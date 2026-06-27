@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-
+from datetime import datetime, timedelta, timezone
+from jose import jwt
+from app.core.config import settings
+from app.schemas.user import Token
 from app.db.database import Base, engine, get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserResponse
@@ -19,6 +22,23 @@ def hash_password(password: str):
 
 def verify_password(plain_password: str, hashed_password: str):
     return password_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    to_encode.update({"exp": expire})
+
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
+
+    return encoded_jwt
 
 
 @router.post("/register", response_model=UserResponse)
@@ -41,7 +61,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 
-@router.post("/login")
+@router.post("/login", response_model=Token)
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_data.email).first()
 
@@ -51,11 +71,11 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
     if not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    access_token = create_access_token(
+        data={"sub": user.email}
+    )
+
     return {
-        "message": "Login successful",
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email
-        }
+        "access_token": access_token,
+        "token_type": "bearer"
     }
