@@ -6,6 +6,7 @@ from app.db.database import get_db
 from app.models.content import GeneratedContent
 from app.models.project import Project
 from app.models.user import User
+from app.models.content_version import ContentVersion
 
 from app.schemas.content import (
     ContentCreate,
@@ -109,6 +110,29 @@ def update_content(
             detail="Not authorized to update this content"
         )
 
+    latest_version = (
+        db.query(ContentVersion)
+        .filter(ContentVersion.content_id == content.id)
+        .order_by(ContentVersion.version_number.desc())
+        .first()
+    )
+
+    next_version_number = 1
+
+    if latest_version:
+        next_version_number = latest_version.version_number + 1
+
+    old_version = ContentVersion(
+        content_id=content.id,
+        title=content.title,
+        content_type=content.content_type,
+        body=content.body,
+        version_number=next_version_number,
+        owner_id=current_user.id,
+    )
+
+    db.add(old_version)
+
     if content_data.title is not None:
         content.title = content_data.title
 
@@ -122,6 +146,7 @@ def update_content(
     db.refresh(content)
 
     return content
+
 
 @router.delete("/{content_id}")
 def delete_content(
