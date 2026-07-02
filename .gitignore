@@ -223,3 +223,7 @@ __pycache__/
 *.pyc
 backend/venv/
 frontend/node_modules/
+
+# Environment variables
+.env
+.env.*
