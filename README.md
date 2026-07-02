@@ -2,15 +2,27 @@
 
 # Tanio AI
 
+## Introduction
+
 Tanio AI is an AI-powered workspace platform designed to help creators, developers, entrepreneurs, and tabletop RPG enthusiasts generate, organize, and manage content in one place.
 
 The platform combines powerful AI-assisted planning tools with an intuitive workspace system, allowing users to create projects, organize content, collaborate with others, and export their work.
 
+Tanio AI consists of two primary modules:
+
+- **Product Architect** – AI-assisted product planning and software development documentation.
+- **Tabletop Creator** – AI-powered tools for creating tabletop RPG campaigns, NPCs, quests, world-building content, and more.
+
+The goal of Tanio AI is to reduce the time spent on planning and organization while helping users create high-quality content using artificial intelligence.
+
 ---
 
-## ✨ Features
+# ✨ Alpha Features
 
-### Product Architect
+The following features are planned for the Alpha release of Tanio AI.
+
+## Product Architect
+
 Generate AI-powered project planning content including:
 
 - Product Requirements Documents (PRDs)
@@ -21,8 +33,10 @@ Generate AI-powered project planning content including:
 - Development Plans
 - SWOT Analysis
 - Market Research
+- AI-generated project planning using the OpenAI API
 
-### Tabletop Creator
+## Tabletop Creator
+
 Generate tabletop RPG content including:
 
 - NPCs
@@ -34,7 +48,7 @@ Generate tabletop RPG content including:
 - Magic Items
 - Session Summaries
 
-### Workspace Management
+## Workspace Management
 
 - Multiple Workspaces
 - Project Organization
@@ -45,7 +59,7 @@ Generate tabletop RPG content including:
 
 ---
 
-# 🛠 Tech Stack
+# 🛠 Technologies
 
 ## Frontend
 
@@ -103,17 +117,19 @@ tanio-ai/
 
 ---
 
-# 🚀 Getting Started
+# 🚀 Installation
 
 ## Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/fullsail_capstone_project.git
+git clone https://github.com/albertolawant/fullsail_capstone_project
 ```
 
 ```bash
 cd fullsail_capstone_project
 ```
+
+Before running the application, create a `.env` file in the backend directory and add your required environment variables, including your OpenAI API key, database credentials, and JWT secret.
 
 ---
 
@@ -125,7 +141,7 @@ Create a virtual environment
 python -m venv .venv
 ```
 
-Activate it
+Activate it.
 
 ### Windows
 
@@ -175,11 +191,38 @@ npm run dev
 
 ---
 
+# 💻 Development Setup
+
+To contribute to Tanio AI, install the following software:
+
+- Git
+- Python 3.12+
+- Node.js 20+
+- npm
+- PostgreSQL
+- Visual Studio Code (recommended)
+
+Developers must create a `.env` file inside the backend directory to store sensitive configuration values.
+
+Example:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+DATABASE_URL=your_database_url
+SECRET_KEY=your_secret_key
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+The frontend and backend are developed independently. Start the FastAPI backend first, then launch the React frontend.
+
+---
+
 # 🌳 Git Workflow
 
 This project follows a Git Flow workflow.
 
-```
+```text
 main
 │
 develop
@@ -191,7 +234,7 @@ Development process:
 
 1. Create a feature branch from `develop`
 2. Build the feature
-3. Commit changes
+3. Commit your changes
 4. Merge into `develop`
 5. Merge `develop` into `main` for stable releases
 
@@ -204,9 +247,11 @@ git checkout -b feature/frontend-ui
 
 ---
 
-# 📈 Current Status
+# 📈 Project Status
 
-### ✅ Completed
+Tanio AI is currently in the **Alpha** stage of development.
+
+## ✅ Completed
 
 - Backend project structure
 - Frontend project structure
@@ -219,7 +264,7 @@ git checkout -b feature/frontend-ui
 - Content routing
 - Settings routing
 
-### 🚧 In Progress
+## 🚧 In Progress
 
 - Authentication
 - Database integration
@@ -227,7 +272,7 @@ git checkout -b feature/frontend-ui
 - Project CRUD
 - OpenAI integration
 
-### 📅 Planned
+## 📅 Planned
 
 - Collaboration
 - Version History
@@ -237,16 +282,16 @@ git checkout -b feature/frontend-ui
 
 ---
 
-# 👥 Team
+# 👥 Contributors
 
-**Alberto Lawant**
+## Alberto Lawant
 
 - Backend Development
 - AI Integration
 - Database Design
 - Frontend Development
 
-**Byron Guntle**
+## Byron Guntle
 
 - Frontend Development
 - UI/UX Design
@@ -257,6 +302,8 @@ git checkout -b feature/frontend-ui
 
 # 📄 License
 
-This project is being developed as a Full Sail University Capstone project.
+This project is being developed as part of the Full Sail University Computer Science Capstone.
 
-All rights reserved.
+This repository is licensed under the **MIT License**.
+
+See the `LICENSE` file for more information.
