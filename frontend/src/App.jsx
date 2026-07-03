@@ -7,6 +7,7 @@ import Workspaces from "./pages/Workspaces";
 import Projects from "./pages/Projects";
 import Content from "./pages/Content";
 import Settings from "./pages/Settings";
+import ProductArchitect from "./pages/ProductArchitect";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
         <Route path="/projects" element={<Projects />} />
         <Route path="/content" element={<Content />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/product-architect" element={<ProductArchitect />} />
       </Routes>
     </div>
   );

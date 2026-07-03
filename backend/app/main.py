@@ -4,10 +4,22 @@ from app.db.database import Base, engine
 from app.models.content_version import ContentVersion
 from app.api import ai
 from app.api import product_architect
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth, workspace as workspace_api, project as project_api, content as content_api, content_version as content_version_api
 
 app = FastAPI(title="Tanio AI API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 Base.metadata.create_all(bind=engine)
 

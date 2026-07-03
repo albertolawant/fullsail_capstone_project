@@ -6,6 +6,7 @@ import {
   FaProjectDiagram,
   FaRobot,
   FaCog,
+  FaBrain,
 } from "react-icons/fa";
 
 function Sidebar() {
@@ -54,6 +55,11 @@ function Sidebar() {
         <NavLink to="/settings" className={linkClass}>
           <FaCog />
           Settings
+        </NavLink>
+
+        <NavLink to="/product-architect" className={linkClass}>
+          <FaBrain />
+          Product Architect
         </NavLink>
       </nav>
 
