@@ -61,6 +61,21 @@ def create_content(
     return content
 
 
+@router.get("/", response_model=list[ContentResponse])
+def get_all_content(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    content = (
+        db.query(GeneratedContent)
+        .filter(GeneratedContent.owner_id == current_user.id)
+        .order_by(GeneratedContent.id.desc())
+        .all()
+    )
+
+    return content
+
+
 @router.get("/{content_id}", response_model=ContentResponse)
 def get_content(
     content_id: int,

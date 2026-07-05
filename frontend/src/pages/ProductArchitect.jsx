@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 function ProductArchitect() {
   const [projectId, setProjectId] = useState(1);
@@ -8,7 +8,9 @@ function ProductArchitect() {
   );
   const [contentType, setContentType] = useState("prd");
   const [generatedContent, setGeneratedContent] = useState("");
+  const [recentContent, setRecentContent] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [recentLoading, setRecentLoading] = useState(false);
   const [error, setError] = useState("");
 
   const endpointMap = {
@@ -17,6 +19,34 @@ function ProductArchitect() {
     userStories: "/product-architect/user-stories",
     featureList: "/product-architect/feature-list",
   };
+
+  const fetchRecentContent = async () => {
+    try {
+      setRecentLoading(true);
+      const token = localStorage.getItem("token");
+
+      const response = await fetch("http://127.0.0.1:8000/content/", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch recent content.");
+      }
+
+      const data = await response.json();
+      setRecentContent(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRecentLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecentContent();
+  }, []);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -48,8 +78,11 @@ function ProductArchitect() {
 
       const data = await response.json();
       setGeneratedContent(data.body);
+      await fetchRecentContent();
     } catch (err) {
-      setError("Something went wrong. Make sure you are logged in and the backend is running.");
+      setError(
+        "Something went wrong. Make sure you are logged in and the backend is running."
+      );
     } finally {
       setLoading(false);
     }
@@ -129,7 +162,7 @@ function ProductArchitect() {
         {error && <p className="text-red-400 mt-4">{error}</p>}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
         <h2 className="text-xl font-bold mb-4">Generated Output</h2>
 
         {generatedContent ? (
@@ -137,9 +170,37 @@ function ProductArchitect() {
             {generatedContent}
           </pre>
         ) : (
-          <p className="text-slate-500">
-            Generated content will appear here.
-          </p>
+          <p className="text-slate-500">Generated content will appear here.</p>
+        )}
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <h2 className="text-xl font-bold mb-4">Recent Generated Content</h2>
+
+        {recentLoading ? (
+          <p className="text-slate-500">Loading recent content...</p>
+        ) : recentContent.length > 0 ? (
+          <div className="space-y-4">
+            {recentContent.slice(0, 5).map((item) => (
+              <div
+                key={item.id}
+                className="bg-slate-950 border border-slate-800 rounded-lg p-4"
+              >
+                <div className="flex justify-between gap-4 mb-2">
+                  <h3 className="font-semibold text-cyan-400">{item.title}</h3>
+                  <span className="text-xs text-slate-500">
+                    {item.content_type}
+                  </span>
+                </div>
+
+                <p className="text-sm text-slate-400 line-clamp-3">
+                  {item.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-slate-500">No recent content yet.</p>
         )}
       </div>
     </div>
