@@ -1,11 +1,22 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
+import { addRecentActivity } from "../utils/activityStorage";
 
 function ProductArchitect() {
-  const [projectId, setProjectId] = useState(1);
-  const [projectName, setProjectName] = useState("Tanio AI");
-  const [description, setDescription] = useState(
-    "An AI-powered workspace platform with modules for project planning and content creation."
+  const location = useLocation();
+  const selectedProject = location.state?.project;
+
+  const [projectId, setProjectId] = useState(selectedProject?.id || 1);
+
+  const [projectName, setProjectName] = useState(
+    selectedProject?.title || "Tanio AI"
   );
+
+  const [description, setDescription] = useState(
+    selectedProject?.description ||
+      "An AI-powered workspace platform with modules for project planning and content creation."
+  );
+
   const [contentType, setContentType] = useState("prd");
   const [generatedContent, setGeneratedContent] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,6 +59,12 @@ function ProductArchitect() {
 
       const data = await response.json();
       setGeneratedContent(data.body);
+      addRecentActivity({
+        type: "Content Generated",
+        title: `${projectName} content generated`,
+        description: `Created a new ${contentType} document.`,
+        projectName,
+      });
     } catch (err) {
       setError("Something went wrong. Make sure you are logged in and the backend is running.");
     } finally {
