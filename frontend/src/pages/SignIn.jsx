@@ -1,7 +1,3 @@
-// Demo account:
-// Email: demo@tanio.ai
-// Password: Demo123!
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
