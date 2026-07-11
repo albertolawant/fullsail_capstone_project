@@ -2,7 +2,6 @@ from pydantic import BaseModel
 
 
 class ProductArchitectRequest(BaseModel):
-    project_id: int
     project_name: str
     description: str
 

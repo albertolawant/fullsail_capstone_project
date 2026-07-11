@@ -8,14 +8,15 @@ function ProductArchitect() {
   const location = useLocation();
   const selectedProject = location.state?.project;
 
-  const [projectId, setProjectId] = useState(selectedProject?.id || 1);
   const [projectName, setProjectName] = useState(
     selectedProject?.title || "Tanio AI"
   );
+
   const [description, setDescription] = useState(
     selectedProject?.description ||
       "An AI-powered workspace platform with modules for project planning and content creation."
   );
+
   const [contentType, setContentType] = useState("prd");
   const [generatedContent, setGeneratedContent] = useState("");
   const [recentContent, setRecentContent] = useState([]);
@@ -28,6 +29,7 @@ function ProductArchitect() {
     persona: "/product-architect/persona",
     userStories: "/product-architect/user-stories",
     featureList: "/product-architect/feature-list",
+    technicalArchitecture: "/product-architect/technical-architecture",
   };
 
   const documentTypeLabels = {
@@ -35,48 +37,60 @@ function ProductArchitect() {
     persona: "User Persona",
     userStories: "User Stories",
     featureList: "Feature List",
+    technicalArchitecture: "Technical Architecture",
   };
 
   const markdownComponents = {
     h1: ({ children }) => (
       <h1 className="text-3xl font-bold text-white mb-6">{children}</h1>
     ),
+
     h2: ({ children }) => (
       <h2 className="text-2xl font-bold text-white mt-8 mb-4">{children}</h2>
     ),
+
     h3: ({ children }) => (
       <h3 className="text-xl font-semibold text-cyan-400 mt-6 mb-3">
         {children}
       </h3>
     ),
+
     p: ({ children }) => (
       <p className="text-slate-200 leading-relaxed mb-4">{children}</p>
     ),
+
     ul: ({ children }) => (
       <ul className="list-disc pl-6 text-slate-200 mb-4 space-y-2">
         {children}
       </ul>
     ),
+
     ol: ({ children }) => (
       <ol className="list-decimal pl-6 text-slate-200 mb-4 space-y-2">
         {children}
       </ol>
     ),
+
     li: ({ children }) => <li>{children}</li>,
+
     strong: ({ children }) => (
       <strong className="font-semibold text-white">{children}</strong>
     ),
+
     hr: () => <hr className="border-slate-700 my-8" />,
+
     blockquote: ({ children }) => (
       <blockquote className="border-l-4 border-cyan-500 pl-4 my-4 text-slate-300 italic">
         {children}
       </blockquote>
     ),
+
     code: ({ children }) => (
       <code className="bg-slate-950 text-cyan-300 px-1.5 py-0.5 rounded">
         {children}
       </code>
     ),
+
     table: ({ children }) => (
       <div className="overflow-x-auto my-6">
         <table className="w-full border-collapse border border-slate-700">
@@ -84,14 +98,17 @@ function ProductArchitect() {
         </table>
       </div>
     ),
+
     thead: ({ children }) => (
       <thead className="bg-slate-800">{children}</thead>
     ),
+
     th: ({ children }) => (
       <th className="border border-slate-700 px-4 py-3 text-left text-white">
         {children}
       </th>
     ),
+
     td: ({ children }) => (
       <td className="border border-slate-700 px-4 py-3 text-slate-200">
         {children}
@@ -103,19 +120,24 @@ function ProductArchitect() {
     h1: ({ children }) => (
       <span className="font-semibold text-slate-300">{children} </span>
     ),
+
     h2: ({ children }) => (
       <span className="font-semibold text-slate-300">{children} </span>
     ),
+
     h3: ({ children }) => (
       <span className="font-semibold text-slate-300">{children} </span>
     ),
+
     p: ({ children }) => <span>{children} </span>,
     ul: ({ children }) => <span>{children} </span>,
     ol: ({ children }) => <span>{children} </span>,
     li: ({ children }) => <span>{children} </span>,
+
     strong: ({ children }) => (
       <strong className="font-semibold text-slate-300">{children}</strong>
     ),
+
     hr: () => <span>— </span>,
   };
 
@@ -177,7 +199,6 @@ function ProductArchitect() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          project_id: Number(projectId),
           project_name: projectName.trim(),
           description: description.trim(),
         }),
@@ -228,41 +249,21 @@ function ProductArchitect() {
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label
-              htmlFor="project-id"
-              className="block text-sm text-slate-400 mb-2"
-            >
-              Project ID
-            </label>
+        <div className="mb-4">
+          <label
+            htmlFor="project-name"
+            className="block text-sm text-slate-400 mb-2"
+          >
+            Project Name
+          </label>
 
-            <input
-              id="project-id"
-              type="number"
-              min="1"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="project-name"
-              className="block text-sm text-slate-400 mb-2"
-            >
-              Project Name
-            </label>
-
-            <input
-              id="project-name"
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white"
-            />
-          </div>
+          <input
+            id="project-name"
+            type="text"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white"
+          />
         </div>
 
         <div className="mb-4">
@@ -300,6 +301,9 @@ function ProductArchitect() {
             <option value="persona">User Persona</option>
             <option value="userStories">User Stories</option>
             <option value="featureList">Feature List</option>
+            <option value="technicalArchitecture">
+              Technical Architecture
+            </option>
           </select>
         </div>
 
@@ -308,7 +312,6 @@ function ProductArchitect() {
           onClick={handleGenerate}
           disabled={
             loading ||
-            !projectId ||
             !projectName.trim() ||
             !description.trim()
           }
