@@ -13,6 +13,8 @@ from app.schemas.project import (
     ProjectResponse,
 )
 from app.api.auth import get_current_user
+from app.models.content import GeneratedContent
+from app.models.content_version import ContentVersion
 
 router = APIRouter(
     prefix="/projects",
@@ -129,6 +131,36 @@ def delete_project(
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    project_content = (
+        db.query(GeneratedContent)
+        .filter(
+            GeneratedContent.project_id == project.id,
+            GeneratedContent.owner_id == current_user.id
+        )
+        .all()
+    )
+
+    content_ids = [content.id for content in project_content]
+
+    if content_ids:
+        (
+            db.query(ContentVersion)
+            .filter(
+                ContentVersion.content_id.in_(content_ids),
+                ContentVersion.owner_id == current_user.id
+            )
+            .delete(synchronize_session=False)
+        )
+
+        (
+            db.query(GeneratedContent)
+            .filter(
+                GeneratedContent.project_id == project.id,
+                GeneratedContent.owner_id == current_user.id
+            )
+            .delete(synchronize_session=False)
+        )
 
     db.delete(project)
     db.commit()

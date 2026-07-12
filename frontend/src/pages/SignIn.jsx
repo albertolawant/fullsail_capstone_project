@@ -15,6 +15,23 @@ function SignIn() {
     setError("");
     setLoading(true);
 
+    if (email === "demo@tanio.ai" && password === "Demo123!") {
+      localStorage.removeItem("token");
+      localStorage.setItem("tanioSession", "true");
+
+      localStorage.setItem(
+        "tanioUser",
+        JSON.stringify({
+          email: "demo@tanio.ai",
+          username: "Demo User",
+        })
+      );
+
+      setLoading(false);
+      navigate("/");
+      return;
+    }
+
     try {
       const formData = new URLSearchParams();
 

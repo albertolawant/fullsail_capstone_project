@@ -17,6 +17,43 @@ export function getDemoProjects() {
   }
 }
 
+export function updateDemoProject(projectId, updates) {
+  const projects = getDemoProjects();
+
+  const updatedProjects = projects.map((project) =>
+    project.id === projectId
+      ? {
+          ...project,
+          ...updates,
+        }
+      : project
+  );
+
+  localStorage.setItem(
+    DEMO_PROJECT_KEY,
+    JSON.stringify(updatedProjects)
+  );
+
+  return updatedProjects.find(
+    (project) => project.id === projectId
+  );
+}
+
+export function deleteDemoProject(projectId) {
+  const projects = getDemoProjects();
+
+  const updatedProjects = projects.filter(
+    (project) => project.id !== projectId
+  );
+
+  localStorage.setItem(
+    DEMO_PROJECT_KEY,
+    JSON.stringify(updatedProjects)
+  );
+
+  return updatedProjects;
+}
+
 export function initializeDemoData() {
   const alreadyInitialized =
     localStorage.getItem(DEMO_INITIALIZED_KEY) === "true";
