@@ -148,7 +148,7 @@ function ProductArchitect() {
       const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error("Authentication token not found.");
+        return;
       }
 
       const response = await fetch("http://127.0.0.1:8000/content/", {
@@ -162,7 +162,8 @@ function ProductArchitect() {
       }
 
       const data = await response.json();
-      setRecentContent(data);
+
+      setRecentContent(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Recent content error:", err);
     } finally {
@@ -175,21 +176,45 @@ function ProductArchitect() {
   }, []);
 
   const handleGenerate = async () => {
-    setLoading(true);
+    const cleanedProjectName = projectName.trim();
+    const cleanedDescription = description.trim();
+
     setError("");
     setGeneratedContent("");
+
+    if (cleanedProjectName.length < 2) {
+      setError("Project name must contain at least 2 characters.");
+      return;
+    }
+
+    if (cleanedProjectName.length > 100) {
+      setError("Project name cannot be longer than 100 characters.");
+      return;
+    }
+
+    if (cleanedDescription.length < 10) {
+      setError("Project description must contain at least 10 characters.");
+      return;
+    }
+
+    if (cleanedDescription.length > 5000) {
+      setError("Project description cannot be longer than 5,000 characters.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error("Authentication token not found.");
+        throw new Error("Your session has expired. Please sign in again.");
       }
 
       const endpoint = endpointMap[contentType];
 
       if (!endpoint) {
-        throw new Error("Invalid document type.");
+        throw new Error("Please select a valid document type.");
       }
 
       const response = await fetch(`http://127.0.0.1:8000${endpoint}`, {
@@ -199,40 +224,77 @@ function ProductArchitect() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          project_name: projectName.trim(),
-          description: description.trim(),
+          project_name: cleanedProjectName,
+          description: cleanedDescription,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
 
-        throw new Error(
-          errorData?.detail || "Failed to generate content."
-        );
+        let message = "Failed to generate content. Please try again.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (response.status === 400) {
+          message = "Please check your project information and try again.";
+        } else if (response.status === 401) {
+          message = "Your session has expired. Please sign in again.";
+        } else if (response.status === 403) {
+          message = "You are not authorized to perform this action.";
+        } else if (response.status === 422) {
+          message =
+            "Please enter a valid project name and a more detailed description.";
+        } else if (response.status === 429) {
+          message =
+            "The AI service is receiving too many requests. Please wait a moment and try again.";
+        } else if (response.status === 502) {
+          message =
+            "The AI service could not complete the request. Please try again.";
+        } else if (response.status === 503) {
+          message =
+            "The AI service is temporarily unavailable. Please try again later.";
+        } else if (response.status === 504) {
+          message = "The AI request took too long. Please try again.";
+        }
+
+        throw new Error(message);
       }
 
       const data = await response.json();
 
-      setGeneratedContent(data.body || "");
+      if (!data?.body || !data.body.trim()) {
+        throw new Error(
+          "The AI did not return any content. Please try again."
+        );
+      }
+
+      setGeneratedContent(data.body);
 
       addRecentActivity({
         type: "Content Generated",
-        title: `${projectName.trim()} content generated`,
+        title: `${cleanedProjectName} content generated`,
         description: `Created a new ${
           documentTypeLabels[contentType] || contentType
         }.`,
-        projectName: projectName.trim(),
+        projectName: cleanedProjectName,
       });
 
       await fetchRecentContent();
     } catch (err) {
       console.error("Generation error:", err);
 
-      setError(
-        err.message ||
-          "Something went wrong. Make sure you are logged in and the backend is running."
-      );
+      if (err instanceof TypeError) {
+        setError(
+          "Could not connect to the server. Make sure the backend is running and try again."
+        );
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while generating content. Please try again."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -261,9 +323,21 @@ function ProductArchitect() {
             id="project-name"
             type="text"
             value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white"
+            onChange={(e) => {
+              setProjectName(e.target.value);
+
+              if (error) {
+                setError("");
+              }
+            }}
+            maxLength={100}
+            aria-describedby="project-name-help"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
           />
+
+          <p id="project-name-help" className="text-xs text-slate-500 mt-2">
+            Use between 2 and 100 characters.
+          </p>
         </div>
 
         <div className="mb-4">
@@ -277,10 +351,26 @@ function ProductArchitect() {
           <textarea
             id="project-description"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => {
+              setDescription(e.target.value);
+
+              if (error) {
+                setError("");
+              }
+            }}
             rows="4"
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white"
+            maxLength={5000}
+            aria-describedby="project-description-help"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
           />
+
+          <div
+            id="project-description-help"
+            className="flex justify-between gap-4 text-xs text-slate-500 mt-2"
+          >
+            <span>Use at least 10 characters.</span>
+            <span>{description.length}/5000</span>
+          </div>
         </div>
 
         <div className="mb-6">
@@ -294,8 +384,14 @@ function ProductArchitect() {
           <select
             id="document-type"
             value={contentType}
-            onChange={(e) => setContentType(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white"
+            onChange={(e) => {
+              setContentType(e.target.value);
+
+              if (error) {
+                setError("");
+              }
+            }}
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
           >
             <option value="prd">Product Requirements Document</option>
             <option value="persona">User Persona</option>
@@ -312,8 +408,8 @@ function ProductArchitect() {
           onClick={handleGenerate}
           disabled={
             loading ||
-            !projectName.trim() ||
-            !description.trim()
+            projectName.trim().length < 2 ||
+            description.trim().length < 10
           }
           className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -321,16 +417,36 @@ function ProductArchitect() {
         </button>
 
         {error && (
-          <p className="text-red-400 mt-4" role="alert">
-            {error}
-          </p>
+          <div
+            className="mt-4 bg-red-950/50 border border-red-800 rounded-lg p-4"
+            role="alert"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-red-300">
+              Unable to generate content
+            </p>
+
+            <p className="text-sm text-red-300 mt-1">{error}</p>
+          </div>
         )}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8"
+        aria-busy={loading}
+      >
         <h2 className="text-xl font-bold mb-6">Generated Output</h2>
 
-        {generatedContent ? (
+        {loading ? (
+          <div className="flex items-center gap-3 text-slate-400">
+            <div
+              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
+              aria-hidden="true"
+            />
+
+            <p>Generating your document. This may take a moment...</p>
+          </div>
+        ) : generatedContent ? (
           <div className="max-w-none">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
@@ -375,7 +491,7 @@ function ProductArchitect() {
                     remarkPlugins={[remarkGfm]}
                     components={recentMarkdownComponents}
                   >
-                    {item.body}
+                    {item.body || ""}
                   </ReactMarkdown>
                 </div>
               </div>

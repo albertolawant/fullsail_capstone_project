@@ -15,27 +15,10 @@ function SignIn() {
     setError("");
     setLoading(true);
 
-    if (email === "demo@tanio.ai" && password === "Demo123!") {
-      localStorage.removeItem("token");
-      localStorage.setItem("tanioSession", "true");
-
-      localStorage.setItem(
-        "tanioUser",
-        JSON.stringify({
-          email: "demo@tanio.ai",
-          username: "Demo User",
-        })
-      );
-
-      setLoading(false);
-      navigate("/");
-      return;
-    }
-
     try {
       const formData = new URLSearchParams();
 
-      formData.append("username", email);
+      formData.append("username", email.trim());
       formData.append("password", password);
 
       const response = await fetch("http://127.0.0.1:8000/auth/login", {
@@ -56,21 +39,37 @@ function SignIn() {
 
       const data = await response.json();
 
-      localStorage.setItem("token", data.access_token);
+      if (!data?.access_token) {
+        throw new Error(
+          "The server did not return an authentication token."
+        );
+      }
 
+      localStorage.setItem("token", data.access_token);
       localStorage.setItem("tanioSession", "true");
 
       localStorage.setItem(
         "tanioUser",
         JSON.stringify({
-          email,
-          username: email === "demo@tanio.ai" ? "Demo User" : email,
+          email: email.trim(),
+          username:
+            email.trim().toLowerCase() === "demo@tanio.ai"
+              ? "Demo User"
+              : email.trim(),
         })
       );
 
       navigate("/");
     } catch (err) {
-      setError(err.message || "Unable to sign in.");
+      localStorage.removeItem("token");
+      localStorage.removeItem("tanioSession");
+      localStorage.removeItem("tanioUser");
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to sign in. Please try again."
+      );
     } finally {
       setLoading(false);
     }
