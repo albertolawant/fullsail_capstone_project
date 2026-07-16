@@ -5,6 +5,7 @@ from app.models.content_version import ContentVersion
 from app.api import ai
 from app.api import product_architect
 from fastapi.middleware.cors import CORSMiddleware
+from app.api import tabletop_creator
 
 from app.api import auth, workspace as workspace_api, project as project_api, content as content_api, content_version as content_version_api
 
@@ -30,6 +31,7 @@ app.include_router(content_api.router)
 app.include_router(content_version_api.router)
 app.include_router(ai.router)
 app.include_router(product_architect.router)
+app.include_router(tabletop_creator.router)
 
 
 @app.get("/")

@@ -10,6 +10,7 @@ import Projects from "./pages/Projects";
 import Content from "./pages/Content";
 import Settings from "./pages/Settings";
 import ProductArchitect from "./pages/ProductArchitect";
+import TabletopCreator from "./pages/TabletopCreator";
 
 function App() {
 
@@ -51,6 +52,7 @@ function App() {
             <Route path="/product-architect"
               element={<ProductArchitect />}
             />
+            <Route path="/tabletop-creator" element={<TabletopCreator />} />
           </Routes>
         </div>
       </div>

@@ -7,6 +7,7 @@ import {
   FaRobot,
   FaCog,
   FaBrain,
+  FaDice,
   FaSignOutAlt,
 } from "react-icons/fa";
 
@@ -85,6 +86,11 @@ function Sidebar() {
         <NavLink to="/product-architect" className={linkClass}>
           <FaBrain />
           Product Architect
+        </NavLink>
+
+        <NavLink to="/tabletop-creator" className={linkClass}>
+          <FaDice />
+          Tabletop Creator
         </NavLink>
       </nav>
 
