@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.core.config import settings
 from app.db.database import get_db
 from app.models.project import Project
@@ -81,7 +82,7 @@ def get_or_create_campaign_project(
     )
 
     if project:
-        if project.description != cleaned_description:
+        if project.description != cleaned_description: 
             project.description = cleaned_description
 
             try:
