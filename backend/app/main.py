@@ -1,13 +1,17 @@
 from fastapi import FastAPI
-from app.models import user, workspace, project, content
-from app.db.database import Base, engine
-from app.models.content_version import ContentVersion
-from app.api import ai
-from app.api import product_architect
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import tabletop_creator
 
-from app.api import auth, workspace as workspace_api, project as project_api, content as content_api, content_version as content_version_api
+from app.api import ai
+from app.api import auth
+from app.api import content as content_api
+from app.api import content_version as content_version_api
+from app.api import product_architect
+from app.api import project as project_api
+from app.api import tabletop_creator
+from app.api import workspace as workspace_api
+from app.db.database import Base, engine
+from app.models import ai_usage, content, project, user, workspace
+from app.models.content_version import ContentVersion
 
 app = FastAPI(title="Tanio AI API")
 
