@@ -1,6 +1,42 @@
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const CAMPAIGN_STORAGE_KEY = "tanioTabletopCampaigns";
+
+const generatedMarkdownClasses = `
+  mt-4 text-slate-200 leading-relaxed
+  [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-6 [&_h1]:mb-3
+  [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-6 [&_h2]:mb-3
+  [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-cyan-300 [&_h3]:mt-6 [&_h3]:mb-3
+  [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-cyan-200 [&_h4]:mt-5 [&_h4]:mb-2
+  [&_p]:my-3
+  [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-3
+  [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-3
+  [&_li]:my-1
+  [&_strong]:font-bold [&_strong]:text-white
+  [&_em]:italic
+  [&_hr]:border-slate-700 [&_hr]:my-6
+  [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-700
+  [&_blockquote]:pl-4 [&_blockquote]:text-slate-300
+  [&_code]:bg-slate-950 [&_code]:px-1 [&_code]:py-0.5
+  [&_code]:rounded [&_code]:text-cyan-300
+`;
+
+const savedMarkdownClasses = `
+  text-sm text-slate-300 mt-2 leading-relaxed
+  [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-4 [&_h1]:mb-2
+  [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-4 [&_h2]:mb-2
+  [&_h3]:font-semibold [&_h3]:text-cyan-300 [&_h3]:mt-4 [&_h3]:mb-2
+  [&_h4]:font-semibold [&_h4]:text-cyan-200 [&_h4]:mt-3 [&_h4]:mb-2
+  [&_p]:my-2
+  [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2
+  [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2
+  [&_li]:my-1
+  [&_strong]:font-bold [&_strong]:text-white
+  [&_em]:italic
+  [&_hr]:border-slate-700 [&_hr]:my-4
+`;
 
 function TabletopCreator() {
   const [campaigns, setCampaigns] = useState([]);
@@ -237,9 +273,7 @@ function TabletopCreator() {
   return (
     <main className="flex-1 p-10" data-testid="tabletop-creator-page">
       <div className="mb-8">
-        <p className="text-cyan-400 font-semibold mb-2">
-          Tanio AI Module
-        </p>
+        <p className="text-cyan-400 font-semibold mb-2">Tanio AI Module</p>
 
         <h2 className="text-4xl font-bold">Tabletop Creator</h2>
 
@@ -401,12 +435,14 @@ function TabletopCreator() {
         )}
 
         {generatedCampaignContent ? (
-          <pre
-            className="mt-4 whitespace-pre-wrap text-slate-200 leading-relaxed"
+          <div
+            className={generatedMarkdownClasses}
             data-testid="generated-campaign-content"
           >
-            {generatedCampaignContent}
-          </pre>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {generatedCampaignContent}
+            </ReactMarkdown>
+          </div>
         ) : (
           <p className="text-slate-400 mt-2">
             Generated campaign content will appear here.
@@ -440,12 +476,14 @@ function TabletopCreator() {
         )}
 
         {generatedNPCContent ? (
-          <pre
-            className="mt-4 whitespace-pre-wrap text-slate-200 leading-relaxed"
+          <div
+            className={generatedMarkdownClasses}
             data-testid="generated-npc-content"
           >
-            {generatedNPCContent}
-          </pre>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {generatedNPCContent}
+            </ReactMarkdown>
+          </div>
         ) : (
           <p className="text-slate-400 mt-2">
             Generated NPC details will appear here.
@@ -498,9 +536,11 @@ function TabletopCreator() {
                 >
                   <p className="text-sm text-cyan-400">{npc.campaignName}</p>
 
-                  <pre className="whitespace-pre-wrap text-sm text-slate-300 mt-2">
-                    {npc.content}
-                  </pre>
+                  <div className={savedMarkdownClasses}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {npc.content}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               ))}
             </div>
@@ -511,8 +551,8 @@ function TabletopCreator() {
           <h3 className="text-xl font-bold">Module Status</h3>
 
           <p className="text-slate-400 mt-2">
-            Tabletop Creator now includes campaign creation, campaign generation,
-            and NPC generation for the proof-of-concept stage.
+            Tabletop Creator now includes campaign creation, campaign
+            generation, and NPC generation for the proof-of-concept stage.
           </p>
         </div>
       </section>
