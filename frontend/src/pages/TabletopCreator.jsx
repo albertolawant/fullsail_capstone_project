@@ -15,6 +15,18 @@ function TabletopCreator() {
   const [generatingNPCs, setGeneratingNPCs] = useState(false);
   const [npcError, setNpcError] = useState("");
   const [savedNPCs, setSavedNPCs] = useState([]);
+  const [generatedQuestContent, setGeneratedQuestContent] = useState("");
+  const [generatingQuests, setGeneratingQuests] = useState(false);
+  const [questError, setQuestError] = useState("");
+  const [savedQuests, setSavedQuests] = useState([]);
+  const [generatedEncounterContent, setGeneratedEncounterContent] = useState("");
+  const [generatingEncounters, setGeneratingEncounters] = useState(false);
+  const [encounterError, setEncounterError] = useState("");
+  const [savedEncounters, setSavedEncounters] = useState([]);
+  const [generatedLocationContent, setGeneratedLocationContent] = useState("");
+  const [generatingLocations, setGeneratingLocations] = useState(false);
+  const [locationError, setLocationError] = useState("");
+  const [savedLocations, setSavedLocations] = useState([]);
 
   const tools = [
     {
@@ -27,19 +39,19 @@ function TabletopCreator() {
       title: "NPC Generator",
       description:
         "Generate characters, allies, villains, merchants, quest givers, and party contacts.",
-      status: "Coming Soon",
+      status: "Active",
     },
     {
       title: "Quest Generator",
       description:
         "Build quests, side missions, encounters, rewards, and story complications.",
-      status: "Coming Soon",
+      status: "Active",
     },
     {
       title: "Saved Campaign Content",
       description:
         "View generated campaign notes, saved encounters, NPCs, locations, and story ideas.",
-      status: "Coming Soon",
+      status: "Active",
     },
   ];
 
@@ -165,6 +177,25 @@ function TabletopCreator() {
     }
   };
 
+  const handleSaveGeneratedCampaign = () => {
+    if (!generatedCampaignContent) {
+      setGenerateError("Generate campaign content before saving.");
+      return;
+    }
+
+    const savedCampaignEntry = {
+      id: crypto.randomUUID(),
+      name: campaignName.trim() || "Untitled Campaign",
+      description: generatedCampaignContent,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedCampaigns = [savedCampaignEntry, ...campaigns];
+
+    saveCampaigns(updatedCampaigns);
+    setSuccessMessage("Generated campaign saved successfully.");
+  };
+
   const handleGenerateNPCs = async () => {
     setNpcError("");
     setGeneratedNPCContent("");
@@ -234,12 +265,227 @@ function TabletopCreator() {
     setSavedNPCs((currentNPCs) => [savedNPCEntry, ...currentNPCs]);
   };
 
+  const handleGenerateQuests = async () => {
+    setQuestError("");
+    setGeneratedQuestContent("");
+    setGeneratingQuests(true);
+
+    const cleanedName = campaignName.trim();
+    const cleanedDescription = campaignDescription.trim();
+
+    if (!cleanedName) {
+      setQuestError("Campaign name is required before generating quests.");
+      setGeneratingQuests(false);
+      return;
+    }
+
+    if (!cleanedDescription) {
+      setQuestError("Campaign description is required before generating quests.");
+      setGeneratingQuests(false);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        "http://127.0.0.1:8000/tabletop-creator/generate-quest",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            campaign_name: cleanedName,
+            campaign_description: cleanedDescription,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(errorData?.detail || "Unable to generate quests.");
+      }
+
+      const data = await response.json();
+      setGeneratedQuestContent(data.quest_content);
+    } catch (error) {
+      setQuestError(error.message);
+    } finally {
+      setGeneratingQuests(false);
+    }
+  };
+
+  const handleGenerateEncounters = async () => {
+    setEncounterError("");
+    setGeneratedEncounterContent("");
+    setGeneratingEncounters(true);
+
+    const cleanedName = campaignName.trim();
+    const cleanedDescription = campaignDescription.trim();
+
+    if (!cleanedName) {
+      setEncounterError("Campaign name is required before generating encounters.");
+      setGeneratingEncounters(false);
+      return;
+    }
+
+    if (!cleanedDescription) {
+      setEncounterError(
+        "Campaign description is required before generating encounters."
+      );
+      setGeneratingEncounters(false);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        "http://127.0.0.1:8000/tabletop-creator/generate-encounter",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            campaign_name: cleanedName,
+            campaign_description: cleanedDescription,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(errorData?.detail || "Unable to generate encounters.");
+      }
+
+      const data = await response.json();
+      setGeneratedEncounterContent(data.encounter_content);
+    } catch (error) {
+      setEncounterError(error.message);
+    } finally {
+      setGeneratingEncounters(false);
+    }
+  };
+
+  const handleGenerateLocations = async () => {
+    setLocationError("");
+    setGeneratedLocationContent("");
+    setGeneratingLocations(true);
+
+    const cleanedName = campaignName.trim();
+    const cleanedDescription = campaignDescription.trim();
+
+    if (!cleanedName) {
+      setLocationError("Campaign name is required before generating locations.");
+      setGeneratingLocations(false);
+      return;
+    }
+
+    if (!cleanedDescription) {
+      setLocationError(
+        "Campaign description is required before generating locations."
+      );
+      setGeneratingLocations(false);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        "http://127.0.0.1:8000/tabletop-creator/generate-location",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            campaign_name: cleanedName,
+            campaign_description: cleanedDescription,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(errorData?.detail || "Unable to generate locations.");
+      }
+
+      const data = await response.json();
+      setGeneratedLocationContent(data.location_content);
+    } catch (error) {
+      setLocationError(error.message);
+    } finally {
+      setGeneratingLocations(false);
+    }
+  };
+
+  const handleSaveQuests = () => {
+    if (!generatedQuestContent) {
+      setQuestError("Generate quests before saving.");
+      return;
+    }
+
+    const savedQuestEntry = {
+      id: crypto.randomUUID(),
+      campaignName: campaignName.trim() || "Untitled Campaign",
+      content: generatedQuestContent,
+      createdAt: new Date().toISOString(),
+    };
+
+    setSavedQuests((currentQuests) => [savedQuestEntry, ...currentQuests]);
+  };
+
+  const handleSaveEncounters = () => {
+    if (!generatedEncounterContent) {
+      setEncounterError("Generate encounters before saving.");
+      return;
+    }
+
+    const savedEncounterEntry = {
+      id: crypto.randomUUID(),
+      campaignName: campaignName.trim() || "Untitled Campaign",
+      content: generatedEncounterContent,
+      createdAt: new Date().toISOString(),
+    };
+
+    setSavedEncounters((currentEncounters) => [
+      savedEncounterEntry,
+      ...currentEncounters,
+    ]);
+  };
+
+  const handleSaveLocations = () => {
+    if (!generatedLocationContent) {
+      setLocationError("Generate locations before saving.");
+      return;
+    }
+
+    const savedLocationEntry = {
+      id: crypto.randomUUID(),
+      campaignName: campaignName.trim() || "Untitled Campaign",
+      content: generatedLocationContent,
+      createdAt: new Date().toISOString(),
+    };
+
+    setSavedLocations((currentLocations) => [
+      savedLocationEntry,
+      ...currentLocations,
+    ]);
+  };
+
   return (
     <main className="flex-1 p-10" data-testid="tabletop-creator-page">
       <div className="mb-8">
-        <p className="text-cyan-400 font-semibold mb-2">
-          Tanio AI Module
-        </p>
+        <p className="text-cyan-400 font-semibold mb-2">Tanio AI Module</p>
 
         <h2 className="text-4xl font-bold">Tabletop Creator</h2>
 
@@ -292,7 +538,7 @@ function TabletopCreator() {
         </p>
 
         <form
-          onSubmit={handleSubmit}
+          onSubmit={(event) => event.preventDefault()}
           className="mt-6"
           data-testid="campaign-creation-form"
         >
@@ -357,14 +603,6 @@ function TabletopCreator() {
 
           <div className="flex flex-wrap gap-3">
             <button
-              type="submit"
-              className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-6 py-3 rounded-lg"
-              data-testid="save-campaign"
-            >
-              Save Campaign
-            </button>
-
-            <button
               type="button"
               onClick={handleGenerateCampaign}
               disabled={generating}
@@ -383,12 +621,58 @@ function TabletopCreator() {
             >
               {generatingNPCs ? "Generating NPCs..." : "Generate NPCs"}
             </button>
+
+            <button
+              type="button"
+              onClick={handleGenerateQuests}
+              disabled={generatingQuests}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+              data-testid="generate-quests"
+            >
+              {generatingQuests ? "Generating Quests..." : "Generate Quests"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleGenerateEncounters}
+              disabled={generatingEncounters}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+              data-testid="generate-encounters"
+            >
+              {generatingEncounters
+                ? "Generating Encounters..."
+                : "Generate Encounters"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleGenerateLocations}
+              disabled={generatingLocations}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+              data-testid="generate-locations"
+            >
+              {generatingLocations
+                ? "Generating Locations..."
+                : "Generate Locations"}
+            </button>
           </div>
         </form>
       </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-        <h3 className="text-2xl font-bold">Generated Campaign Content</h3>
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-2xl font-bold">Generated Campaign Content</h3>
+
+          <button
+            type="button"
+            onClick={handleSaveGeneratedCampaign}
+            disabled={!generatedCampaignContent}
+            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+            data-testid="save-generated-campaign"
+          >
+            Save Generated Campaign
+          </button>
+        </div>
 
         {generateError && (
           <p
@@ -453,7 +737,124 @@ function TabletopCreator() {
         )}
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-2xl font-bold">Generated Quests</h3>
+
+          <button
+            type="button"
+            onClick={handleSaveQuests}
+            disabled={!generatedQuestContent}
+            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+            data-testid="save-quests"
+          >
+            Save Quests
+          </button>
+        </div>
+
+        {questError && (
+          <p
+            className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+            role="alert"
+            data-testid="quest-generate-error"
+          >
+            {questError}
+          </p>
+        )}
+
+        {generatedQuestContent ? (
+          <pre
+            className="mt-4 whitespace-pre-wrap text-slate-200 leading-relaxed"
+            data-testid="generated-quest-content"
+          >
+            {generatedQuestContent}
+          </pre>
+        ) : (
+          <p className="text-slate-400 mt-2">
+            Generated quest details will appear here.
+          </p>
+        )}
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-2xl font-bold">Generated Encounters</h3>
+
+          <button
+            type="button"
+            onClick={handleSaveEncounters}
+            disabled={!generatedEncounterContent}
+            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+            data-testid="save-encounters"
+          >
+            Save Encounters
+          </button>
+        </div>
+
+        {encounterError && (
+          <p
+            className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+            role="alert"
+            data-testid="encounter-generate-error"
+          >
+            {encounterError}
+          </p>
+        )}
+
+        {generatedEncounterContent ? (
+          <pre
+            className="mt-4 whitespace-pre-wrap text-slate-200 leading-relaxed"
+            data-testid="generated-encounter-content"
+          >
+            {generatedEncounterContent}
+          </pre>
+        ) : (
+          <p className="text-slate-400 mt-2">
+            Generated encounter details will appear here.
+          </p>
+        )}
+      </section>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-2xl font-bold">Generated Locations</h3>
+
+          <button
+            type="button"
+            onClick={handleSaveLocations}
+            disabled={!generatedLocationContent}
+            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+            data-testid="save-locations"
+          >
+            Save Locations
+          </button>
+        </div>
+
+        {locationError && (
+          <p
+            className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+            role="alert"
+            data-testid="location-generate-error"
+          >
+            {locationError}
+          </p>
+        )}
+
+        {generatedLocationContent ? (
+          <pre
+            className="mt-4 whitespace-pre-wrap text-slate-200 leading-relaxed"
+            data-testid="generated-location-content"
+          >
+            {generatedLocationContent}
+          </pre>
+        ) : (
+          <p className="text-slate-400 mt-2">
+            Generated location descriptions will appear here.
+          </p>
+        )}
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-6 gap-6">
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h3 className="text-xl font-bold">Saved Campaigns</h3>
 
@@ -508,11 +909,94 @@ function TabletopCreator() {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <h3 className="text-xl font-bold">Saved Quests</h3>
+
+          {savedQuests.length === 0 ? (
+            <p className="text-slate-400 text-sm mt-2">
+              Saved quests will appear here after generation.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-3" data-testid="saved-quest-list">
+              {savedQuests.map((quest) => (
+                <div
+                  key={quest.id}
+                  className="bg-slate-950 border border-slate-800 rounded-lg p-4"
+                  data-testid={`saved-quest-${quest.id}`}
+                >
+                  <p className="text-sm text-cyan-400">{quest.campaignName}</p>
+
+                  <pre className="whitespace-pre-wrap text-sm text-slate-300 mt-2">
+                    {quest.content}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <h3 className="text-xl font-bold">Saved Encounters</h3>
+
+          {savedEncounters.length === 0 ? (
+            <p className="text-slate-400 text-sm mt-2">
+              Saved encounters will appear here after generation.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-3" data-testid="saved-encounter-list">
+              {savedEncounters.map((encounter) => (
+                <div
+                  key={encounter.id}
+                  className="bg-slate-950 border border-slate-800 rounded-lg p-4"
+                  data-testid={`saved-encounter-${encounter.id}`}
+                >
+                  <p className="text-sm text-cyan-400">
+                    {encounter.campaignName}
+                  </p>
+
+                  <pre className="whitespace-pre-wrap text-sm text-slate-300 mt-2">
+                    {encounter.content}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <h3 className="text-xl font-bold">Saved Locations</h3>
+
+          {savedLocations.length === 0 ? (
+            <p className="text-slate-400 text-sm mt-2">
+              Saved locations will appear here after generation.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-3" data-testid="saved-location-list">
+              {savedLocations.map((location) => (
+                <div
+                  key={location.id}
+                  className="bg-slate-950 border border-slate-800 rounded-lg p-4"
+                  data-testid={`saved-location-${location.id}`}
+                >
+                  <p className="text-sm text-cyan-400">
+                    {location.campaignName}
+                  </p>
+
+                  <pre className="whitespace-pre-wrap text-sm text-slate-300 mt-2">
+                    {location.content}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h3 className="text-xl font-bold">Module Status</h3>
 
           <p className="text-slate-400 mt-2">
             Tabletop Creator now includes campaign creation, campaign generation,
-            and NPC generation for the proof-of-concept stage.
+            NPC generation, quest generation, encounter generation, and location
+            generation for the proof-of-concept stage.
           </p>
         </div>
       </section>
