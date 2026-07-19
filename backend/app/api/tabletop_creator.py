@@ -14,6 +14,7 @@ from app.schemas.tabletop_creator import (
     NPCGenerateRequest,
     NPCGenerateResponse,
 )
+from app.services.ai_response_validation import validate_ai_response
 from app.services.ai_usage_service import log_ai_usage
 
 
@@ -172,13 +173,20 @@ Return the response with these sections:
             input=prompt,
         )
 
-        generated_text = response.output_text
-
-        if not generated_text or not generated_text.strip():
-            raise HTTPException(
-                status_code=502,
-                detail="The AI did not return campaign content.",
-            )
+        generated_text = validate_ai_response(
+            generated_text=response.output_text,
+            content_label="campaign content",
+            required_sections=(
+                "Campaign Overview",
+                "World Setting",
+                "Main Conflict",
+                "Important Locations",
+                "Key NPCs",
+                "Starter Quest",
+                "Possible Twists",
+            ),
+            minimum_length=200,
+        )
 
         log_ai_usage(
             db=db,
@@ -190,7 +198,7 @@ Return the response with these sections:
         )
 
         return {
-            "campaign_content": generated_text.strip(),
+            "campaign_content": generated_text,
         }
 
     except HTTPException:
@@ -234,14 +242,14 @@ Campaign Name:
 Campaign Description:
 {request.campaign_description}
 
-For each NPC, include:
+For each NPC, include these exact labeled sections:
 1. Name
-2. Role in the campaign
+2. Role
 3. Personality
 4. Appearance
 5. Motivation
-6. Secret or hidden detail
-7. How players may encounter them
+6. Secret
+7. Encounter
 """
 
     client = OpenAI(
@@ -256,13 +264,20 @@ For each NPC, include:
             input=prompt,
         )
 
-        generated_text = response.output_text
-
-        if not generated_text or not generated_text.strip():
-            raise HTTPException(
-                status_code=502,
-                detail="The AI did not return NPC content.",
-            )
+        generated_text = validate_ai_response(
+            generated_text=response.output_text,
+            content_label="NPC content",
+            required_sections=(
+                "Name",
+                "Role",
+                "Personality",
+                "Appearance",
+                "Motivation",
+                "Secret",
+                "Encounter",
+            ),
+            minimum_length=200,
+        )
 
         log_ai_usage(
             db=db,
@@ -274,7 +289,7 @@ For each NPC, include:
         )
 
         return {
-            "npc_content": generated_text.strip(),
+            "npc_content": generated_text,
         }
 
     except HTTPException:
@@ -285,3 +300,5 @@ For each NPC, include:
             status_code=500,
             detail="Unable to generate NPC content.",
         )
+    
+    
