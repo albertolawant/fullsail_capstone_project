@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 const CAMPAIGN_STORAGE_KEY = "tanioTabletopCampaigns";
+const AI_REQUEST_TIMEOUT_MS = 35000;
+const SLOW_REQUEST_THRESHOLD_MS = 30000;
 
 const generatedMarkdownClasses = `
   mt-4 text-slate-200 leading-relaxed
@@ -63,6 +65,14 @@ function TabletopCreator() {
   const [generatingLocations, setGeneratingLocations] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [savedLocations, setSavedLocations] = useState([]);
+  const activeRequestsRef = useRef(new Set());
+
+  const isAnyGenerationInProgress =
+    generating ||
+    generatingNPCs ||
+    generatingQuests ||
+    generatingEncounters ||
+    generatingLocations;
 
   const tools = [
     {
@@ -90,6 +100,85 @@ function TabletopCreator() {
       status: "Active",
     },
   ];
+
+  const requestAIContent = async ({
+    requestKey,
+    endpoint,
+    responseField,
+    fallbackError,
+    cleanedName,
+    cleanedDescription,
+    setLoading,
+    setError,
+    setContent,
+  }) => {
+    if (activeRequestsRef.current.has(requestKey)) {
+      return;
+    }
+
+    activeRequestsRef.current.add(requestKey);
+    setError("");
+    setContent("");
+    setLoading(true);
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      AI_REQUEST_TIMEOUT_MS
+    );
+    const startedAt = performance.now();
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/tabletop-creator/${endpoint}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            campaign_name: cleanedName,
+            campaign_description: cleanedDescription,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(errorData?.detail || fallbackError);
+      }
+
+      const data = await response.json();
+      setContent(data[responseField]);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setError(
+          "The AI request took too long. Please try generating the content again."
+        );
+      } else {
+        setError(error instanceof Error ? error.message : fallbackError);
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+
+      const duration = Math.round(performance.now() - startedAt);
+      console.info(`${requestKey} AI request completed in ${duration} ms`);
+
+      if (duration > SLOW_REQUEST_THRESHOLD_MS) {
+        console.warn(
+          `${requestKey} AI request exceeded the ${SLOW_REQUEST_THRESHOLD_MS} ms performance target.`
+        );
+      }
+
+      activeRequestsRef.current.delete(requestKey);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const savedCampaigns = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
@@ -157,16 +246,11 @@ function TabletopCreator() {
   };
 
   const handleGenerateCampaign = async () => {
-    setGenerateError("");
-    setGeneratedCampaignContent("");
-    setGenerating(true);
-
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
     if (!cleanedName) {
       setGenerateError("Campaign name is required before generating content.");
-      setGenerating(false);
       return;
     }
 
@@ -174,43 +258,20 @@ function TabletopCreator() {
       setGenerateError(
         "Campaign description is required before generating content."
       );
-      setGenerating(false);
       return;
     }
 
-    try {
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        "http://127.0.0.1:8000/tabletop-creator/generate-campaign",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            campaign_name: cleanedName,
-            campaign_description: cleanedDescription,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail || "Unable to generate campaign content."
-        );
-      }
-
-      const data = await response.json();
-      setGeneratedCampaignContent(data.campaign_content);
-    } catch (error) {
-      setGenerateError(error.message);
-    } finally {
-      setGenerating(false);
-    }
+    await requestAIContent({
+      requestKey: "Campaign",
+      endpoint: "generate-campaign",
+      responseField: "campaign_content",
+      fallbackError: "Unable to generate campaign content.",
+      cleanedName,
+      cleanedDescription,
+      setLoading: setGenerating,
+      setError: setGenerateError,
+      setContent: setGeneratedCampaignContent,
+    });
   };
 
   const handleSaveGeneratedCampaign = () => {
@@ -233,56 +294,30 @@ function TabletopCreator() {
   };
 
   const handleGenerateNPCs = async () => {
-    setNpcError("");
-    setGeneratedNPCContent("");
-    setGeneratingNPCs(true);
-
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
     if (!cleanedName) {
       setNpcError("Campaign name is required before generating NPCs.");
-      setGeneratingNPCs(false);
       return;
     }
 
     if (!cleanedDescription) {
       setNpcError("Campaign description is required before generating NPCs.");
-      setGeneratingNPCs(false);
       return;
     }
 
-    try {
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        "http://127.0.0.1:8000/tabletop-creator/generate-npc",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            campaign_name: cleanedName,
-            campaign_description: cleanedDescription,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(errorData?.detail || "Unable to generate NPCs.");
-      }
-
-      const data = await response.json();
-      setGeneratedNPCContent(data.npc_content);
-    } catch (error) {
-      setNpcError(error.message);
-    } finally {
-      setGeneratingNPCs(false);
-    }
+    await requestAIContent({
+      requestKey: "NPC",
+      endpoint: "generate-npc",
+      responseField: "npc_content",
+      fallbackError: "Unable to generate NPCs.",
+      cleanedName,
+      cleanedDescription,
+      setLoading: setGeneratingNPCs,
+      setError: setNpcError,
+      setContent: setGeneratedNPCContent,
+    });
   };
 
   const handleSaveNPCs = () => {
@@ -302,69 +337,38 @@ function TabletopCreator() {
   };
 
   const handleGenerateQuests = async () => {
-    setQuestError("");
-    setGeneratedQuestContent("");
-    setGeneratingQuests(true);
-
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
     if (!cleanedName) {
       setQuestError("Campaign name is required before generating quests.");
-      setGeneratingQuests(false);
       return;
     }
 
     if (!cleanedDescription) {
       setQuestError("Campaign description is required before generating quests.");
-      setGeneratingQuests(false);
       return;
     }
 
-    try {
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        "http://127.0.0.1:8000/tabletop-creator/generate-quest",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            campaign_name: cleanedName,
-            campaign_description: cleanedDescription,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(errorData?.detail || "Unable to generate quests.");
-      }
-
-      const data = await response.json();
-      setGeneratedQuestContent(data.quest_content);
-    } catch (error) {
-      setQuestError(error.message);
-    } finally {
-      setGeneratingQuests(false);
-    }
+    await requestAIContent({
+      requestKey: "Quest",
+      endpoint: "generate-quest",
+      responseField: "quest_content",
+      fallbackError: "Unable to generate quests.",
+      cleanedName,
+      cleanedDescription,
+      setLoading: setGeneratingQuests,
+      setError: setQuestError,
+      setContent: setGeneratedQuestContent,
+    });
   };
 
   const handleGenerateEncounters = async () => {
-    setEncounterError("");
-    setGeneratedEncounterContent("");
-    setGeneratingEncounters(true);
-
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
     if (!cleanedName) {
       setEncounterError("Campaign name is required before generating encounters.");
-      setGeneratingEncounters(false);
       return;
     }
 
@@ -372,54 +376,28 @@ function TabletopCreator() {
       setEncounterError(
         "Campaign description is required before generating encounters."
       );
-      setGeneratingEncounters(false);
       return;
     }
 
-    try {
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        "http://127.0.0.1:8000/tabletop-creator/generate-encounter",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            campaign_name: cleanedName,
-            campaign_description: cleanedDescription,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(errorData?.detail || "Unable to generate encounters.");
-      }
-
-      const data = await response.json();
-      setGeneratedEncounterContent(data.encounter_content);
-    } catch (error) {
-      setEncounterError(error.message);
-    } finally {
-      setGeneratingEncounters(false);
-    }
+    await requestAIContent({
+      requestKey: "Encounter",
+      endpoint: "generate-encounter",
+      responseField: "encounter_content",
+      fallbackError: "Unable to generate encounters.",
+      cleanedName,
+      cleanedDescription,
+      setLoading: setGeneratingEncounters,
+      setError: setEncounterError,
+      setContent: setGeneratedEncounterContent,
+    });
   };
 
   const handleGenerateLocations = async () => {
-    setLocationError("");
-    setGeneratedLocationContent("");
-    setGeneratingLocations(true);
-
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
     if (!cleanedName) {
       setLocationError("Campaign name is required before generating locations.");
-      setGeneratingLocations(false);
       return;
     }
 
@@ -427,41 +405,20 @@ function TabletopCreator() {
       setLocationError(
         "Campaign description is required before generating locations."
       );
-      setGeneratingLocations(false);
       return;
     }
 
-    try {
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        "http://127.0.0.1:8000/tabletop-creator/generate-location",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            campaign_name: cleanedName,
-            campaign_description: cleanedDescription,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(errorData?.detail || "Unable to generate locations.");
-      }
-
-      const data = await response.json();
-      setGeneratedLocationContent(data.location_content);
-    } catch (error) {
-      setLocationError(error.message);
-    } finally {
-      setGeneratingLocations(false);
-    }
+    await requestAIContent({
+      requestKey: "Location",
+      endpoint: "generate-location",
+      responseField: "location_content",
+      fallbackError: "Unable to generate locations.",
+      cleanedName,
+      cleanedDescription,
+      setLoading: setGeneratingLocations,
+      setError: setLocationError,
+      setContent: setGeneratedLocationContent,
+    });
   };
 
   const handleSaveQuests = () => {
@@ -641,8 +598,8 @@ function TabletopCreator() {
             <button
               type="button"
               onClick={handleGenerateCampaign}
-              disabled={generating}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+              disabled={isAnyGenerationInProgress}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-campaign"
             >
               {generating ? "Generating..." : "Generate Campaign Content"}
@@ -651,8 +608,8 @@ function TabletopCreator() {
             <button
               type="button"
               onClick={handleGenerateNPCs}
-              disabled={generatingNPCs}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+              disabled={isAnyGenerationInProgress}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-npcs"
             >
               {generatingNPCs ? "Generating NPCs..." : "Generate NPCs"}
@@ -661,8 +618,8 @@ function TabletopCreator() {
             <button
               type="button"
               onClick={handleGenerateQuests}
-              disabled={generatingQuests}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+              disabled={isAnyGenerationInProgress}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-quests"
             >
               {generatingQuests ? "Generating Quests..." : "Generate Quests"}
@@ -671,8 +628,8 @@ function TabletopCreator() {
             <button
               type="button"
               onClick={handleGenerateEncounters}
-              disabled={generatingEncounters}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+              disabled={isAnyGenerationInProgress}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-encounters"
             >
               {generatingEncounters
@@ -683,8 +640,8 @@ function TabletopCreator() {
             <button
               type="button"
               onClick={handleGenerateLocations}
-              disabled={generatingLocations}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50"
+              disabled={isAnyGenerationInProgress}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-locations"
             >
               {generatingLocations
@@ -692,6 +649,17 @@ function TabletopCreator() {
                 : "Generate Locations"}
             </button>
           </div>
+
+          {isAnyGenerationInProgress && (
+            <p
+              className="mt-4 text-sm text-cyan-300"
+              role="status"
+              aria-live="polite"
+              data-testid="ai-generation-loading"
+            >
+              Tanio AI is generating content. Please wait...
+            </p>
+          )}
         </form>
       </section>
 

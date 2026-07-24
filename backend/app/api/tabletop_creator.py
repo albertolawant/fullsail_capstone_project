@@ -21,6 +21,7 @@ from app.schemas.tabletop_creator import (
 )
 from app.services.ai_response_validation import validate_ai_response
 from app.services.ai_usage_service import log_ai_usage
+from app.api.auth import get_current_user
 
 
 router = APIRouter(
