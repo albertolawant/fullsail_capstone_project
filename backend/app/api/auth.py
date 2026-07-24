@@ -17,9 +17,6 @@ password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-Base.metadata.create_all(bind=engine)
-
-
 def hash_password(password: str):
     return password_context.hash(password)
 
