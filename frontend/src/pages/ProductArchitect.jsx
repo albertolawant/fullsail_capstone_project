@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { addRecentActivity } from "../utils/activityStorage";
 import { exportContentAsPdf } from "../utils/exportPdf";
+import { exportContentAsMarkdown } from "../utils/exportMarkdown";
 
 function ProductArchitect() {
   const location = useLocation();
@@ -335,6 +336,42 @@ function ProductArchitect() {
     }
   };
 
+  const handleExportMarkdown = () => {
+    try {
+      setError("");
+
+      const cleanedProjectName = projectName.trim() || "Tanio AI";
+      const documentLabel =
+        documentTypeLabels[contentType] || "Generated Content";
+
+      const safeProjectName = cleanedProjectName
+        .replace(/[^a-zA-Z0-9-_ ]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      exportContentAsMarkdown(
+        `${cleanedProjectName} - ${documentLabel}`,
+        generatedContent,
+        `${safeProjectName}-${contentType}.md`
+      );
+
+      addRecentActivity({
+        type: "Content Exported",
+        title: `${cleanedProjectName} exported as Markdown`,
+        description: `Downloaded the ${documentLabel} as a Markdown file.`,
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("Markdown export error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while exporting the Markdown file."
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-slate-950 p-8 text-white">
       <div className="mb-8">
@@ -474,13 +511,23 @@ function ProductArchitect() {
           <h2 className="text-xl font-bold">Generated Output</h2>
 
           {generatedContent && !loading && (
-            <button
-              type="button"
-              onClick={handleExportPdf}
-              className="bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-            >
-              Export PDF
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleExportMarkdown}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Export Markdown
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Export PDF
+              </button>
+            </div>
           )}
         </div>
 
