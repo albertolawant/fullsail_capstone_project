@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { addRecentActivity } from "../utils/activityStorage";
+import { exportContentAsPdf } from "../utils/exportPdf";
 
 function ProductArchitect() {
   const location = useLocation();
@@ -264,9 +265,7 @@ function ProductArchitect() {
       const data = await response.json();
 
       if (!data?.body || !data.body.trim()) {
-        throw new Error(
-          "The AI did not return any content. Please try again."
-        );
+        throw new Error("The AI did not return any content. Please try again.");
       }
 
       setGeneratedContent(data.body);
@@ -297,6 +296,42 @@ function ProductArchitect() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportPdf = () => {
+    try {
+      setError("");
+
+      const cleanedProjectName = projectName.trim() || "Tanio AI";
+      const documentLabel =
+        documentTypeLabels[contentType] || "Generated Content";
+
+      const safeProjectName = cleanedProjectName
+        .replace(/[^a-zA-Z0-9-_ ]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      exportContentAsPdf(
+        `${cleanedProjectName} - ${documentLabel}`,
+        generatedContent,
+        `${safeProjectName}-${contentType}.pdf`
+      );
+
+      addRecentActivity({
+        type: "Content Exported",
+        title: `${cleanedProjectName} exported as PDF`,
+        description: `Downloaded the ${documentLabel} as a PDF file.`,
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("PDF export error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while exporting the PDF."
+      );
     }
   };
 
@@ -423,7 +458,7 @@ function ProductArchitect() {
             aria-live="polite"
           >
             <p className="font-semibold text-red-300">
-              Unable to generate content
+              Something went wrong
             </p>
 
             <p className="text-sm text-red-300 mt-1">{error}</p>
@@ -435,7 +470,19 @@ function ProductArchitect() {
         className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8"
         aria-busy={loading}
       >
-        <h2 className="text-xl font-bold mb-6">Generated Output</h2>
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <h2 className="text-xl font-bold">Generated Output</h2>
+
+          {generatedContent && !loading && (
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              className="bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              Export PDF
+            </button>
+          )}
+        </div>
 
         {loading ? (
           <div className="flex items-center gap-3 text-slate-400">
