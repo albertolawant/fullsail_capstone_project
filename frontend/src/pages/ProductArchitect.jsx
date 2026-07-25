@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import { addRecentActivity } from "../utils/activityStorage";
 import { exportContentAsPdf } from "../utils/exportPdf";
 import { exportContentAsMarkdown } from "../utils/exportMarkdown";
+import { exportContentAsTxt } from "../utils/exportTxt";
 
 function ProductArchitect() {
   const location = useLocation();
@@ -372,6 +373,42 @@ function ProductArchitect() {
     }
   };
 
+  const handleExportTxt = () => {
+    try {
+      setError("");
+
+      const cleanedProjectName = projectName.trim() || "Tanio AI";
+      const documentLabel =
+        documentTypeLabels[contentType] || "Generated Content";
+
+      const safeProjectName = cleanedProjectName
+        .replace(/[^a-zA-Z0-9-_ ]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      exportContentAsTxt(
+        `${cleanedProjectName} - ${documentLabel}`,
+        generatedContent,
+        `${safeProjectName}-${contentType}.txt`
+      );
+
+      addRecentActivity({
+        type: "Content Exported",
+        title: `${cleanedProjectName} exported as TXT`,
+        description: `Downloaded the ${documentLabel} as a text file.`,
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("TXT export error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while exporting the TXT file."
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-slate-950 p-8 text-white">
       <div className="mb-8">
@@ -512,6 +549,14 @@ function ProductArchitect() {
 
           {generatedContent && !loading && (
             <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleExportTxt}
+                className="bg-slate-600 hover:bg-slate-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Export TXT
+              </button>
+
               <button
                 type="button"
                 onClick={handleExportMarkdown}
