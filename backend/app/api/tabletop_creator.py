@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.core.config import settings
 from app.db.database import get_db
 from app.models.project import Project
@@ -10,18 +11,17 @@ from app.models.workspace import Workspace
 from app.schemas.tabletop_creator import (
     CampaignGenerateRequest,
     CampaignGenerateResponse,
-    NPCGenerateRequest,
-    NPCGenerateResponse,
-    QuestGenerateRequest,
-    QuestGenerateResponse, 
     EncounterGenerateRequest,
     EncounterGenerateResponse,
     LocationGenerateRequest,
     LocationGenerateResponse,
+    NPCGenerateRequest,
+    NPCGenerateResponse,
+    QuestGenerateRequest,
+    QuestGenerateResponse,
 )
 from app.services.ai_response_validation import validate_ai_response
 from app.services.ai_usage_service import log_ai_usage
-from app.api.auth import get_current_user
 
 
 router = APIRouter(
@@ -52,6 +52,7 @@ def get_or_create_user_workspace(
         db.add(workspace)
         db.commit()
         db.refresh(workspace)
+
         return workspace
 
     except Exception:
@@ -115,6 +116,7 @@ def get_or_create_campaign_project(
         db.add(project)
         db.commit()
         db.refresh(project)
+
         return project
 
     except Exception:
@@ -149,7 +151,9 @@ def generate_campaign_content(
     )
 
     prompt = f"""
-Create tabletop campaign content for the following campaign.
+You are an expert tabletop RPG world builder.
+
+Generate rich and immersive campaign lore for the following campaign.
 
 Campaign Name:
 {request.campaign_name}
@@ -157,14 +161,56 @@ Campaign Name:
 Campaign Description:
 {request.campaign_description}
 
-Return the response with these sections:
-1. Campaign Overview
-2. World Setting
-3. Main Conflict
-4. Important Locations
-5. Key NPCs
-6. Starter Quest
-7. Possible Twists
+Return the response in Markdown format.
+
+Include all of the following sections using these exact headings:
+
+# Campaign Overview
+
+Provide a clear summary of the campaign, its tone, genre, and central premise.
+
+# World Lore
+
+Describe the history of the world, including major past events, legends,
+cultures, and important changes that shaped the setting.
+
+# Current Political Situation
+
+Describe the major kingdoms, governments, factions, guilds, religious groups,
+or other powers currently influencing the world.
+
+# Important Locations
+
+Describe at least five interesting locations that players could explore.
+Explain what makes each location important or memorable.
+
+# Major Characters
+
+Introduce important rulers, heroes, villains, faction leaders, or other NPCs
+who influence the world and its ongoing events.
+
+# Main Conflict
+
+Explain the central threat, crisis, war, mystery, or other major conflict that
+drives the campaign.
+
+# Secrets and Mysteries
+
+Provide hidden truths, ancient secrets, unanswered questions, or mysteries
+that players could eventually discover.
+
+# Adventure Hooks
+
+Provide at least five different adventure hooks that could introduce players
+to the world and its conflicts.
+
+# Optional Future Storylines
+
+Provide additional story ideas that the game master could expand into future
+quests, campaign arcs, or major events.
+
+Make the lore creative, detailed, consistent with the campaign description,
+and useful for running a tabletop RPG campaign.
 """
 
     client = OpenAI(
@@ -181,25 +227,27 @@ Return the response with these sections:
 
         generated_text = validate_ai_response(
             generated_text=response.output_text,
-            content_label="campaign content",
+            content_label="campaign lore",
             required_sections=(
                 "Campaign Overview",
-                "World Setting",
-                "Main Conflict",
+                "World Lore",
+                "Current Political Situation",
                 "Important Locations",
-                "Key NPCs",
-                "Starter Quest",
-                "Possible Twists",
+                "Major Characters",
+                "Main Conflict",
+                "Secrets and Mysteries",
+                "Adventure Hooks",
+                "Optional Future Storylines",
             ),
-            minimum_length=200,
+            minimum_length=500,
         )
 
         log_ai_usage(
             db=db,
             user_id=current_user.id,
             project_id=project.id,
-            feature_type="Campaign Generator",
-            content_type="Campaign Content",
+            feature_type="Campaign Lore Generator",
+            content_type="Campaign Lore",
             status="success",
         )
 
@@ -213,7 +261,7 @@ Return the response with these sections:
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail="Unable to generate campaign content.",
+            detail="Unable to generate campaign lore.",
         )
 
 
@@ -304,18 +352,21 @@ For each NPC, include these exact labeled sections:
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail="Unable to generate NPC content."
+            detail="Unable to generate NPC content.",
         )
-    
-@router.post("/generate-quest", response_model=QuestGenerateResponse)
+
+
+@router.post(
+    "/generate-quest",
+    response_model=QuestGenerateResponse,
+)
 def generate_quest_content(
     request: QuestGenerateRequest,
-
 ):
     if not settings.OPENAI_API_KEY:
         raise HTTPException(
             status_code=500,
-            detail="OpenAI API key is not configured."
+            detail="OpenAI API key is not configured.",
         )
 
     prompt = f"""
@@ -338,6 +389,12 @@ For each quest, include:
 8. Twist or Complication
 """
 
+    client = OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        timeout=30.0,
+        max_retries=1,
+    )
+
     try:
         response = client.responses.create(
             model="gpt-4.1-mini",
@@ -345,24 +402,27 @@ For each quest, include:
         )
 
         return {
-            "quest_content": response.output_text
+            "quest_content": response.output_text,
         }
 
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail="Unable to generate quest content."
+            detail="Unable to generate quest content.",
         )
-    
-@router.post("/generate-encounter", response_model=EncounterGenerateResponse)
+
+
+@router.post(
+    "/generate-encounter",
+    response_model=EncounterGenerateResponse,
+)
 def generate_encounter_content(
     request: EncounterGenerateRequest,
-
 ):
     if not settings.OPENAI_API_KEY:
         raise HTTPException(
             status_code=500,
-            detail="OpenAI API key is not configured."
+            detail="OpenAI API key is not configured.",
         )
 
     prompt = f"""
@@ -386,6 +446,12 @@ For each encounter, include:
 9. Reward or Consequence
 """
 
+    client = OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        timeout=30.0,
+        max_retries=1,
+    )
+
     try:
         response = client.responses.create(
             model="gpt-4.1-mini",
@@ -393,24 +459,27 @@ For each encounter, include:
         )
 
         return {
-            "encounter_content": response.output_text
+            "encounter_content": response.output_text,
         }
 
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail="Unable to generate encounter content."
+            detail="Unable to generate encounter content.",
         )
-    
-@router.post("/generate-location", response_model=LocationGenerateResponse)
+
+
+@router.post(
+    "/generate-location",
+    response_model=LocationGenerateResponse,
+)
 def generate_location_content(
     request: LocationGenerateRequest,
-
 ):
     if not settings.OPENAI_API_KEY:
         raise HTTPException(
             status_code=500,
-            detail="OpenAI API key is not configured."
+            detail="OpenAI API key is not configured.",
         )
 
     prompt = f"""
@@ -434,6 +503,12 @@ For each location, include:
 9. Story Use
 """
 
+    client = OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        timeout=30.0,
+        max_retries=1,
+    )
+
     try:
         response = client.responses.create(
             model="gpt-4.1-mini",
@@ -441,11 +516,11 @@ For each location, include:
         )
 
         return {
-            "location_content": response.output_text
+            "location_content": response.output_text,
         }
 
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail="Unable to generate location content."
+            detail="Unable to generate location content.",
         )
