@@ -3,6 +3,9 @@ import { useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { addRecentActivity } from "../utils/activityStorage";
+import { exportContentAsPdf } from "../utils/exportPdf";
+import { exportContentAsMarkdown } from "../utils/exportMarkdown";
+import { exportContentAsTxt } from "../utils/exportTxt";
 
 function ProductArchitect() {
   const location = useLocation();
@@ -264,9 +267,7 @@ function ProductArchitect() {
       const data = await response.json();
 
       if (!data?.body || !data.body.trim()) {
-        throw new Error(
-          "The AI did not return any content. Please try again."
-        );
+        throw new Error("The AI did not return any content. Please try again.");
       }
 
       setGeneratedContent(data.body);
@@ -297,6 +298,114 @@ function ProductArchitect() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportPdf = () => {
+    try {
+      setError("");
+
+      const cleanedProjectName = projectName.trim() || "Tanio AI";
+      const documentLabel =
+        documentTypeLabels[contentType] || "Generated Content";
+
+      const safeProjectName = cleanedProjectName
+        .replace(/[^a-zA-Z0-9-_ ]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      exportContentAsPdf(
+        `${cleanedProjectName} - ${documentLabel}`,
+        generatedContent,
+        `${safeProjectName}-${contentType}.pdf`
+      );
+
+      addRecentActivity({
+        type: "Content Exported",
+        title: `${cleanedProjectName} exported as PDF`,
+        description: `Downloaded the ${documentLabel} as a PDF file.`,
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("PDF export error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while exporting the PDF."
+      );
+    }
+  };
+
+  const handleExportMarkdown = () => {
+    try {
+      setError("");
+
+      const cleanedProjectName = projectName.trim() || "Tanio AI";
+      const documentLabel =
+        documentTypeLabels[contentType] || "Generated Content";
+
+      const safeProjectName = cleanedProjectName
+        .replace(/[^a-zA-Z0-9-_ ]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      exportContentAsMarkdown(
+        `${cleanedProjectName} - ${documentLabel}`,
+        generatedContent,
+        `${safeProjectName}-${contentType}.md`
+      );
+
+      addRecentActivity({
+        type: "Content Exported",
+        title: `${cleanedProjectName} exported as Markdown`,
+        description: `Downloaded the ${documentLabel} as a Markdown file.`,
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("Markdown export error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while exporting the Markdown file."
+      );
+    }
+  };
+
+  const handleExportTxt = () => {
+    try {
+      setError("");
+
+      const cleanedProjectName = projectName.trim() || "Tanio AI";
+      const documentLabel =
+        documentTypeLabels[contentType] || "Generated Content";
+
+      const safeProjectName = cleanedProjectName
+        .replace(/[^a-zA-Z0-9-_ ]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+
+      exportContentAsTxt(
+        `${cleanedProjectName} - ${documentLabel}`,
+        generatedContent,
+        `${safeProjectName}-${contentType}.txt`
+      );
+
+      addRecentActivity({
+        type: "Content Exported",
+        title: `${cleanedProjectName} exported as TXT`,
+        description: `Downloaded the ${documentLabel} as a text file.`,
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("TXT export error:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while exporting the TXT file."
+      );
     }
   };
 
@@ -423,7 +532,7 @@ function ProductArchitect() {
             aria-live="polite"
           >
             <p className="font-semibold text-red-300">
-              Unable to generate content
+              Something went wrong
             </p>
 
             <p className="text-sm text-red-300 mt-1">{error}</p>
@@ -435,7 +544,37 @@ function ProductArchitect() {
         className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8"
         aria-busy={loading}
       >
-        <h2 className="text-xl font-bold mb-6">Generated Output</h2>
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <h2 className="text-xl font-bold">Generated Output</h2>
+
+          {generatedContent && !loading && (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleExportTxt}
+                className="bg-slate-600 hover:bg-slate-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Export TXT
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportMarkdown}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Export Markdown
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Export PDF
+              </button>
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <div className="flex items-center gap-3 text-slate-400">
