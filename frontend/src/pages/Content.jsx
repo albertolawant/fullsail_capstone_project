@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   FaBrain,
   FaDiceD20,
@@ -99,6 +101,31 @@ function createPreview(body = "", maximumLength = 220) {
 
   return `${plainText.slice(0, maximumLength).trim()}...`;
 }
+
+
+const contentMarkdownClasses = `
+  text-slate-200 leading-relaxed
+  [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-2 [&_h1]:mb-4
+  [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-7 [&_h2]:mb-3
+  [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-cyan-300 [&_h3]:mt-6 [&_h3]:mb-3
+  [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-cyan-200 [&_h4]:mt-5 [&_h4]:mb-2
+  [&_p]:my-3
+  [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-3
+  [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-3
+  [&_li]:my-1
+  [&_strong]:font-bold [&_strong]:text-white
+  [&_em]:italic
+  [&_hr]:border-slate-700 [&_hr]:my-6
+  [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-700
+  [&_blockquote]:pl-4 [&_blockquote]:text-slate-300
+  [&_code]:bg-slate-950 [&_code]:px-1 [&_code]:py-0.5
+  [&_code]:rounded [&_code]:text-cyan-300
+  [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-slate-950
+  [&_pre]:p-4 [&_pre]:my-4
+  [&_table]:w-full [&_table]:border-collapse [&_table]:my-5
+  [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:p-3 [&_th]:text-left
+  [&_td]:border [&_td]:border-slate-700 [&_td]:p-3
+`;
 
 function Content() {
   const [contentItems, setContentItems] = useState([]);
@@ -557,8 +584,12 @@ function Content() {
             </header>
 
             <div className="overflow-y-auto p-6">
-              <div className="whitespace-pre-wrap break-words rounded-xl border border-slate-800 bg-slate-950 p-5 font-mono text-sm leading-7 text-slate-300">
-                {selectedContent.body}
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-6">
+                <div className={contentMarkdownClasses}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {selectedContent.body}
+                  </ReactMarkdown>
+                </div>
               </div>
             </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -22,9 +22,7 @@ function ProductArchitect() {
 
   const [contentType, setContentType] = useState("prd");
   const [generatedContent, setGeneratedContent] = useState("");
-  const [recentContent, setRecentContent] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [recentLoading, setRecentLoading] = useState(false);
   const [error, setError] = useState("");
 
   const endpointMap = {
@@ -118,65 +116,6 @@ function ProductArchitect() {
       </td>
     ),
   };
-
-  const recentMarkdownComponents = {
-    h1: ({ children }) => (
-      <span className="font-semibold text-slate-300">{children} </span>
-    ),
-
-    h2: ({ children }) => (
-      <span className="font-semibold text-slate-300">{children} </span>
-    ),
-
-    h3: ({ children }) => (
-      <span className="font-semibold text-slate-300">{children} </span>
-    ),
-
-    p: ({ children }) => <span>{children} </span>,
-    ul: ({ children }) => <span>{children} </span>,
-    ol: ({ children }) => <span>{children} </span>,
-    li: ({ children }) => <span>{children} </span>,
-
-    strong: ({ children }) => (
-      <strong className="font-semibold text-slate-300">{children}</strong>
-    ),
-
-    hr: () => <span>— </span>,
-  };
-
-  const fetchRecentContent = async () => {
-    try {
-      setRecentLoading(true);
-
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        return;
-      }
-
-      const response = await fetch("http://127.0.0.1:8000/content/", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch recent content.");
-      }
-
-      const data = await response.json();
-
-      setRecentContent(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Recent content error:", err);
-    } finally {
-      setRecentLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRecentContent();
-  }, []);
 
   const handleGenerate = async () => {
     const cleanedProjectName = projectName.trim();
@@ -281,7 +220,6 @@ function ProductArchitect() {
         projectName: cleanedProjectName,
       });
 
-      await fetchRecentContent();
     } catch (err) {
       console.error("Generation error:", err);
 
@@ -601,45 +539,6 @@ function ProductArchitect() {
         )}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-        <h2 className="text-xl font-bold mb-4">
-          Recent Generated Content
-        </h2>
-
-        {recentLoading ? (
-          <p className="text-slate-500">Loading recent content...</p>
-        ) : recentContent.length > 0 ? (
-          <div className="space-y-4">
-            {recentContent.slice(0, 5).map((item) => (
-              <div
-                key={item.id}
-                className="bg-slate-950 border border-slate-800 rounded-lg p-4"
-              >
-                <div className="flex justify-between items-start gap-4 mb-2">
-                  <h3 className="font-semibold text-cyan-400">
-                    {item.title}
-                  </h3>
-
-                  <span className="text-xs text-slate-500 shrink-0">
-                    {item.content_type}
-                  </span>
-                </div>
-
-                <div className="text-sm text-slate-400 leading-relaxed line-clamp-3 overflow-hidden">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={recentMarkdownComponents}
-                  >
-                    {item.body || ""}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-slate-500">No recent content yet.</p>
-        )}
-      </div>
     </div>
   );
 }

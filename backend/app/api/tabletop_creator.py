@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.db.database import get_db
+from app.models.content import GeneratedContent
 from app.models.project import Project
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -22,7 +23,6 @@ from app.schemas.tabletop_creator import (
 )
 from app.services.ai_response_validation import validate_ai_response
 from app.services.ai_usage_service import log_ai_usage
-
 
 router = APIRouter(
     prefix="/tabletop-creator",
@@ -52,12 +52,9 @@ def get_or_create_user_workspace(
         db.add(workspace)
         db.commit()
         db.refresh(workspace)
-
         return workspace
-
     except Exception:
         db.rollback()
-
         raise HTTPException(
             status_code=500,
             detail="A workspace could not be created. Please try again.",
@@ -89,10 +86,8 @@ def get_or_create_campaign_project(
             try:
                 db.commit()
                 db.refresh(project)
-
             except Exception:
                 db.rollback()
-
                 raise HTTPException(
                     status_code=500,
                     detail="The campaign project could not be updated.",
@@ -116,16 +111,50 @@ def get_or_create_campaign_project(
         db.add(project)
         db.commit()
         db.refresh(project)
-
         return project
-
     except Exception:
         db.rollback()
-
         raise HTTPException(
             status_code=500,
             detail="The campaign project could not be created.",
         )
+
+
+def save_generated_content(
+    db: Session,
+    current_user: User,
+    project: Project,
+    title: str,
+    content_type: str,
+    body: str,
+) -> GeneratedContent:
+    content = GeneratedContent(
+        title=title,
+        content_type=content_type,
+        body=body,
+        project_id=project.id,
+        owner_id=current_user.id,
+    )
+
+    try:
+        db.add(content)
+        db.commit()
+        db.refresh(content)
+        return content
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="The generated content could not be saved.",
+        )
+
+
+def create_openai_client() -> OpenAI:
+    return OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        timeout=30.0,
+        max_retries=1,
+    )
 
 
 @router.post(
@@ -213,11 +242,7 @@ Make the lore creative, detailed, consistent with the campaign description,
 and useful for running a tabletop RPG campaign.
 """
 
-    client = OpenAI(
-        api_key=settings.OPENAI_API_KEY,
-        timeout=30.0,
-        max_retries=1,
-    )
+    client = create_openai_client()
 
     try:
         response = client.responses.create(
@@ -242,6 +267,15 @@ and useful for running a tabletop RPG campaign.
             minimum_length=500,
         )
 
+        save_generated_content(
+            db=db,
+            current_user=current_user,
+            project=project,
+            title=f"{request.campaign_name.strip()} - Campaign Lore",
+            content_type="Campaign Lore",
+            body=generated_text,
+        )
+
         log_ai_usage(
             db=db,
             user_id=current_user.id,
@@ -251,13 +285,10 @@ and useful for running a tabletop RPG campaign.
             status="success",
         )
 
-        return {
-            "campaign_content": generated_text,
-        }
+        return {"campaign_content": generated_text}
 
     except HTTPException:
         raise
-
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -296,6 +327,8 @@ Campaign Name:
 Campaign Description:
 {request.campaign_description}
 
+Return the response in Markdown format.
+
 For each NPC, include these exact labeled sections:
 1. Name
 2. Role
@@ -306,11 +339,7 @@ For each NPC, include these exact labeled sections:
 7. Encounter
 """
 
-    client = OpenAI(
-        api_key=settings.OPENAI_API_KEY,
-        timeout=30.0,
-        max_retries=1,
-    )
+    client = create_openai_client()
 
     try:
         response = client.responses.create(
@@ -333,6 +362,15 @@ For each NPC, include these exact labeled sections:
             minimum_length=200,
         )
 
+        save_generated_content(
+            db=db,
+            current_user=current_user,
+            project=project,
+            title=f"{request.campaign_name.strip()} - NPCs",
+            content_type="NPC Content",
+            body=generated_text,
+        )
+
         log_ai_usage(
             db=db,
             user_id=current_user.id,
@@ -342,13 +380,10 @@ For each NPC, include these exact labeled sections:
             status="success",
         )
 
-        return {
-            "npc_content": generated_text,
-        }
+        return {"npc_content": generated_text}
 
     except HTTPException:
         raise
-
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -362,12 +397,21 @@ For each NPC, include these exact labeled sections:
 )
 def generate_quest_content(
     request: QuestGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if not settings.OPENAI_API_KEY:
         raise HTTPException(
-            status_code=500,
-            detail="OpenAI API key is not configured.",
+            status_code=503,
+            detail="The AI service is temporarily unavailable.",
         )
+
+    project = get_or_create_campaign_project(
+        db=db,
+        current_user=current_user,
+        campaign_name=request.campaign_name,
+        campaign_description=request.campaign_description,
+    )
 
     prompt = f"""
 Create 3 tabletop quests or adventure hooks for the following campaign.
@@ -377,6 +421,8 @@ Campaign Name:
 
 Campaign Description:
 {request.campaign_description}
+
+Return the response in Markdown format.
 
 For each quest, include:
 1. Quest Title
@@ -389,11 +435,7 @@ For each quest, include:
 8. Twist or Complication
 """
 
-    client = OpenAI(
-        api_key=settings.OPENAI_API_KEY,
-        timeout=30.0,
-        max_retries=1,
-    )
+    client = create_openai_client()
 
     try:
         response = client.responses.create(
@@ -401,10 +443,44 @@ For each quest, include:
             input=prompt,
         )
 
-        return {
-            "quest_content": response.output_text,
-        }
+        generated_text = validate_ai_response(
+            generated_text=response.output_text,
+            content_label="quest content",
+            required_sections=(
+                "Quest Title",
+                "Quest Summary",
+                "Main Objective",
+                "Important NPCs",
+                "Key Location",
+                "Challenge or Encounter",
+                "Reward",
+                "Twist or Complication",
+            ),
+            minimum_length=200,
+        )
 
+        save_generated_content(
+            db=db,
+            current_user=current_user,
+            project=project,
+            title=f"{request.campaign_name.strip()} - Quests",
+            content_type="Quest Content",
+            body=generated_text,
+        )
+
+        log_ai_usage(
+            db=db,
+            user_id=current_user.id,
+            project_id=project.id,
+            feature_type="Quest Generator",
+            content_type="Quest Content",
+            status="success",
+        )
+
+        return {"quest_content": generated_text}
+
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -418,12 +494,21 @@ For each quest, include:
 )
 def generate_encounter_content(
     request: EncounterGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if not settings.OPENAI_API_KEY:
         raise HTTPException(
-            status_code=500,
-            detail="OpenAI API key is not configured.",
+            status_code=503,
+            detail="The AI service is temporarily unavailable.",
         )
+
+    project = get_or_create_campaign_project(
+        db=db,
+        current_user=current_user,
+        campaign_name=request.campaign_name,
+        campaign_description=request.campaign_description,
+    )
 
     prompt = f"""
 Create 3 tabletop encounters for the following campaign.
@@ -433,6 +518,8 @@ Campaign Name:
 
 Campaign Description:
 {request.campaign_description}
+
+Return the response in Markdown format.
 
 For each encounter, include:
 1. Encounter Name
@@ -446,11 +533,7 @@ For each encounter, include:
 9. Reward or Consequence
 """
 
-    client = OpenAI(
-        api_key=settings.OPENAI_API_KEY,
-        timeout=30.0,
-        max_retries=1,
-    )
+    client = create_openai_client()
 
     try:
         response = client.responses.create(
@@ -458,10 +541,45 @@ For each encounter, include:
             input=prompt,
         )
 
-        return {
-            "encounter_content": response.output_text,
-        }
+        generated_text = validate_ai_response(
+            generated_text=response.output_text,
+            content_label="encounter content",
+            required_sections=(
+                "Encounter Name",
+                "Encounter Type",
+                "Location",
+                "Setup",
+                "Enemies or NPCs Involved",
+                "Objective",
+                "Challenge Details",
+                "Possible Player Choices",
+                "Reward or Consequence",
+            ),
+            minimum_length=200,
+        )
 
+        save_generated_content(
+            db=db,
+            current_user=current_user,
+            project=project,
+            title=f"{request.campaign_name.strip()} - Encounters",
+            content_type="Encounter Content",
+            body=generated_text,
+        )
+
+        log_ai_usage(
+            db=db,
+            user_id=current_user.id,
+            project_id=project.id,
+            feature_type="Encounter Generator",
+            content_type="Encounter Content",
+            status="success",
+        )
+
+        return {"encounter_content": generated_text}
+
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -475,12 +593,21 @@ For each encounter, include:
 )
 def generate_location_content(
     request: LocationGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if not settings.OPENAI_API_KEY:
         raise HTTPException(
-            status_code=500,
-            detail="OpenAI API key is not configured.",
+            status_code=503,
+            detail="The AI service is temporarily unavailable.",
         )
+
+    project = get_or_create_campaign_project(
+        db=db,
+        current_user=current_user,
+        campaign_name=request.campaign_name,
+        campaign_description=request.campaign_description,
+    )
 
     prompt = f"""
 Create 3 tabletop campaign locations or settings for the following campaign.
@@ -490,6 +617,8 @@ Campaign Name:
 
 Campaign Description:
 {request.campaign_description}
+
+Return the response in Markdown format.
 
 For each location, include:
 1. Location Name
@@ -503,11 +632,7 @@ For each location, include:
 9. Story Use
 """
 
-    client = OpenAI(
-        api_key=settings.OPENAI_API_KEY,
-        timeout=30.0,
-        max_retries=1,
-    )
+    client = create_openai_client()
 
     try:
         response = client.responses.create(
@@ -515,10 +640,45 @@ For each location, include:
             input=prompt,
         )
 
-        return {
-            "location_content": response.output_text,
-        }
+        generated_text = validate_ai_response(
+            generated_text=response.output_text,
+            content_label="location content",
+            required_sections=(
+                "Location Name",
+                "Location Type",
+                "Description",
+                "Atmosphere or Mood",
+                "Important NPCs or Factions",
+                "Key Features",
+                "Secrets or Hidden Details",
+                "Possible Encounters",
+                "Story Use",
+            ),
+            minimum_length=200,
+        )
 
+        save_generated_content(
+            db=db,
+            current_user=current_user,
+            project=project,
+            title=f"{request.campaign_name.strip()} - Locations",
+            content_type="Location Content",
+            body=generated_text,
+        )
+
+        log_ai_usage(
+            db=db,
+            user_id=current_user.id,
+            project_id=project.id,
+            feature_type="Location Generator",
+            content_type="Location Content",
+            status="success",
+        )
+
+        return {"location_content": generated_text}
+
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,
