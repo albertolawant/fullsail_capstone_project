@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { FaArrowRight, FaChevronRight } from "react-icons/fa";
 import { addRecentActivity } from "../utils/activityStorage";
 
 import {
@@ -11,17 +12,29 @@ import {
 
 function Projects() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [workspaceName, setWorkspaceName] = useState("");
+
   const [editingProject, setEditingProject] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
+
   const [deletingProject, setDeletingProject] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+
+  const workspaceParam = searchParams.get("workspace");
+
+  const selectedWorkspaceId = workspaceParam
+    ? Number(workspaceParam)
+    : null;
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -29,7 +42,8 @@ function Projects() {
 
     try {
       const token = localStorage.getItem("token");
-      // temp
+
+      // Demo mode
       if (!token) {
         initializeDemoData();
         setProjects(getDemoProjects());
@@ -61,6 +75,70 @@ function Projects() {
   useEffect(() => {
     loadProjects();
   }, [loadProjects]);
+
+  useEffect(() => {
+    const loadWorkspaceName = async () => {
+      if (!selectedWorkspaceId) {
+        setWorkspaceName("");
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
+          return;
+        }
+
+        const response = await fetch(
+          `http://127.0.0.1:8000/workspaces/${selectedWorkspaceId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
+          return;
+        }
+
+        const workspace = await response.json();
+
+        setWorkspaceName(
+          workspace.name || `Workspace #${selectedWorkspaceId}`
+        );
+      } catch {
+        setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
+      }
+    };
+
+    loadWorkspaceName();
+  }, [selectedWorkspaceId]);
+
+  const filteredProjects = useMemo(() => {
+    if (!selectedWorkspaceId) {
+      return projects;
+    }
+
+    return projects.filter(
+      (project) =>
+        Number(project.workspace_id) === selectedWorkspaceId
+    );
+  }, [projects, selectedWorkspaceId]);
+
+  const displayWorkspaceName =
+    workspaceName ||
+    (selectedWorkspaceId
+      ? `Workspace #${selectedWorkspaceId}`
+      : "");
+
+  const clearWorkspaceFilter = () => {
+    setSearchParams({});
+    setWorkspaceName("");
+  };
 
   const openProject = (project) => {
     navigate("/product-architect", {
@@ -229,121 +307,230 @@ function Projects() {
       setDeleting(false);
     }
   };
-  
+
   return (
-    <main className="flex-1 p-10" data-testid="project-list-view">
-      <div className="flex items-center justify-between mb-8">
+    <main
+      className="flex-1 p-10"
+      data-testid="project-list-view"
+    >
+      {/* Workspace Breadcrumb */}
+      {selectedWorkspaceId && (
+        <div className="mb-4 flex items-center gap-2 text-sm">
+          <button
+            type="button"
+            onClick={() => navigate("/workspaces")}
+            className="font-medium text-slate-400 transition hover:text-cyan-400"
+          >
+            Workspaces
+          </button>
+
+          <FaChevronRight className="text-xs text-slate-600" />
+
+          <span className="font-medium text-cyan-400">
+            {displayWorkspaceName}
+          </span>
+        </div>
+      )}
+
+      {/* Page Header */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-4xl font-bold">Projects</h2>
-          <p className="text-slate-400 mt-2">
-            View and manage projects from your workspaces.
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-4xl font-bold text-white">
+              Projects
+            </h1>
+
+            {selectedWorkspaceId && (
+              <span className="rounded-full border border-cyan-700/50 bg-cyan-950/40 px-3 py-1 text-sm font-medium text-cyan-400">
+                {filteredProjects.length}{" "}
+                {filteredProjects.length === 1
+                  ? "Project"
+                  : "Projects"}
+              </span>
+            )}
+          </div>
+
+          <p className="mt-2 text-slate-400">
+            {selectedWorkspaceId
+              ? `Viewing projects from ${displayWorkspaceName}.`
+              : "View and manage projects from your workspaces."}
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadProjects}
-          className="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg"
-        >
-          Refresh
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {selectedWorkspaceId && (
+            <button
+              type="button"
+              onClick={clearWorkspaceFilter}
+              className="rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700"
+            >
+              Show All Projects
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={loadProjects}
+            className="rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
+      {/* Loading State */}
       {loading && (
-        <p className="text-slate-400" data-testid="projects-loading">
-          Loading projects...
-        </p>
+        <div
+          className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center"
+          data-testid="projects-loading"
+        >
+          <p className="text-slate-400">
+            Loading projects...
+          </p>
+        </div>
       )}
 
+      {/* Error State */}
       {error && (
         <div
-          className="bg-red-950 border border-red-800 text-red-300 rounded-lg p-4"
+          className="rounded-xl border border-red-800 bg-red-950 p-4 text-red-300"
           role="alert"
         >
           {error}
         </div>
       )}
 
-      {!loading && !error && projects.length === 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
-          <h3 className="text-xl font-semibold">No projects found</h3>
-          <p className="text-slate-400 mt-2">
-            Projects will appear here after they are created.
-          </p>
-        </div>
-      )}
+      {/* Empty State - All Projects */}
+      {!loading &&
+        !error &&
+        !selectedWorkspaceId &&
+        projects.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
+            <h3 className="text-xl font-semibold text-white">
+              No projects found
+            </h3>
 
-      {!loading && !error && projects.length > 0 && (
-        <div
-          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
-          data-testid="project-list"
-        >
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className="bg-slate-900 border border-slate-800 hover:border-cyan-500 rounded-xl p-6 text-left transition-all duration-200"
-              data-testid={`project-${project.id}`}
-            >
-              <h3 className="text-xl font-semibold text-white">
-                {project.title}
+            <p className="mt-2 text-slate-400">
+              Projects will appear here after they are created.
+            </p>
+          </div>
+        )}
+
+      {/* Empty State - Selected Workspace */}
+      {!loading &&
+        !error &&
+        selectedWorkspaceId &&
+        filteredProjects.length === 0 && (
+          <div className="flex min-h-72 items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8">
+            <div className="max-w-lg text-center">
+              <h3 className="text-2xl font-bold text-white">
+                No projects in this workspace
               </h3>
 
-              <p className="text-slate-400 mt-3 min-h-12">
-                {project.description || "No project description provided."}
+              <p className="mt-2 text-slate-400">
+                {displayWorkspaceName} does not have any projects yet.
               </p>
 
-              <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-800">
-                <span className="text-sm text-slate-500">
-                  Workspace {project.workspace_id}
-                </span>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => startEditing(project)}
-                    className="text-sm text-slate-300 hover:text-white"
-                    data-testid={`edit-project-${project.id}`}
-                  >
-                    Edit
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => startDeleting(project)}
-                    className="text-sm text-red-400 hover:text-red-300"
-                    data-testid={`delete-project-${project.id}`}
-                  >
-                    Delete
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => openProject(project)}
-                    className="text-sm text-cyan-400 hover:text-cyan-300"
-                  >
-                    Open Project
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={clearWorkspaceFilter}
+                className="mt-6 rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400"
+              >
+                Show All Projects
+              </button>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
+
+      {/* Project Cards */}
+      {!loading &&
+        !error &&
+        filteredProjects.length > 0 && (
+          <div
+            className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3"
+            data-testid="project-list"
+          >
+            {filteredProjects.map((project) => (
+              <article
+                key={project.id}
+                className="flex min-h-56 flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
+                data-testid={`project-${project.id}`}
+              >
+                <div className="flex-1">
+                  <h3 className="text-xl font-semibold text-white">
+                    {project.title}
+                  </h3>
+
+                  <p className="mt-3 min-h-12 text-slate-400">
+                    {project.description ||
+                      "No project description provided."}
+                  </p>
+                </div>
+
+                <div className="mt-6 border-t border-slate-800 pt-4">
+                  {/* Workspace label only shown when viewing ALL projects */}
+                  {!selectedWorkspaceId && (
+                    <div className="mb-4">
+                      <span className="text-sm text-slate-500">
+                        Workspace {project.workspace_id}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => openProject(project)}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                    >
+                      Open Project
+                      <FaArrowRight className="text-xs" />
+                    </button>
+
+                    <div className="flex items-center justify-center gap-4">
+                      <button
+                        type="button"
+                        onClick={() => startEditing(project)}
+                        className="text-sm font-medium text-slate-300 transition hover:text-white"
+                        data-testid={`edit-project-${project.id}`}
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => startDeleting(project)}
+                        className="text-sm font-medium text-red-400 transition hover:text-red-300"
+                        data-testid={`delete-project-${project.id}`}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+      {/* Edit Project Modal */}
       {editingProject && (
         <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
           data-testid="edit-project-panel"
         >
           <form
             onSubmit={saveProjectChanges}
-            className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-xl p-6"
+            className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6"
           >
-            <h3 className="text-2xl font-bold">Edit Project</h3>
+            <h3 className="text-2xl font-bold">
+              Edit Project
+            </h3>
 
             <div className="mt-6">
               <label
                 htmlFor="edit-project-title"
-                className="block text-sm text-slate-300 mb-2"
+                className="mb-2 block text-sm text-slate-300"
               >
                 Project Name
               </label>
@@ -351,9 +538,11 @@ function Projects() {
               <input
                 id="edit-project-title"
                 value={editTitle}
-                onChange={(event) => setEditTitle(event.target.value)}
+                onChange={(event) =>
+                  setEditTitle(event.target.value)
+                }
                 maxLength={100}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
                 data-testid="edit-project-title"
               />
             </div>
@@ -361,7 +550,7 @@ function Projects() {
             <div className="mt-5">
               <label
                 htmlFor="edit-project-description"
-                className="block text-sm text-slate-300 mb-2"
+                className="mb-2 block text-sm text-slate-300"
               >
                 Project Description
               </label>
@@ -374,26 +563,26 @@ function Projects() {
                 }
                 rows="5"
                 maxLength={500}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
                 data-testid="edit-project-description"
               />
             </div>
 
             {editError && (
               <p
-                className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+                className="mt-4 rounded-lg border border-red-800 bg-red-950 p-3 text-red-300"
                 role="alert"
               >
                 {editError}
               </p>
             )}
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={cancelEditing}
                 disabled={saving}
-                className="bg-slate-800 hover:bg-slate-700 px-5 py-2 rounded-lg disabled:opacity-50"
+                className="rounded-lg bg-slate-800 px-5 py-2 transition hover:bg-slate-700 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -401,7 +590,7 @@ function Projects() {
               <button
                 type="submit"
                 disabled={saving}
-                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-5 py-2 rounded-lg disabled:opacity-50"
+                className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50"
                 data-testid="save-project-changes"
               >
                 {saving ? "Saving..." : "Save Changes"}
@@ -410,15 +599,19 @@ function Projects() {
           </form>
         </div>
       )}
+
+      {/* Delete Project Modal */}
       {deletingProject && (
         <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
           data-testid="delete-project-panel"
         >
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-6">
-            <h3 className="text-2xl font-bold">Delete Project</h3>
+          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6">
+            <h3 className="text-2xl font-bold">
+              Delete Project
+            </h3>
 
-            <p className="text-slate-300 mt-4">
+            <p className="mt-4 text-slate-300">
               Are you sure you want to permanently delete{" "}
               <span className="font-semibold text-white">
                 {deletingProject.title}
@@ -426,26 +619,26 @@ function Projects() {
               ?
             </p>
 
-            <p className="text-sm text-red-400 mt-3">
-              This action cannot be undone. All associated project content
-              will also be deleted.
+            <p className="mt-3 text-sm text-red-400">
+              This action cannot be undone. All associated project
+              content will also be deleted.
             </p>
 
             {deleteError && (
               <p
-                className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+                className="mt-4 rounded-lg border border-red-800 bg-red-950 p-3 text-red-300"
                 role="alert"
               >
                 {deleteError}
               </p>
             )}
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={cancelDeleting}
                 disabled={deleting}
-                className="bg-slate-800 hover:bg-slate-700 px-5 py-2 rounded-lg disabled:opacity-50"
+                className="rounded-lg bg-slate-800 px-5 py-2 transition hover:bg-slate-700 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -454,7 +647,7 @@ function Projects() {
                 type="button"
                 onClick={confirmDeleteProject}
                 disabled={deleting}
-                className="bg-red-600 hover:bg-red-500 text-white font-semibold px-5 py-2 rounded-lg disabled:opacity-50"
+                className="rounded-lg bg-red-600 px-5 py-2 font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
                 data-testid="confirm-delete-project"
               >
                 {deleting ? "Deleting..." : "Delete Project"}
