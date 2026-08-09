@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -6,6 +6,85 @@ import { addRecentActivity } from "../utils/activityStorage";
 import { exportContentAsPdf } from "../utils/exportPdf";
 import { exportContentAsMarkdown } from "../utils/exportMarkdown";
 import { exportContentAsTxt } from "../utils/exportTxt";
+
+const SETTINGS_KEY = "tanioSettings";
+
+const DEFAULT_AI_SETTINGS = {
+  creativity: "balanced",
+  responseLength: "medium",
+  defaultTone: "professional",
+};
+
+function getAiGenerationSettings() {
+  try {
+    const storedSettings = localStorage.getItem(SETTINGS_KEY);
+
+    if (!storedSettings) {
+      return DEFAULT_AI_SETTINGS;
+    }
+
+    const parsedSettings = JSON.parse(storedSettings);
+
+    return {
+      creativity:
+        parsedSettings?.ai?.creativity || DEFAULT_AI_SETTINGS.creativity,
+      responseLength:
+        parsedSettings?.ai?.responseLength ||
+        DEFAULT_AI_SETTINGS.responseLength,
+      defaultTone:
+        parsedSettings?.ai?.defaultTone || DEFAULT_AI_SETTINGS.defaultTone,
+    };
+  } catch {
+    return DEFAULT_AI_SETTINGS;
+  }
+}
+
+function buildAiPreferenceInstructions(aiSettings) {
+  const creativityInstructions = {
+    focused:
+      "Stay closely grounded in the project description. Prioritize practical, realistic, and directly relevant recommendations over speculative ideas.",
+    balanced:
+      "Balance practical recommendations with thoughtful creativity. Introduce useful ideas without drifting away from the project's goals.",
+    creative:
+      "Be highly imaginative and exploratory. Suggest distinctive ideas, creative approaches, and less obvious opportunities while remaining relevant to the project.",
+  };
+
+  const responseLengthInstructions = {
+    short:
+      "Keep the response concise. Focus on the most important information and avoid unnecessary detail.",
+    medium:
+      "Provide a moderately detailed response with enough explanation to be useful without becoming overly long.",
+    long:
+      "Provide a comprehensive and detailed response. Expand on recommendations, reasoning, examples, risks, and implementation considerations where appropriate.",
+  };
+
+  const toneInstructions = {
+    professional:
+      "Use a polished, professional, clear, and business-appropriate tone.",
+    casual:
+      "Use a friendly, approachable, conversational tone while remaining clear and useful.",
+    concise:
+      "Use a direct, efficient tone. Avoid filler and keep wording tight.",
+    detailed:
+      "Use an explanatory, thorough tone with clear context and supporting detail.",
+  };
+
+  return [
+    "AI generation preferences:",
+    `- Creativity: ${aiSettings.creativity}. ${
+      creativityInstructions[aiSettings.creativity] ||
+      creativityInstructions.balanced
+    }`,
+    `- Response length: ${aiSettings.responseLength}. ${
+      responseLengthInstructions[aiSettings.responseLength] ||
+      responseLengthInstructions.medium
+    }`,
+    `- Tone: ${aiSettings.defaultTone}. ${
+      toneInstructions[aiSettings.defaultTone] ||
+      toneInstructions.professional
+    }`,
+  ].join("\n");
+}
 
 function ProductArchitect() {
   const location = useLocation();
@@ -22,9 +101,7 @@ function ProductArchitect() {
 
   const [contentType, setContentType] = useState("prd");
   const [generatedContent, setGeneratedContent] = useState("");
-  const [recentContent, setRecentContent] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [recentLoading, setRecentLoading] = useState(false);
   const [error, setError] = useState("");
 
   const endpointMap = {
@@ -119,65 +196,6 @@ function ProductArchitect() {
     ),
   };
 
-  const recentMarkdownComponents = {
-    h1: ({ children }) => (
-      <span className="font-semibold text-slate-300">{children} </span>
-    ),
-
-    h2: ({ children }) => (
-      <span className="font-semibold text-slate-300">{children} </span>
-    ),
-
-    h3: ({ children }) => (
-      <span className="font-semibold text-slate-300">{children} </span>
-    ),
-
-    p: ({ children }) => <span>{children} </span>,
-    ul: ({ children }) => <span>{children} </span>,
-    ol: ({ children }) => <span>{children} </span>,
-    li: ({ children }) => <span>{children} </span>,
-
-    strong: ({ children }) => (
-      <strong className="font-semibold text-slate-300">{children}</strong>
-    ),
-
-    hr: () => <span>— </span>,
-  };
-
-  const fetchRecentContent = async () => {
-    try {
-      setRecentLoading(true);
-
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        return;
-      }
-
-      const response = await fetch("http://127.0.0.1:8000/content/", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch recent content.");
-      }
-
-      const data = await response.json();
-
-      setRecentContent(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Recent content error:", err);
-    } finally {
-      setRecentLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRecentContent();
-  }, []);
-
   const handleGenerate = async () => {
     const cleanedProjectName = projectName.trim();
     const cleanedDescription = description.trim();
@@ -220,6 +238,15 @@ function ProductArchitect() {
         throw new Error("Please select a valid document type.");
       }
 
+      const aiSettings = getAiGenerationSettings();
+
+      const aiPreferenceInstructions =
+        buildAiPreferenceInstructions(aiSettings);
+
+      const descriptionWithPreferences = `${cleanedDescription}
+
+${aiPreferenceInstructions}`;
+
       const response = await fetch(`http://127.0.0.1:8000${endpoint}`, {
         method: "POST",
         headers: {
@@ -228,7 +255,7 @@ function ProductArchitect() {
         },
         body: JSON.stringify({
           project_name: cleanedProjectName,
-          description: cleanedDescription,
+          description: descriptionWithPreferences,
         }),
       });
 
@@ -280,8 +307,6 @@ function ProductArchitect() {
         }.`,
         projectName: cleanedProjectName,
       });
-
-      await fetchRecentContent();
     } catch (err) {
       console.error("Generation error:", err);
 
@@ -598,46 +623,6 @@ function ProductArchitect() {
           <p className="text-slate-500">
             Generated content will appear here.
           </p>
-        )}
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-        <h2 className="text-xl font-bold mb-4">
-          Recent Generated Content
-        </h2>
-
-        {recentLoading ? (
-          <p className="text-slate-500">Loading recent content...</p>
-        ) : recentContent.length > 0 ? (
-          <div className="space-y-4">
-            {recentContent.slice(0, 5).map((item) => (
-              <div
-                key={item.id}
-                className="bg-slate-950 border border-slate-800 rounded-lg p-4"
-              >
-                <div className="flex justify-between items-start gap-4 mb-2">
-                  <h3 className="font-semibold text-cyan-400">
-                    {item.title}
-                  </h3>
-
-                  <span className="text-xs text-slate-500 shrink-0">
-                    {item.content_type}
-                  </span>
-                </div>
-
-                <div className="text-sm text-slate-400 leading-relaxed line-clamp-3 overflow-hidden">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={recentMarkdownComponents}
-                  >
-                    {item.body || ""}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-slate-500">No recent content yet.</p>
         )}
       </div>
     </div>

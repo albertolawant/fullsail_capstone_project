@@ -47,7 +47,7 @@ function Sidebar() {
   return (
     <aside className="w-64 min-h-screen bg-slate-900 border-r border-slate-800 flex flex-col">
       {/* Logo */}
-      <div className="flex justify-center items-center border-b border-slate-800 h-24 overflow-hidden">
+      <div className="flex justify-center items-center border-b border-slate-800 h-20 shrink-0 overflow-hidden">
         <img
           src={logo}
           alt="Tanio AI"

@@ -1,20 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.db.database import get_db
-
 from app.models.content import GeneratedContent
+from app.models.content_version import ContentVersion
 from app.models.project import Project
 from app.models.user import User
-from app.models.content_version import ContentVersion
-
 from app.schemas.content import (
     ContentCreate,
-    ContentUpdate,
     ContentResponse,
+    ContentUpdate,
 )
-
-from app.api.auth import get_current_user
 
 router = APIRouter(
     prefix="/content",
@@ -37,13 +37,13 @@ def create_content(
     if not project:
         raise HTTPException(
             status_code=404,
-            detail="Project not found"
+            detail="Project not found",
         )
 
     if project.owner_id != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Not authorized to add content to this project"
+            detail="Not authorized to add content to this project",
         )
 
     content = GeneratedContent(
@@ -61,6 +61,52 @@ def create_content(
     return content
 
 
+@router.get("/", response_model=List[ContentResponse])
+def get_all_content(
+    search: Optional[str] = Query(
+        default=None,
+        description="Search content by title, type, or body",
+    ),
+    content_type: Optional[str] = Query(
+        default=None,
+        description="Filter content by its exact content type",
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return all generated content owned by the authenticated user.
+
+    Optional query parameters:
+    - search: searches the title, content type, and body
+    - content_type: filters by an exact content type
+
+    Results are returned with the newest content first.
+    """
+
+    query = db.query(GeneratedContent).filter(
+        GeneratedContent.owner_id == current_user.id
+    )
+
+    if search and search.strip():
+        search_value = f"%{search.strip()}%"
+
+        query = query.filter(
+            or_(
+                GeneratedContent.title.ilike(search_value),
+                GeneratedContent.content_type.ilike(search_value),
+                GeneratedContent.body.ilike(search_value),
+            )
+        )
+
+    if content_type and content_type.strip():
+        query = query.filter(
+            GeneratedContent.content_type == content_type.strip()
+        )
+
+    return query.order_by(GeneratedContent.id.desc()).all()
+
+
 @router.get("/{content_id}", response_model=ContentResponse)
 def get_content(
     content_id: int,
@@ -76,13 +122,13 @@ def get_content(
     if not content:
         raise HTTPException(
             status_code=404,
-            detail="Content not found"
+            detail="Content not found",
         )
 
     if content.owner_id != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Not authorized to view this content"
+            detail="Not authorized to view this content",
         )
 
     return content
@@ -102,12 +148,15 @@ def update_content(
     )
 
     if not content:
-        raise HTTPException(status_code=404, detail="Content not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Content not found",
+        )
 
     if content.owner_id != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Not authorized to update this content"
+            detail="Not authorized to update this content",
         )
 
     latest_version = (
@@ -161,12 +210,15 @@ def delete_content(
     )
 
     if not content:
-        raise HTTPException(status_code=404, detail="Content not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Content not found",
+        )
 
     if content.owner_id != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Not authorized to delete this content"
+            detail="Not authorized to delete this content",
         )
 
     db.delete(content)
