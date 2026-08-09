@@ -1,5 +1,3 @@
-![Logo](images/logo.png)
-
 # Tanio AI
 
 ## Introduction
@@ -21,7 +19,7 @@ The goal of Tanio AI is to reduce the time spent planning and organizing project
 
 Tanio AI has entered the **Beta** stage of development.
 
-The core platform is now functional, with development focused on expanding features, improving usability, and preparing for user testing.
+The core platform is now functional, with development focused on improving the user experience, strengthening AI functionality, expanding content management, adding AI branding tools, and preparing the application for user testing during Software Integration.
 
 ---
 
@@ -96,13 +94,42 @@ Generate tabletop RPG content including:
 
 ---
 
-# 🎯 Beta Development Goals
+# 🎯 August Beta Development Goals
 
-The following features will be completed during the Beta phase before user testing:
+The following features are being developed or planned during August to prepare Tanio AI for user testing in Software Integration.
+
+## UI and User Experience
+
+- Create Global Content Library
+- Move Saved Content into the Content Module
+- Build Workspace Page
+- Improve Dashboard UI Consistency
+- Implement User Profile Page
+- Build Settings Page
+- Add Loading States and User Feedback
+
+## AI Regeneration
+
+- Add Regenerate Button to Product Architect
+- Add Regenerate Button to Tabletop Creator
+- Preserve AI Generation History
+- Improve AI Generation User Experience
+- Optimize AI Request Handling
+
+## AI Branding and Logo Generation
+
+- Generate AI Product Logos
+- Customize Logo Generation Prompts
+- Save Generated Logos to Projects
+- Create Logo Gallery and Version History
+- Download Generated Logos
+
+## Planned Beta Improvements
+
+The following features are also being considered for the remaining Beta sprint as development continues:
 
 - Shared Project Collaboration
 - Workspace Permissions
-- AI Content Version History
 - Dashboard Analytics
 - AI Usage History
 - Improved Export Options
@@ -111,6 +138,8 @@ The following features will be completed during the Beta phase before user testi
 - Accessibility Improvements
 - Bug Fixes
 - Deployment Preparation
+
+These features and improvements are intended to strengthen the usability, stability, and overall user experience of Tanio AI before formal user testing begins.
 
 ---
 
@@ -175,7 +204,7 @@ tanio-ai/
 
 # 🚀 Installation
 
-## Clone the repository
+## Clone the Repository
 
 ```bash
 git clone https://github.com/albertolawant/fullsail_capstone_project
@@ -191,7 +220,7 @@ Create a `.env` file inside the `backend` directory and add your environment var
 
 ## Backend Setup
 
-Create a virtual environment
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
@@ -211,13 +240,13 @@ Activate it.
 source .venv/bin/activate
 ```
 
-Install dependencies
+Install dependencies:
 
 ```bash
 pip install -r backend/requirements.txt
 ```
 
-Run the backend
+Run the backend:
 
 ```bash
 uvicorn app.main:app --reload
@@ -227,19 +256,19 @@ uvicorn app.main:app --reload
 
 ## Frontend Setup
 
-Navigate to the frontend
+Navigate to the frontend:
 
 ```bash
 cd frontend
 ```
 
-Install dependencies
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-Run the development server
+Run the development server:
 
 ```bash
 npm run dev
@@ -307,6 +336,8 @@ git checkout -b feature/new-feature
 
 **Development Stage:** **Beta**
 
+Tanio AI has moved from core development into Beta development. The current focus is completing the remaining features and improvements needed before user testing in Software Integration.
+
 ## ✅ Completed
 
 - User Authentication
@@ -322,29 +353,51 @@ git checkout -b feature/new-feature
 - AI Preference System
 - Activity Tracking
 - Responsive User Interface
+- Global Content Library
+- Saved Content Integration
+- Workspace Page
+- Dashboard UI Improvements
+- Settings Page
 
 ---
 
 ## 🚧 Current Beta Focus
 
-- Collaboration Features
-- Workspace Permissions
-- AI Version History
-- Dashboard Analytics
-- Performance Improvements
+- User Profile Page
+- Loading States and User Feedback
+- AI Content Regeneration
+- AI Generation History
+- Improved AI Generation UX
+- AI Request Optimization
+- AI Product Logo Generation
+- Logo Prompt Customization
+- Logo Project Storage
+- Logo Gallery and Version History
+- Logo Downloads
 - UI Polish
-- Accessibility
+- Bug Fixes
 - User Testing Preparation
 
 ---
 
-## 📅 Planned
+## 📅 Planned Beta Work
 
-- Team Collaboration
-- Shared Workspaces
-- Advanced Analytics
-- AI Prompt History
-- Additional AI Tools
+Potential remaining Beta work includes:
+
+- Shared Project Collaboration
+- Workspace Permissions
+- Dashboard Analytics
+- AI Usage History
+- Improved Export Options
+- Performance Optimization
+- Accessibility Improvements
+- Deployment Preparation
+
+---
+
+## 🔜 Next Stage
+
+After Beta development is completed, Tanio AI will move into **Software Integration**, where the application will undergo user testing, feedback collection, bug fixing, and additional refinement.
 
 ---
 
