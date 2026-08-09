@@ -350,7 +350,7 @@ git checkout -b feature/new-feature
 
 # 👥 Contributors
 
-## Alberto
+## Alberto Lawant
 
 - Backend Development
 - Frontend Development
