@@ -5,6 +5,86 @@ import remarkGfm from "remark-gfm";
 const AI_REQUEST_TIMEOUT_MS = 35000;
 const SLOW_REQUEST_THRESHOLD_MS = 30000;
 
+
+const SETTINGS_KEY = "tanioSettings";
+
+const DEFAULT_AI_SETTINGS = {
+  creativity: "balanced",
+  responseLength: "medium",
+  defaultTone: "professional",
+};
+
+function getAiGenerationSettings() {
+  try {
+    const storedSettings = localStorage.getItem(SETTINGS_KEY);
+
+    if (!storedSettings) {
+      return DEFAULT_AI_SETTINGS;
+    }
+
+    const parsedSettings = JSON.parse(storedSettings);
+
+    return {
+      creativity:
+        parsedSettings?.ai?.creativity || DEFAULT_AI_SETTINGS.creativity,
+      responseLength:
+        parsedSettings?.ai?.responseLength ||
+        DEFAULT_AI_SETTINGS.responseLength,
+      defaultTone:
+        parsedSettings?.ai?.defaultTone || DEFAULT_AI_SETTINGS.defaultTone,
+    };
+  } catch {
+    return DEFAULT_AI_SETTINGS;
+  }
+}
+
+function buildAiPreferenceInstructions(aiSettings) {
+  const creativityInstructions = {
+    focused:
+      "Stay closely grounded in the campaign description. Prioritize coherent, practical, setting-consistent ideas over unusual or highly experimental additions.",
+    balanced:
+      "Balance consistency with creativity. Add interesting ideas while keeping them strongly connected to the campaign's established tone, setting, and goals.",
+    creative:
+      "Be highly imaginative and exploratory. Introduce distinctive characters, locations, conflicts, twists, and world-building ideas while remaining coherent with the campaign.",
+  };
+
+  const responseLengthInstructions = {
+    short:
+      "Keep the response concise and focused on the most important usable details.",
+    medium:
+      "Provide a moderately detailed response with enough description to be useful at the table without becoming overly long.",
+    long:
+      "Provide a comprehensive and richly detailed response with expanded descriptions, motivations, hooks, consequences, and world-building details where appropriate.",
+  };
+
+  const toneInstructions = {
+    professional:
+      "Use a polished, clear, organized tone suitable for a game master reference document.",
+    casual:
+      "Use a friendly, conversational, approachable tone while keeping the content easy to use during play.",
+    concise:
+      "Use a direct, efficient tone. Avoid filler and keep wording tight and scannable.",
+    detailed:
+      "Use an explanatory, immersive, thorough tone with strong descriptive detail and context.",
+  };
+
+  return [
+    "AI generation preferences:",
+    `- Creativity: ${aiSettings.creativity}. ${
+      creativityInstructions[aiSettings.creativity] ||
+      creativityInstructions.balanced
+    }`,
+    `- Response length: ${aiSettings.responseLength}. ${
+      responseLengthInstructions[aiSettings.responseLength] ||
+      responseLengthInstructions.medium
+    }`,
+    `- Tone: ${aiSettings.defaultTone}. ${
+      toneInstructions[aiSettings.defaultTone] ||
+      toneInstructions.professional
+    }`,
+  ].join("\n");
+}
+
 const generatedMarkdownClasses = `
   mt-4 text-slate-200 leading-relaxed
   [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-6 [&_h1]:mb-3
@@ -112,7 +192,9 @@ function TabletopCreator() {
           },
           body: JSON.stringify({
             campaign_name: cleanedName,
-            campaign_description: cleanedDescription,
+            campaign_description: `${cleanedDescription}
+
+${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
           }),
           signal: controller.signal,
         }
