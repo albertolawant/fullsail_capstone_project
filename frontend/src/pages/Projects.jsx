@@ -17,6 +17,7 @@ function Projects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [workspaceName, setWorkspaceName] = useState("");
 
@@ -39,6 +40,7 @@ function Projects() {
   const loadProjects = useCallback(async () => {
     setLoading(true);
     setError("");
+    setSuccessMessage("");
 
     try {
       const token = localStorage.getItem("token");
@@ -240,6 +242,7 @@ function Projects() {
         projectName: updatedProject.title,
       });
 
+      setSuccessMessage("Project updated successfully.");
       cancelEditing();
     } catch (error) {
       setEditError(error.message);
@@ -300,6 +303,7 @@ function Projects() {
         projectName: deletingProject.title,
       });
 
+      setSuccessMessage("Project deleted successfully.");
       cancelDeleting();
     } catch (error) {
       setDeleteError(error.message);
@@ -371,9 +375,10 @@ function Projects() {
           <button
             type="button"
             onClick={loadProjects}
-            className="rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700"
+            disabled={loading}
+            className="rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Refresh
+            {loading ? "Refreshing..." : "Refresh"}
           </button>
         </div>
       </div>
@@ -397,6 +402,15 @@ function Projects() {
           role="alert"
         >
           {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div
+          className="mb-6 rounded-xl border border-emerald-800 bg-emerald-950 p-4 text-emerald-300"
+          role="status"
+        >
+          {successMessage}
         </div>
       )}
 

@@ -103,6 +103,7 @@ function ProductArchitect() {
   const [generatedContent, setGeneratedContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const endpointMap = {
     prd: "/product-architect/prd",
@@ -201,6 +202,7 @@ function ProductArchitect() {
     const cleanedDescription = description.trim();
 
     setError("");
+    setSuccessMessage("");
     setGeneratedContent("");
 
     if (cleanedProjectName.length < 2) {
@@ -298,6 +300,9 @@ ${aiPreferenceInstructions}`;
       }
 
       setGeneratedContent(data.body);
+      setSuccessMessage(
+        `${documentTypeLabels[contentType] || "Content"} generated successfully.`
+      );
 
       addRecentActivity({
         type: "Content Generated",
@@ -463,6 +468,9 @@ ${aiPreferenceInstructions}`;
               if (error) {
                 setError("");
               }
+              if (successMessage) {
+                setSuccessMessage("");
+              }
             }}
             maxLength={100}
             aria-describedby="project-name-help"
@@ -490,6 +498,9 @@ ${aiPreferenceInstructions}`;
 
               if (error) {
                 setError("");
+              }
+              if (successMessage) {
+                setSuccessMessage("");
               }
             }}
             rows="4"
@@ -523,6 +534,9 @@ ${aiPreferenceInstructions}`;
 
               if (error) {
                 setError("");
+              }
+              if (successMessage) {
+                setSuccessMessage("");
               }
             }}
             className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
@@ -561,6 +575,22 @@ ${aiPreferenceInstructions}`;
             </p>
 
             <p className="text-sm text-red-300 mt-1">{error}</p>
+          </div>
+        )}
+        
+        {successMessage && (
+          <div
+            className="mt-4 bg-emerald-950/50 border border-emerald-800 rounded-lg p-4"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-emerald-300">
+              Success
+            </p>
+
+            <p className="text-sm text-emerald-300 mt-1">
+              {successMessage}
+            </p>
           </div>
         )}
       </div>

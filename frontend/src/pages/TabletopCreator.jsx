@@ -122,6 +122,7 @@ function TabletopCreator() {
   const [generatedLocationContent, setGeneratedLocationContent] = useState("");
   const [generatingLocations, setGeneratingLocations] = useState(false);
   const [locationError, setLocationError] = useState("");
+  const [generateSuccess, setGenerateSuccess] = useState("");
   const activeRequestsRef = useRef(new Set());
 
   const isAnyGenerationInProgress =
@@ -162,6 +163,8 @@ function TabletopCreator() {
     setLoading,
     setError,
     setContent,
+    setSuccess,
+    successMessage,
   }) => {
     if (activeRequestsRef.current.has(requestKey)) {
       return;
@@ -169,6 +172,7 @@ function TabletopCreator() {
 
     activeRequestsRef.current.add(requestKey);
     setError("");
+    setSuccess("");
     setContent("");
     setLoading(true);
 
@@ -208,6 +212,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
 
       const data = await response.json();
       setContent(data[responseField]);
+      setSuccess(successMessage);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setError(
@@ -259,6 +264,8 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setLoading: setGenerating,
       setError: setGenerateError,
       setContent: setGeneratedCampaignContent,
+      setSuccess: setGenerateSuccess,
+      successMessage: "Campaign content generated successfully.",
     });
   };
 
@@ -286,6 +293,8 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setLoading: setGeneratingNPCs,
       setError: setNpcError,
       setContent: setGeneratedNPCContent,
+      setSuccess: setGenerateSuccess,
+      successMessage: "NPCs generated successfully.",
     });
   };
 
@@ -313,6 +322,8 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setLoading: setGeneratingQuests,
       setError: setQuestError,
       setContent: setGeneratedQuestContent,
+      setSuccess: setGenerateSuccess,
+      successMessage: "Quests generated successfully.",
     });
   };
 
@@ -342,6 +353,8 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setLoading: setGeneratingEncounters,
       setError: setEncounterError,
       setContent: setGeneratedEncounterContent,
+      setSuccess: setGenerateSuccess,
+      successMessage: "Encounters generated successfully.",
     });
   };
 
@@ -371,6 +384,8 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setLoading: setGeneratingLocations,
       setError: setLocationError,
       setContent: setGeneratedLocationContent,
+      setSuccess: setGenerateSuccess,
+      successMessage: "Locations generated successfully.",
     });
   };
 
@@ -537,6 +552,16 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
               data-testid="ai-generation-loading"
             >
               Tanio AI is generating content. Please wait...
+            </p>
+          )}
+
+          {generateSuccess && (
+            <p
+              className="mt-4 bg-emerald-950 border border-emerald-800 text-emerald-300 rounded-lg p-3"
+              role="status"
+              aria-live="polite"
+            >
+              {generateSuccess}
             </p>
           )}
         </form>

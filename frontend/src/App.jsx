@@ -131,12 +131,7 @@ function App() {
               path="/content"
               element={<Content />}
             />
-
-            <Route
-              path="/settings"
-              element={<Settings />}
-            />
-
+            
             <Route
               path="/product-architect"
               element={<ProductArchitect />}
@@ -145,6 +140,11 @@ function App() {
             <Route
               path="/tabletop-creator"
               element={<TabletopCreator />}
+            />
+
+            <Route
+              path="/settings"
+              element={<Settings />}
             />
           </Routes>
         </div>

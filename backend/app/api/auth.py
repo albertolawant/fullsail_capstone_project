@@ -5,11 +5,18 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt
 from app.core.config import settings
 from app.schemas.user import Token
-from app.db.database import Base, engine, get_db
+from app.db.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserLogin, UserResponse
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+    PasswordUpdate,
+    UserProfileUpdateResponse,
+)
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError
+
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -121,6 +128,71 @@ def login(
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+@router.put("/me", response_model=UserProfileUpdateResponse)
+def update_me(
+    user_data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    existing_email = (
+        db.query(User)
+        .filter(User.email == user_data.email, User.id != current_user.id)
+        .first()
+    )
+
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    existing_username = (
+        db.query(User)
+        .filter(User.username == user_data.username, User.id != current_user.id)
+        .first()
+    )
+
+    if existing_username:
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    current_user.username = user_data.username
+    current_user.email = user_data.email
+
+    db.commit()
+    db.refresh(current_user)
+
+    access_token = create_access_token(
+        data={"sub": current_user.email}
+    )
+
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "is_active": current_user.is_active,
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
+
+
+@router.put("/me/password")
+def update_password(
+    password_data: PasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    if len(password_data.new_password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be at least 6 characters long"
+        )
+
+    current_user.hashed_password = hash_password(password_data.new_password)
+
+    db.commit()
+
+    return {"message": "Password updated successfully"}
+    
 @router.post("/logout")
 def logout():
     return {"message": "Successfully logged out"}

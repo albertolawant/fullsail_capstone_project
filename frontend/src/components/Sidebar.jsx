@@ -78,11 +78,6 @@ function Sidebar() {
           Content
         </NavLink>
 
-        <NavLink to="/settings" className={linkClass}>
-          <FaCog />
-          Settings
-        </NavLink>
-
         <NavLink to="/product-architect" className={linkClass}>
           <FaBrain />
           Product Architect
@@ -91,6 +86,11 @@ function Sidebar() {
         <NavLink to="/tabletop-creator" className={linkClass}>
           <FaDice />
           Tabletop Creator
+        </NavLink>
+        
+        <NavLink to="/settings" className={linkClass}>
+          <FaCog />
+          Settings
         </NavLink>
       </nav>
 

@@ -39,6 +39,26 @@ function Settings() {
   const [successMessage, setSuccessMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [profileForm, setProfileForm] = useState({
+    username: "",
+    email: "",
+  });
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+  });
+
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [showPasswords, setShowPasswords] = useState(false);
+
+  const [profileError, setProfileError] = useState("");
+  const [profileSuccess, setProfileSuccess] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+
   useEffect(() => {
     try {
       const storedSettings = localStorage.getItem(SETTINGS_KEY);
@@ -78,6 +98,77 @@ function Settings() {
     }
   }, []);
 
+  useEffect(() => {
+    const loadProfile = async () => {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        setProfileError("Sign in with a real account to manage your profile.");
+        return;
+      }
+
+      setProfileLoading(true);
+      setProfileError("");
+
+      try {
+        const response = await fetch("http://127.0.0.1:8000/auth/me", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+
+          throw new Error(
+            errorData?.detail || "Unable to load your profile."
+          );
+        }
+
+        const data = await response.json();
+
+        setProfileForm({
+          username: data.username || "",
+          email: data.email || "",
+        });
+
+        localStorage.setItem(
+          "tanioUser",
+          JSON.stringify({
+            username: data.username,
+            email: data.email,
+          })
+        );
+
+        setSettings((currentSettings) => ({
+          ...currentSettings,
+          account: {
+            ...currentSettings.account,
+            displayName: data.username || "Tanio User",
+          },
+        }));
+
+        setSavedSettings((currentSettings) => ({
+          ...currentSettings,
+          account: {
+            ...currentSettings.account,
+            displayName: data.username || "Tanio User",
+          },
+        }));
+      } catch (err) {
+        setProfileError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load your profile."
+        );
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
   const updateSetting = (section, key, value) => {
     setSettings((currentSettings) => ({
       ...currentSettings,
@@ -91,19 +182,52 @@ function Settings() {
     setSuccessMessage("");
   };
 
-  const validateSettings = () => {
-    const displayName = settings.account.displayName.trim();
+  const updateProfileForm = (key, value) => {
+    setProfileForm((currentProfile) => ({
+      ...currentProfile,
+      [key]: value,
+    }));
 
-    if (!displayName) {
+    setProfileError("");
+    setProfileSuccess("");
+  };
+
+  const updatePasswordForm = (key, value) => {
+    setPasswordForm((currentPasswordForm) => ({
+      ...currentPasswordForm,
+      [key]: value,
+    }));
+
+    setPasswordError("");
+    setPasswordSuccess("");
+  };
+
+  const validateSettings = () => {
+    return "";
+  };
+
+  const validateProfile = () => {
+    const username = profileForm.username.trim();
+    const email = profileForm.email.trim();
+
+    if (!username) {
       return "Display name is required.";
     }
 
-    if (displayName.length < 2) {
+    if (username.length < 2) {
       return "Display name must be at least 2 characters.";
     }
 
-    if (displayName.length > 50) {
+    if (username.length > 50) {
       return "Display name must be 50 characters or fewer.";
+    }
+
+    if (!email) {
+      return "Email address is required.";
+    }
+
+    if (!email.includes("@")) {
+      return "Enter a valid email address.";
     }
 
     return "";
@@ -126,7 +250,7 @@ function Settings() {
       ...settings,
       account: {
         ...settings.account,
-        displayName: settings.account.displayName.trim(),
+        displayName: profileForm.username.trim() || "Tanio User",
       },
     };
 
@@ -136,7 +260,6 @@ function Settings() {
         JSON.stringify(cleanedSettings)
       );
 
-      // Notify the rest of Tanio that settings changed.
       window.dispatchEvent(
         new Event("tanio-settings-updated")
       );
@@ -152,6 +275,160 @@ function Settings() {
     }
   };
 
+  const handleSaveProfile = async () => {
+    const validationError = validateProfile();
+
+    if (validationError) {
+      setProfileError(validationError);
+      setProfileSuccess("");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setProfileError("You must be signed in to update your profile.");
+      setProfileSuccess("");
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileError("");
+    setProfileSuccess("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/auth/me", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          username: profileForm.username.trim(),
+          email: profileForm.email.trim(),
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || "Unable to update your profile."
+        );
+      }
+
+      if (data?.access_token) {
+        localStorage.setItem("token", data.access_token);
+      }
+
+      localStorage.setItem(
+        "tanioUser",
+        JSON.stringify({
+          username: data.username,
+          email: data.email,
+        })
+      );
+
+      setProfileForm({
+        username: data.username,
+        email: data.email,
+      });
+
+      const updatedSettings = {
+        ...settings,
+        account: {
+          ...settings.account,
+          displayName: data.username,
+        },
+      };
+
+      localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify(updatedSettings)
+      );
+
+      setSettings(updatedSettings);
+      setSavedSettings(updatedSettings);
+
+      window.dispatchEvent(
+        new Event("tanio-settings-updated")
+      );
+
+      setProfileSuccess("Profile updated successfully.");
+    } catch (err) {
+      setProfileError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update your profile."
+      );
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setPasswordError("You must be signed in to update your password.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    if (!passwordForm.currentPassword) {
+      setPasswordError("Current password is required.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters long.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/auth/me/password", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          current_password: passwordForm.currentPassword,
+          new_password: passwordForm.newPassword,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || "Unable to update your password."
+        );
+      }
+
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+      });
+
+      setPasswordSuccess("Password updated successfully.");
+    } catch (err) {
+      setPasswordError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update your password."
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const handleReset = () => {
     const confirmed = window.confirm(
       "Reset all settings to their default values?"
@@ -161,22 +438,29 @@ function Settings() {
       return;
     }
 
-    setSettings(DEFAULT_SETTINGS);
+    const resetSettings = {
+      ...DEFAULT_SETTINGS,
+      account: {
+        ...DEFAULT_SETTINGS.account,
+        displayName: profileForm.username || "Tanio User",
+      },
+    };
+
+    setSettings(resetSettings);
     setError("");
     setSuccessMessage("");
 
     try {
       localStorage.setItem(
         SETTINGS_KEY,
-        JSON.stringify(DEFAULT_SETTINGS)
+        JSON.stringify(resetSettings)
       );
 
-      // Notify the rest of Tanio that settings were reset.
       window.dispatchEvent(
         new Event("tanio-settings-updated")
       );
 
-      setSavedSettings(DEFAULT_SETTINGS);
+      setSavedSettings(resetSettings);
       setSuccessMessage("Settings reset to defaults.");
     } catch {
       setError("Unable to reset settings.");
@@ -196,7 +480,7 @@ function Settings() {
           </h1>
 
           <p className="mt-2 text-slate-400">
-            Manage your Tanio AI preferences and default settings.
+            Manage your Tanio AI preferences and account information.
           </p>
         </div>
 
@@ -243,6 +527,196 @@ function Settings() {
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {/* Account */}
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+          <div className="mb-6 flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
+              <FaUserCog />
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                My Account
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-400">
+                Update your display name, email address, and password.
+              </p>
+            </div>
+          </div>
+
+          {profileError && (
+            <div
+              className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+              role="alert"
+            >
+              {profileError}
+            </div>
+          )}
+
+          {profileSuccess && (
+            <div
+              className="mb-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"
+              role="status"
+            >
+              {profileSuccess}
+            </div>
+          )}
+
+          <div className="space-y-5">
+            <div>
+              <label
+                htmlFor="profile-display-name"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Display Name
+              </label>
+
+              <input
+                id="profile-display-name"
+                type="text"
+                value={profileForm.username}
+                onChange={(event) =>
+                  updateProfileForm("username", event.target.value)
+                }
+                disabled={profileLoading}
+                maxLength={50}
+                placeholder="Enter your display name"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 disabled:opacity-50"
+              />
+
+              <div className="mt-2 flex justify-between text-xs text-slate-500">
+                <span>2–50 characters</span>
+
+                <span>
+                  {profileForm.username.length}/50
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="profile-email"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Email Address
+              </label>
+
+              <input
+                id="profile-email"
+                type="email"
+                value={profileForm.email}
+                onChange={(event) =>
+                  updateProfileForm("email", event.target.value)
+                }
+                disabled={profileLoading}
+                placeholder="Enter your email address"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 disabled:opacity-50"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSaveProfile}
+              disabled={profileSaving || profileLoading}
+              className="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {profileSaving ? "Saving Profile..." : "Save Profile"}
+            </button>
+          </div>
+
+          <div className="my-6 border-t border-slate-800" />
+
+          {passwordError && (
+            <div
+              className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+              role="alert"
+            >
+              {passwordError}
+            </div>
+          )}
+
+          {passwordSuccess && (
+            <div
+              className="mb-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"
+              role="status"
+            >
+              {passwordSuccess}
+            </div>
+          )}
+
+          <div className="space-y-5">
+            <div>
+              <label
+                htmlFor="current-password"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Current Password
+              </label>
+
+              <input
+                id="current-password"
+                type={showPasswords ? "text" : "password"}
+                value={passwordForm.currentPassword}
+                onChange={(event) =>
+                  updatePasswordForm(
+                    "currentPassword",
+                    event.target.value
+                  )
+                }
+                placeholder="Enter your current password"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="new-password"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                New Password
+              </label>
+
+              <input
+                id="new-password"
+                type={showPasswords ? "text" : "password"}
+                value={passwordForm.newPassword}
+                onChange={(event) =>
+                  updatePasswordForm(
+                    "newPassword",
+                    event.target.value
+                  )
+                }
+                placeholder="Enter a new password"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
+              />
+
+              <p className="mt-2 text-xs text-slate-500">
+                New password must be at least 6 characters.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setShowPasswords((currentValue) => !currentValue)}
+                className="rounded-lg bg-slate-800 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-700"
+              >
+                {showPasswords ? "Hide Passwords" : "Show Passwords"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleUpdatePassword}
+                disabled={passwordSaving}
+                className="rounded-lg bg-slate-800 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {passwordSaving ? "Updating Password..." : "Update Password"}
+              </button>
+            </div>
+          </div>
+        </section>
+
         {/* Appearance */}
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
           <div className="mb-6 flex items-start gap-4">
@@ -502,88 +976,6 @@ function Settings() {
                 )
               }
             />
-          </div>
-        </section>
-
-        {/* Account */}
-        <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-          <div className="mb-6 flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
-              <FaUserCog />
-            </div>
-
-            <div>
-              <h2 className="text-xl font-bold text-white">
-                Account Settings
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-400">
-                Manage your general account preferences.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-5">
-            <div>
-              <label
-                htmlFor="display-name"
-                className="mb-2 block text-sm font-medium text-slate-300"
-              >
-                Display Name
-              </label>
-
-              <input
-                id="display-name"
-                type="text"
-                value={settings.account.displayName}
-                onChange={(event) =>
-                  updateSetting(
-                    "account",
-                    "displayName",
-                    event.target.value
-                  )
-                }
-                maxLength={50}
-                placeholder="Enter your display name"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
-              />
-
-              <div className="mt-2 flex justify-between text-xs text-slate-500">
-                <span>2–50 characters</span>
-
-                <span>
-                  {settings.account.displayName.length}/50
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="default-workspace"
-                className="mb-2 block text-sm font-medium text-slate-300"
-              >
-                Default Workspace
-              </label>
-
-              <input
-                id="default-workspace"
-                type="text"
-                value={settings.account.defaultWorkspace}
-                onChange={(event) =>
-                  updateSetting(
-                    "account",
-                    "defaultWorkspace",
-                    event.target.value
-                  )
-                }
-                placeholder="Optional workspace name"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
-              />
-
-              <p className="mt-2 text-xs text-slate-500">
-                Leave blank if you do not want a default workspace.
-              </p>
-            </div>
           </div>
         </section>
       </div>
