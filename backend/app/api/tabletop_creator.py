@@ -80,7 +80,7 @@ def get_or_create_campaign_project(
     )
 
     if project:
-        if project.description != cleaned_description:
+        if project.description != cleaned_description: 
             project.description = cleaned_description
 
             try:
