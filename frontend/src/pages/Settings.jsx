@@ -136,7 +136,6 @@ function Settings() {
         JSON.stringify(cleanedSettings)
       );
 
-      // Notify the rest of Tanio that settings changed.
       window.dispatchEvent(
         new Event("tanio-settings-updated")
       );
