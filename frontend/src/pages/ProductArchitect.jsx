@@ -7,6 +7,8 @@ import { exportContentAsPdf } from "../utils/exportPdf";
 import { exportContentAsMarkdown } from "../utils/exportMarkdown";
 import { exportContentAsTxt } from "../utils/exportTxt";
 
+const AI_REQUEST_TIMEOUT_MS = 35000;
+const SLOW_REQUEST_THRESHOLD_MS = 30000;
 const SETTINGS_KEY = "tanioSettings";
 
 const DEFAULT_AI_SETTINGS = {
@@ -197,13 +199,19 @@ function ProductArchitect() {
     ),
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (isRegeneration = false) => {
+    if (loading) {
+      return;
+    }
+
     const cleanedProjectName = projectName.trim();
     const cleanedDescription = description.trim();
 
     setError("");
     setSuccessMessage("");
-    setGeneratedContent("");
+    if (!isRegeneration) {
+      setGeneratedContent("");
+    }
 
     if (cleanedProjectName.length < 2) {
       setError("Project name must contain at least 2 characters.");
@@ -226,6 +234,12 @@ function ProductArchitect() {
     }
 
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      AI_REQUEST_TIMEOUT_MS
+    );
+    const startedAt = performance.now();
 
     try {
       const token = localStorage.getItem("token");
@@ -259,6 +273,7 @@ ${aiPreferenceInstructions}`;
           project_name: cleanedProjectName,
           description: descriptionWithPreferences,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -301,12 +316,16 @@ ${aiPreferenceInstructions}`;
 
       setGeneratedContent(data.body);
       setSuccessMessage(
-        `${documentTypeLabels[contentType] || "Content"} generated successfully.`
+        `${documentTypeLabels[contentType] || "Content"} ${
+          isRegeneration ? "regenerated" : "generated"
+        } successfully.`
       );
 
       addRecentActivity({
         type: "Content Generated",
-        title: `${cleanedProjectName} content generated`,
+        title: `${cleanedProjectName} content ${
+          isRegeneration ? "regenerated" : "generated"
+        }`,
         description: `Created a new ${
           documentTypeLabels[contentType] || contentType
         }.`,
@@ -314,8 +333,9 @@ ${aiPreferenceInstructions}`;
       });
     } catch (err) {
       console.error("Generation error:", err);
-
-      if (err instanceof TypeError) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("The AI request took too long. Please try generating the content again.");
+      } else if (err instanceof TypeError) {
         setError(
           "Could not connect to the server. Make sure the backend is running and try again."
         );
@@ -327,6 +347,17 @@ ${aiPreferenceInstructions}`;
         );
       }
     } finally {
+      window.clearTimeout(timeoutId);
+
+      const duration = Math.round(performance.now() - startedAt);
+      console.info(`Product Architect AI request completed in ${duration} ms`);
+
+      if (duration > SLOW_REQUEST_THRESHOLD_MS) {
+        console.warn(
+          `Product Architect AI request exceeded the ${SLOW_REQUEST_THRESHOLD_MS} ms performance target.`
+        );
+      }
+
       setLoading(false);
     }
   };
@@ -553,7 +584,7 @@ ${aiPreferenceInstructions}`;
 
         <button
           type="button"
-          onClick={handleGenerate}
+          onClick={() => handleGenerate(false)}
           disabled={
             loading ||
             projectName.trim().length < 2 ||
@@ -575,6 +606,14 @@ ${aiPreferenceInstructions}`;
             </p>
 
             <p className="text-sm text-red-300 mt-1">{error}</p>
+            <button
+              type="button"
+              onClick={() => handleGenerate(false)}
+              disabled={loading}
+              className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Retry
+            </button>
           </div>
         )}
         
@@ -602,8 +641,17 @@ ${aiPreferenceInstructions}`;
         <div className="flex items-center justify-between gap-4 mb-6">
           <h2 className="text-xl font-bold">Generated Output</h2>
 
-          {generatedContent && !loading && (
+          {generatedContent && (
             <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => handleGenerate(true)}
+                disabled={loading}
+                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? "Regenerating..." : "Regenerate"}
+              </button>
+
               <button
                 type="button"
                 onClick={handleExportTxt}

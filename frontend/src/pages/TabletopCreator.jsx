@@ -238,7 +238,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
     }
   };
 
-  const handleGenerateCampaign = async () => {
+  const handleGenerateCampaign = async (isRegeneration = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -265,11 +265,13 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setError: setGenerateError,
       setContent: setGeneratedCampaignContent,
       setSuccess: setGenerateSuccess,
-      successMessage: "Campaign content generated successfully.",
+      successMessage: `Campaign content ${
+        isRegeneration ? "regenerated" : "generated"
+      } successfully.`,
     });
   };
 
-  const handleGenerateNPCs = async () => {
+  const handleGenerateNPCs = async (isRegeneration = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -294,11 +296,13 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setError: setNpcError,
       setContent: setGeneratedNPCContent,
       setSuccess: setGenerateSuccess,
-      successMessage: "NPCs generated successfully.",
+      successMessage: `NPCs ${
+        isRegeneration ? "regenerated" : "generated"
+      } successfully.`,
     });
   };
 
-  const handleGenerateQuests = async () => {
+  const handleGenerateQuests = async (isRegeneration = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -323,11 +327,13 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setError: setQuestError,
       setContent: setGeneratedQuestContent,
       setSuccess: setGenerateSuccess,
-      successMessage: "Quests generated successfully.",
+      successMessage: `Quests ${
+        isRegeneration ? "regenerated" : "generated"
+      } successfully.`,
     });
   };
 
-  const handleGenerateEncounters = async () => {
+  const handleGenerateEncounters = async (isRegeneration = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -354,11 +360,13 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setError: setEncounterError,
       setContent: setGeneratedEncounterContent,
       setSuccess: setGenerateSuccess,
-      successMessage: "Encounters generated successfully.",
+      successMessage: `Encounters ${
+        isRegeneration ? "regenerated" : "generated"
+      } successfully.`,
     });
   };
 
-  const handleGenerateLocations = async () => {
+  const handleGenerateLocations = async (isRegeneration = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -385,7 +393,9 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       setError: setLocationError,
       setContent: setGeneratedLocationContent,
       setSuccess: setGenerateSuccess,
-      successMessage: "Locations generated successfully.",
+      successMessage: `Locations ${
+        isRegeneration ? "regenerated" : "generated"
+      } successfully.`,
     });
   };
 
@@ -491,7 +501,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={handleGenerateCampaign}
+              onClick={() => handleGenerateCampaign(false)}
               disabled={isAnyGenerationInProgress}
               className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-campaign"
@@ -501,7 +511,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
 
             <button
               type="button"
-              onClick={handleGenerateNPCs}
+              onClick={() => handleGenerateNPCs(false)}
               disabled={isAnyGenerationInProgress}
               className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-npcs"
@@ -511,7 +521,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
 
             <button
               type="button"
-              onClick={handleGenerateQuests}
+              onClick={() => handleGenerateQuests(false)}
               disabled={isAnyGenerationInProgress}
               className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-quests"
@@ -521,7 +531,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
 
             <button
               type="button"
-              onClick={handleGenerateEncounters}
+              onClick={() => handleGenerateEncounters(false)}
               disabled={isAnyGenerationInProgress}
               className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-encounters"
@@ -533,7 +543,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
 
             <button
               type="button"
-              onClick={handleGenerateLocations}
+              onClick={() => handleGenerateLocations(false)}
               disabled={isAnyGenerationInProgress}
               className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-locations"
@@ -545,14 +555,19 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
           </div>
 
           {isAnyGenerationInProgress && (
-            <p
-              className="mt-4 text-sm text-cyan-300"
+            <div
+              className="mt-4 flex items-center gap-3 text-sm text-cyan-300"
               role="status"
               aria-live="polite"
               data-testid="ai-generation-loading"
             >
-              Tanio AI is generating content. Please wait...
-            </p>
+              <div
+                className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
+                aria-hidden="true"
+              />
+
+              <p>Tanio AI is generating content. Please wait...</p>
+            </div>
           )}
 
           {generateSuccess && (
@@ -570,15 +585,34 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       {(generateError || generatedCampaignContent) && (
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated Campaign Content</h3>
-
+          {generatedCampaignContent && (
+            <button
+              type="button"
+              onClick={() => handleGenerateCampaign(true)}
+              disabled={isAnyGenerationInProgress}
+              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {generating ? "Regenerating..." : "Regenerate Campaign"}
+            </button>
+          )}
+          
           {generateError && (
-            <p
+            <div
               className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
               role="alert"
               data-testid="campaign-generate-error"
             >
-              {generateError}
-            </p>
+              <p>{generateError}</p>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateCampaign(false)}
+                disabled={isAnyGenerationInProgress}
+                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry Campaign
+              </button>
+            </div>
           )}
 
           {generatedCampaignContent && (
@@ -597,15 +631,34 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       {(npcError || generatedNPCContent) && (
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated NPCs</h3>
+          {generatedNPCContent && (
+            <button
+              type="button"
+              onClick={() => handleGenerateNPCs(true)}
+              disabled={isAnyGenerationInProgress}
+              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {generatingNPCs ? "Regenerating..." : "Regenerate NPCs"}
+            </button>
+          )}
 
           {npcError && (
-            <p
+            <div
               className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
               role="alert"
               data-testid="npc-generate-error"
             >
-              {npcError}
-            </p>
+              <p>{npcError}</p>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateNPCs(false)}
+                disabled={isAnyGenerationInProgress}
+                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry NPCs
+              </button>
+            </div>
           )}
 
           {generatedNPCContent && (
@@ -624,15 +677,34 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       {(questError || generatedQuestContent) && (
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated Quests</h3>
+          {generatedQuestContent && (
+            <button
+              type="button"
+              onClick={() => handleGenerateQuests(true)}
+              disabled={isAnyGenerationInProgress}
+              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {generatingQuests ? "Regenerating..." : "Regenerate Quests"}
+            </button>
+          )}
 
           {questError && (
-            <p
+            <div
               className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
               role="alert"
               data-testid="quest-generate-error"
             >
-              {questError}
-            </p>
+              <p>{questError}</p>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateQuests(false)}
+                disabled={isAnyGenerationInProgress}
+                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry Quests
+              </button>
+            </div>
           )}
 
           {generatedQuestContent && (
@@ -651,15 +723,34 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       {(encounterError || generatedEncounterContent) && (
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated Encounters</h3>
+          {generatedEncounterContent && (
+            <button
+              type="button"
+              onClick={() => handleGenerateEncounters(true)}
+              disabled={isAnyGenerationInProgress}
+              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {generatingEncounters ? "Regenerating..." : "Regenerate Encounters"}
+            </button>
+          )}
 
           {encounterError && (
-            <p
+            <div
               className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
               role="alert"
               data-testid="encounter-generate-error"
             >
-              {encounterError}
-            </p>
+              <p>{encounterError}</p>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateEncounters(false)}
+                disabled={isAnyGenerationInProgress}
+                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry Encounters
+              </button>
+            </div>
           )}
 
           {generatedEncounterContent && (
@@ -678,15 +769,34 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       {(locationError || generatedLocationContent) && (
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated Locations</h3>
+          {generatedLocationContent && (
+            <button
+              type="button"
+              onClick={() => handleGenerateLocations(true)}
+              disabled={isAnyGenerationInProgress}
+              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {generatingLocations ? "Regenerating..." : "Regenerate Locations"}
+            </button>
+          )}
 
           {locationError && (
-            <p
+            <div
               className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
               role="alert"
               data-testid="location-generate-error"
             >
-              {locationError}
-            </p>
+              <p>{locationError}</p>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateLocations(false)}
+                disabled={isAnyGenerationInProgress}
+                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry Locations
+              </button>
+            </div>
           )}
 
           {generatedLocationContent && (
