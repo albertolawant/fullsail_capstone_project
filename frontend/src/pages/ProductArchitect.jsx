@@ -103,6 +103,8 @@ function ProductArchitect() {
 
   const [contentType, setContentType] = useState("prd");
   const [generatedContent, setGeneratedContent] = useState("");
+  const [generationHistory, setGenerationHistory] = useState([]);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
@@ -200,6 +202,30 @@ function ProductArchitect() {
     ),
   };
 
+  const handlePreviousVersion = () => {
+    if (currentVersionIndex <= 0) {
+      return;
+    }
+
+    const previousIndex = currentVersionIndex - 1;
+    setCurrentVersionIndex(previousIndex);
+    setGeneratedContent(generationHistory[previousIndex].content);
+    setSuccessMessage("");
+    setError("");
+  };
+
+  const handleNextVersion = () => {
+    if (currentVersionIndex >= generationHistory.length - 1) {
+      return;
+    }
+
+    const nextIndex = currentVersionIndex + 1;
+    setCurrentVersionIndex(nextIndex);
+    setGeneratedContent(generationHistory[nextIndex].content);
+    setSuccessMessage("");
+    setError("");
+  };
+
   const handleGenerate = async (isRegeneration = false) => {
     if (loading) {
       return;
@@ -212,6 +238,8 @@ function ProductArchitect() {
     setSuccessMessage("");
     if (!isRegeneration) {
       setGeneratedContent("");
+      setGenerationHistory([]);
+      setCurrentVersionIndex(-1);
     }
 
     if (cleanedProjectName.length < 2) {
@@ -316,7 +344,21 @@ ${aiPreferenceInstructions}`;
         throw new Error("The AI did not return any content. Please try again.");
       }
 
+      const newVersion = {
+        content: data.body,
+        createdAt: new Date().toISOString(),
+        documentType: contentType,
+      };
+
+      const nextHistory =
+        isRegeneration && generationHistory.length > 0
+          ? [...generationHistory, newVersion]
+          : [newVersion];
+
+      setGenerationHistory(nextHistory);
+      setCurrentVersionIndex(nextHistory.length - 1);
       setGeneratedContent(data.body);
+
       setSuccessMessage(
         `${documentTypeLabels[contentType] || "Content"} ${
           isRegeneration ? "regenerated" : "generated"
@@ -588,7 +630,6 @@ ${aiPreferenceInstructions}`;
         <button
           type="button"
           onClick={() => handleGenerate(false)}
-          onClick={() => handleGenerate(false)}
           disabled={
             loading ||
             projectName.trim().length < 2 ||
@@ -620,7 +661,7 @@ ${aiPreferenceInstructions}`;
             </button>
           </div>
         )}
-        
+
         {successMessage && (
           <div
             className="mt-4 bg-emerald-950/50 border border-emerald-800 rounded-lg p-4"
@@ -647,6 +688,27 @@ ${aiPreferenceInstructions}`;
 
           {generatedContent && (
             <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handlePreviousVersion}
+                disabled={loading || currentVersionIndex <= 0}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ← Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNextVersion}
+                disabled={
+                  loading ||
+                  currentVersionIndex >= generationHistory.length - 1
+                }
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleGenerate(true)}
@@ -712,6 +774,26 @@ ${aiPreferenceInstructions}`;
                   Regenerating your document. Your current version will stay
                   visible until the new one is ready.
                 </p>
+              </div>
+            )}
+
+            {generationHistory.length > 0 && (
+              <div className="mb-5 flex flex-wrap items-center gap-3 text-sm">
+                <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                  Version {currentVersionIndex + 1} of {generationHistory.length}
+                </span>
+
+                <span
+                  className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                    currentVersionIndex === generationHistory.length - 1
+                      ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                      : "border-slate-700 bg-slate-800 text-slate-400"
+                  }`}
+                >
+                  {currentVersionIndex === generationHistory.length - 1
+                    ? "Current Version"
+                    : "Previous Version"}
+                </span>
               </div>
             )}
 

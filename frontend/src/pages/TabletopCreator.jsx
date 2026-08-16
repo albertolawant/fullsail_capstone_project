@@ -136,6 +136,23 @@ function TabletopCreator() {
   const [generatingLocations, setGeneratingLocations] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [generateSuccess, setGenerateSuccess] = useState("");
+
+  const [generationHistory, setGenerationHistory] = useState({
+    campaign: [],
+    npc: [],
+    quest: [],
+    encounter: [],
+    location: [],
+  });
+
+  const [currentVersionIndex, setCurrentVersionIndex] = useState({
+    campaign: -1,
+    npc: -1,
+    quest: -1,
+    encounter: -1,
+    location: -1,
+  });
+
   const activeRequestsRef = useRef(new Set());
 
   const isAnyGenerationInProgress =
@@ -166,6 +183,36 @@ function TabletopCreator() {
     },
   ];
 
+  const handleVersionChange = (historyKey, direction, setContent) => {
+    const history = generationHistory[historyKey] || [];
+    const currentIndex = currentVersionIndex[historyKey] ?? -1;
+    const nextIndex = currentIndex + direction;
+
+    if (nextIndex < 0 || nextIndex >= history.length) {
+      return;
+    }
+
+    setCurrentVersionIndex((previous) => ({
+      ...previous,
+      [historyKey]: nextIndex,
+    }));
+
+    setContent(history[nextIndex].content);
+    setGenerateSuccess("");
+  };
+
+  const resetHistoryFor = (historyKey) => {
+    setGenerationHistory((previous) => ({
+      ...previous,
+      [historyKey]: [],
+    }));
+
+    setCurrentVersionIndex((previous) => ({
+      ...previous,
+      [historyKey]: -1,
+    }));
+  };
+
   const requestAIContent = async ({
     requestKey,
     endpoint,
@@ -179,6 +226,7 @@ function TabletopCreator() {
     setSuccess,
     successMessage,
     isRegeneration = false,
+    historyKey,
   }) => {
     if (activeRequestsRef.current.has(requestKey)) {
       return;
@@ -190,6 +238,7 @@ function TabletopCreator() {
 
     if (!isRegeneration) {
       setContent("");
+      resetHistoryFor(historyKey);
     }
 
     setLoading(true);
@@ -239,7 +288,33 @@ function TabletopCreator() {
       }
 
       const data = await response.json();
-      setContent(data[responseField]);
+      const generatedContent = data[responseField];
+
+      const newVersion = {
+        content: generatedContent,
+        createdAt: new Date().toISOString(),
+      };
+
+      setGenerationHistory((previous) => {
+        const existingHistory = previous[historyKey] || [];
+
+        const nextHistory =
+          isRegeneration && existingHistory.length > 0
+            ? [...existingHistory, newVersion]
+            : [newVersion];
+
+        setCurrentVersionIndex((previousIndexes) => ({
+          ...previousIndexes,
+          [historyKey]: nextHistory.length - 1,
+        }));
+
+        return {
+          ...previous,
+          [historyKey]: nextHistory,
+        };
+      });
+
+      setContent(generatedContent);
       setSuccess(successMessage);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -284,6 +359,7 @@ function TabletopCreator() {
 
     await requestAIContent({
       requestKey: "Campaign",
+      historyKey: "campaign",
       endpoint: "generate-campaign",
       responseField: "campaign_content",
       fallbackError: "Unable to generate campaign content.",
@@ -316,6 +392,7 @@ function TabletopCreator() {
 
     await requestAIContent({
       requestKey: "NPC",
+      historyKey: "npc",
       endpoint: "generate-npc",
       responseField: "npc_content",
       fallbackError: "Unable to generate NPCs.",
@@ -348,6 +425,7 @@ function TabletopCreator() {
 
     await requestAIContent({
       requestKey: "Quest",
+      historyKey: "quest",
       endpoint: "generate-quest",
       responseField: "quest_content",
       fallbackError: "Unable to generate quests.",
@@ -382,6 +460,7 @@ function TabletopCreator() {
 
     await requestAIContent({
       requestKey: "Encounter",
+      historyKey: "encounter",
       endpoint: "generate-encounter",
       responseField: "encounter_content",
       fallbackError: "Unable to generate encounters.",
@@ -416,6 +495,7 @@ function TabletopCreator() {
 
     await requestAIContent({
       requestKey: "Location",
+      historyKey: "location",
       endpoint: "generate-location",
       responseField: "location_content",
       fallbackError: "Unable to generate locations.",
@@ -619,14 +699,45 @@ function TabletopCreator() {
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated Campaign Content</h3>
           {generatedCampaignContent && (
-            <button
-              type="button"
-              onClick={() => handleGenerateCampaign(true)}
-              disabled={isAnyGenerationInProgress}
-              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {generating ? "Regenerating..." : "Regenerate Campaign"}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("campaign", -1, setGeneratedCampaignContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.campaign <= 0
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ← Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("campaign", 1, setGeneratedCampaignContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.campaign >=
+                    generationHistory.campaign.length - 1
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next →
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateCampaign(true)}
+                disabled={isAnyGenerationInProgress}
+                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generating ? "Regenerating..." : "Regenerate Campaign"}
+              </button>
+            </div>
           )}
           
           {generateError && (
@@ -648,6 +759,28 @@ function TabletopCreator() {
             </div>
           )}
 
+          {generatedCampaignContent && generationHistory.campaign.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                Version {currentVersionIndex.campaign + 1} of {generationHistory.campaign.length}
+              </span>
+
+              <span
+                className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                  currentVersionIndex.campaign ===
+                  generationHistory.campaign.length - 1
+                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                    : "border-slate-700 bg-slate-800 text-slate-400"
+                }`}
+              >
+                {currentVersionIndex.campaign ===
+                generationHistory.campaign.length - 1
+                  ? "Current Version"
+                  : "Previous Version"}
+              </span>
+            </div>
+          )}
+
           {generatedCampaignContent && (
             <div
               className={generatedMarkdownClasses}
@@ -665,14 +798,45 @@ function TabletopCreator() {
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated NPCs</h3>
           {generatedNPCContent && (
-            <button
-              type="button"
-              onClick={() => handleGenerateNPCs(true)}
-              disabled={isAnyGenerationInProgress}
-              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {generatingNPCs ? "Regenerating..." : "Regenerate NPCs"}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("npc", -1, setGeneratedNPCContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.npc <= 0
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ← Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("npc", 1, setGeneratedNPCContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.npc >=
+                    generationHistory.npc.length - 1
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next →
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateNPCs(true)}
+                disabled={isAnyGenerationInProgress}
+                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingNPCs ? "Regenerating..." : "Regenerate NPCs"}
+              </button>
+            </div>
           )}
 
           {npcError && (
@@ -694,6 +858,28 @@ function TabletopCreator() {
             </div>
           )}
 
+          {generatedNPCContent && generationHistory.npc.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                Version {currentVersionIndex.npc + 1} of {generationHistory.npc.length}
+              </span>
+
+              <span
+                className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                  currentVersionIndex.npc ===
+                  generationHistory.npc.length - 1
+                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                    : "border-slate-700 bg-slate-800 text-slate-400"
+                }`}
+              >
+                {currentVersionIndex.npc ===
+                generationHistory.npc.length - 1
+                  ? "Current Version"
+                  : "Previous Version"}
+              </span>
+            </div>
+          )}
+
           {generatedNPCContent && (
             <div
               className={generatedMarkdownClasses}
@@ -711,14 +897,45 @@ function TabletopCreator() {
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated Quests</h3>
           {generatedQuestContent && (
-            <button
-              type="button"
-              onClick={() => handleGenerateQuests(true)}
-              disabled={isAnyGenerationInProgress}
-              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {generatingQuests ? "Regenerating..." : "Regenerate Quests"}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("quest", -1, setGeneratedQuestContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.quest <= 0
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ← Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("quest", 1, setGeneratedQuestContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.quest >=
+                    generationHistory.quest.length - 1
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next →
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateQuests(true)}
+                disabled={isAnyGenerationInProgress}
+                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingQuests ? "Regenerating..." : "Regenerate Quests"}
+              </button>
+            </div>
           )}
 
           {questError && (
@@ -740,6 +957,28 @@ function TabletopCreator() {
             </div>
           )}
 
+          {generatedQuestContent && generationHistory.quest.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                Version {currentVersionIndex.quest + 1} of {generationHistory.quest.length}
+              </span>
+
+              <span
+                className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                  currentVersionIndex.quest ===
+                  generationHistory.quest.length - 1
+                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                    : "border-slate-700 bg-slate-800 text-slate-400"
+                }`}
+              >
+                {currentVersionIndex.quest ===
+                generationHistory.quest.length - 1
+                  ? "Current Version"
+                  : "Previous Version"}
+              </span>
+            </div>
+          )}
+
           {generatedQuestContent && (
             <div
               className={generatedMarkdownClasses}
@@ -757,14 +996,45 @@ function TabletopCreator() {
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated Encounters</h3>
           {generatedEncounterContent && (
-            <button
-              type="button"
-              onClick={() => handleGenerateEncounters(true)}
-              disabled={isAnyGenerationInProgress}
-              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {generatingEncounters ? "Regenerating..." : "Regenerate Encounters"}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("encounter", -1, setGeneratedEncounterContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.encounter <= 0
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ← Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("encounter", 1, setGeneratedEncounterContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.encounter >=
+                    generationHistory.encounter.length - 1
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next →
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateEncounters(true)}
+                disabled={isAnyGenerationInProgress}
+                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingEncounters ? "Regenerating..." : "Regenerate Encounters"}
+              </button>
+            </div>
           )}
 
           {encounterError && (
@@ -786,6 +1056,28 @@ function TabletopCreator() {
             </div>
           )}
 
+          {generatedEncounterContent && generationHistory.encounter.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                Version {currentVersionIndex.encounter + 1} of {generationHistory.encounter.length}
+              </span>
+
+              <span
+                className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                  currentVersionIndex.encounter ===
+                  generationHistory.encounter.length - 1
+                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                    : "border-slate-700 bg-slate-800 text-slate-400"
+                }`}
+              >
+                {currentVersionIndex.encounter ===
+                generationHistory.encounter.length - 1
+                  ? "Current Version"
+                  : "Previous Version"}
+              </span>
+            </div>
+          )}
+
           {generatedEncounterContent && (
             <div
               className={generatedMarkdownClasses}
@@ -803,14 +1095,45 @@ function TabletopCreator() {
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
           <h3 className="text-2xl font-bold">Generated Locations</h3>
           {generatedLocationContent && (
-            <button
-              type="button"
-              onClick={() => handleGenerateLocations(true)}
-              disabled={isAnyGenerationInProgress}
-              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {generatingLocations ? "Regenerating..." : "Regenerate Locations"}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("location", -1, setGeneratedLocationContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.location <= 0
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ← Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleVersionChange("location", 1, setGeneratedLocationContent)
+                }
+                disabled={
+                  isAnyGenerationInProgress ||
+                  currentVersionIndex.location >=
+                    generationHistory.location.length - 1
+                }
+                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next →
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateLocations(true)}
+                disabled={isAnyGenerationInProgress}
+                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generatingLocations ? "Regenerating..." : "Regenerate Locations"}
+              </button>
+            </div>
           )}
 
           {locationError && (
@@ -829,6 +1152,28 @@ function TabletopCreator() {
               >
                 Retry Locations
               </button>
+            </div>
+          )}
+
+          {generatedLocationContent && generationHistory.location.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                Version {currentVersionIndex.location + 1} of {generationHistory.location.length}
+              </span>
+
+              <span
+                className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                  currentVersionIndex.location ===
+                  generationHistory.location.length - 1
+                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                    : "border-slate-700 bg-slate-800 text-slate-400"
+                }`}
+              >
+                {currentVersionIndex.location ===
+                generationHistory.location.length - 1
+                  ? "Current Version"
+                  : "Previous Version"}
+              </span>
             </div>
           )}
 
