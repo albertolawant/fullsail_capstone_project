@@ -104,6 +104,19 @@ const generatedMarkdownClasses = `
   [&_code]:rounded [&_code]:text-cyan-300
 `;
 
+
+function cleanGeneratedMarkdown(content) {
+  if (!content) {
+    return "";
+  }
+
+  return content
+    .trim()
+    .replace(/^```(?:markdown|md)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+}
+
 function TabletopCreator() {
   const [campaignName, setCampaignName] = useState("");
   const [campaignDescription, setCampaignDescription] = useState("");
@@ -165,6 +178,7 @@ function TabletopCreator() {
     setContent,
     setSuccess,
     successMessage,
+    isRegeneration = false,
   }) => {
     if (activeRequestsRef.current.has(requestKey)) {
       return;
@@ -173,7 +187,11 @@ function TabletopCreator() {
     activeRequestsRef.current.add(requestKey);
     setError("");
     setSuccess("");
-    setContent("");
+
+    if (!isRegeneration) {
+      setContent("");
+    }
+
     setLoading(true);
 
     const controller = new AbortController();
@@ -196,9 +214,7 @@ function TabletopCreator() {
           },
           body: JSON.stringify({
             campaign_name: cleanedName,
-            campaign_description: `${cleanedDescription}
-
-${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
+            campaign_description: cleanedDescription,
           }),
           signal: controller.signal,
         }
@@ -207,7 +223,19 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
 
-        throw new Error(errorData?.detail || fallbackError);
+        let errorMessage = fallbackError;
+
+        if (typeof errorData?.detail === "string") {
+          errorMessage = errorData.detail;
+        } else if (Array.isArray(errorData?.detail)) {
+          errorMessage = errorData.detail
+            .map((item) => item?.msg || JSON.stringify(item))
+            .join(" ");
+        } else if (errorData?.detail) {
+          errorMessage = JSON.stringify(errorData.detail);
+        }
+
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -268,6 +296,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       successMessage: `Campaign content ${
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
+      isRegeneration,
     });
   };
 
@@ -299,6 +328,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       successMessage: `NPCs ${
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
+      isRegeneration,
     });
   };
 
@@ -330,6 +360,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       successMessage: `Quests ${
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
+      isRegeneration,
     });
   };
 
@@ -363,6 +394,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       successMessage: `Encounters ${
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
+      isRegeneration,
     });
   };
 
@@ -396,6 +428,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
       successMessage: `Locations ${
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
+      isRegeneration,
     });
   };
 
@@ -621,7 +654,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
               data-testid="generated-campaign-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {generatedCampaignContent}
+                {cleanGeneratedMarkdown(generatedCampaignContent)}
               </ReactMarkdown>
             </div>
           )}
@@ -667,7 +700,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
               data-testid="generated-npc-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {generatedNPCContent}
+                {cleanGeneratedMarkdown(generatedNPCContent)}
               </ReactMarkdown>
             </div>
           )}
@@ -713,7 +746,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
               data-testid="generated-quest-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {generatedQuestContent}
+                {cleanGeneratedMarkdown(generatedQuestContent)}
               </ReactMarkdown>
             </div>
           )}
@@ -759,7 +792,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
               data-testid="generated-encounter-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {generatedEncounterContent}
+                {cleanGeneratedMarkdown(generatedEncounterContent)}
               </ReactMarkdown>
             </div>
           )}
@@ -805,7 +838,7 @@ ${buildAiPreferenceInstructions(getAiGenerationSettings())}`,
               data-testid="generated-location-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {generatedLocationContent}
+                {cleanGeneratedMarkdown(generatedLocationContent)}
               </ReactMarkdown>
             </div>
           )}
