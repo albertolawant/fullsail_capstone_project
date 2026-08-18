@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -116,6 +116,11 @@ function ProductArchitect() {
   const [preferredColors, setPreferredColors] = useState("");
   const [logoIdeas, setLogoIdeas] = useState("");
   const [brandingDirection, setBrandingDirection] = useState("");
+  const [logoProjectId, setLogoProjectId] = useState(selectedProject?.id || null);
+  const [logoGallery, setLogoGallery] = useState([]);
+  const [selectedLogoIndex, setSelectedLogoIndex] = useState(-1);
+  const [logoGalleryLoading, setLogoGalleryLoading] = useState(false);
+  const [logoGalleryError, setLogoGalleryError] = useState("");
 
   const endpointMap = {
     prd: "/product-architect/prd",
@@ -415,6 +420,108 @@ ${aiPreferenceInstructions}`;
   };
 
 
+  const loadLogoGallery = async (projectId, existingToken = null) => {
+    if (!projectId) {
+      return [];
+    }
+
+    setLogoGalleryLoading(true);
+    setLogoGalleryError("");
+
+    try {
+      const token = existingToken || localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/product-architect/logos/${projectId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        if (response.status === 404) {
+          return [];
+        }
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Could not load the logo gallery."
+        );
+      }
+
+      const data = await response.json();
+      const logos = Array.isArray(data?.logos) ? data.logos : [];
+
+      setLogoGallery(logos);
+
+      if (logos.length > 0) {
+        const latestIndex = logos.length - 1;
+        setSelectedLogoIndex(latestIndex);
+        setLogoBase64(logos[latestIndex].image_base64);
+      } else {
+        setSelectedLogoIndex(-1);
+        setLogoBase64("");
+      }
+
+      return logos;
+    } catch (err) {
+      console.error("Logo gallery load error:", err);
+      setLogoGalleryError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while loading the logo gallery."
+      );
+      return [];
+    } finally {
+      setLogoGalleryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedProject?.id) {
+      return;
+    }
+
+    setLogoProjectId(selectedProject.id);
+    loadLogoGallery(selectedProject.id);
+  }, [selectedProject?.id]);
+
+  const handleSelectLogoVersion = (index) => {
+    if (index < 0 || index >= logoGallery.length) {
+      return;
+    }
+
+    setSelectedLogoIndex(index);
+    setLogoBase64(logoGallery[index].image_base64);
+    setLogoError("");
+  };
+
+  const handlePreviousLogoVersion = () => {
+    if (selectedLogoIndex <= 0) {
+      return;
+    }
+
+    handleSelectLogoVersion(selectedLogoIndex - 1);
+  };
+
+  const handleNextLogoVersion = () => {
+    if (selectedLogoIndex >= logoGallery.length - 1) {
+      return;
+    }
+
+    handleSelectLogoVersion(selectedLogoIndex + 1);
+  };
+
+
   const handleGenerateLogo = async () => {
     if (logoLoading) {
       return;
@@ -424,7 +531,7 @@ ${aiPreferenceInstructions}`;
     const cleanedDescription = description.trim();
 
     setLogoError("");
-    setLogoBase64("");
+    setLogoGalleryError("");
 
     if (cleanedProjectName.length < 2) {
       setLogoError("Project name must contain at least 2 characters.");
@@ -526,6 +633,29 @@ ${aiPreferenceInstructions}`;
       }
 
       setLogoBase64(data.image_base64);
+
+      if (data?.project_id) {
+        setLogoProjectId(data.project_id);
+
+        const refreshedLogos = await loadLogoGallery(data.project_id, token);
+
+        if (refreshedLogos.length === 0) {
+          const generatedLogo = {
+            id: data.id,
+            project_id: data.project_id,
+            image_base64: data.image_base64,
+            style: data.style || logoStyle,
+            preferred_colors: data.preferred_colors || preferredColors.trim(),
+            logo_ideas: data.logo_ideas || logoIdeas.trim(),
+            branding_direction:
+              data.branding_direction || brandingDirection.trim(),
+            created_at: data.created_at || new Date().toISOString(),
+          };
+
+          setLogoGallery([generatedLogo]);
+          setSelectedLogoIndex(0);
+        }
+      }
 
       addRecentActivity({
         type: "Logo Generated",
@@ -738,6 +868,16 @@ ${aiPreferenceInstructions}`;
               if (logoBase64) {
                 setLogoBase64("");
               }
+
+              setLogoProjectId(null);
+              setLogoGallery([]);
+              setSelectedLogoIndex(-1);
+              setLogoGalleryError("");
+
+              setLogoProjectId(null);
+              setLogoGallery([]);
+              setSelectedLogoIndex(-1);
+              setLogoGalleryError("");
             }}
             maxLength={100}
             aria-describedby="project-name-help"
@@ -1059,21 +1199,223 @@ ${aiPreferenceInstructions}`;
           </div>
         )}
 
-        {logoBase64 && !logoLoading && (
-          <div className="mt-6">
-            <img
-              src={`data:image/png;base64,${logoBase64}`}
-              alt={`${projectName.trim() || "Project"} generated logo`}
-              className="w-full max-w-md rounded-xl border border-slate-700 bg-white"
+        {logoGalleryLoading && !logoLoading && (
+          <div
+            className="mb-4 flex items-center gap-3 text-slate-400"
+            role="status"
+            aria-live="polite"
+          >
+            <div
+              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-purple-400 animate-spin"
+              aria-hidden="true"
             />
+            <p>Loading saved logo versions...</p>
           </div>
         )}
 
-        {!logoBase64 && !logoLoading && !logoError && (
-          <p className="text-slate-500">
-            Your generated logo will appear here.
-          </p>
+        {logoGalleryError && (
+          <div className="mb-4 rounded-lg border border-amber-800 bg-amber-950/40 p-4">
+            <p className="font-semibold text-amber-300">
+              Logo gallery could not be loaded
+            </p>
+            <p className="mt-1 text-sm text-amber-300">{logoGalleryError}</p>
+            {logoProjectId && (
+              <button
+                type="button"
+                onClick={() => loadLogoGallery(logoProjectId)}
+                disabled={logoGalleryLoading}
+                className="mt-3 rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry Gallery
+              </button>
+            )}
+          </div>
         )}
+
+        {logoBase64 && !logoLoading && (
+          <div className="mt-6">
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+              {logoGallery.length > 0 && selectedLogoIndex >= 0 && (
+                <>
+                  <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                    Version {selectedLogoIndex + 1} of {logoGallery.length}
+                  </span>
+
+                  <span
+                    className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                      selectedLogoIndex === logoGallery.length - 1
+                        ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                        : "border-slate-700 bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {selectedLogoIndex === logoGallery.length - 1
+                      ? "Current Version"
+                      : "Previous Version"}
+                  </span>
+
+                  {logoGallery[selectedLogoIndex]?.created_at && (
+                    <span className="text-slate-500">
+                      {new Date(
+                        logoGallery[selectedLogoIndex].created_at
+                      ).toLocaleString()}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-start gap-6">
+              <div>
+                <img
+                  src={`data:image/png;base64,${logoBase64}`}
+                  alt={`${projectName.trim() || "Project"} generated logo`}
+                  className="w-full max-w-md rounded-xl border border-slate-700 bg-white"
+                />
+
+                {logoGallery.length > 1 && selectedLogoIndex >= 0 && (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={handlePreviousLogoVersion}
+                      disabled={selectedLogoIndex <= 0}
+                      className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      ← Previous
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleNextLogoVersion}
+                      disabled={selectedLogoIndex >= logoGallery.length - 1}
+                      className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {logoGallery.length > 0 && selectedLogoIndex >= 0 && (
+                <div className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+                  <h3 className="font-semibold text-white">Version Details</h3>
+
+                  <dl className="mt-3 space-y-3 text-sm">
+                    <div>
+                      <dt className="text-slate-500">Style</dt>
+                      <dd className="mt-1 capitalize text-slate-200">
+                        {logoGallery[selectedLogoIndex]?.style || "default"}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-slate-500">Preferred Colors</dt>
+                      <dd className="mt-1 text-slate-200">
+                        {logoGallery[selectedLogoIndex]?.preferred_colors ||
+                          "Default"}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-slate-500">Logo Ideas / Symbols</dt>
+                      <dd className="mt-1 text-slate-200">
+                        {logoGallery[selectedLogoIndex]?.logo_ideas || "None"}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-slate-500">Branding Direction</dt>
+                      <dd className="mt-1 text-slate-200">
+                        {logoGallery[selectedLogoIndex]?.branding_direction ||
+                          "Default"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {logoGallery.length > 0 && !logoLoading && (
+          <div className="mt-8 border-t border-slate-800 pt-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-white">
+                  Logo Gallery & Version History
+                </h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Browse every saved logo version for this project.
+                </p>
+              </div>
+
+              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
+                {logoGallery.length} saved{" "}
+                {logoGallery.length === 1 ? "logo" : "logos"}
+              </span>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {logoGallery.map((logo, index) => {
+                const isSelected = index === selectedLogoIndex;
+                const isCurrent = index === logoGallery.length - 1;
+
+                return (
+                  <button
+                    key={logo.id ?? `${logo.project_id}-${index}`}
+                    type="button"
+                    onClick={() => handleSelectLogoVersion(index)}
+                    className={`overflow-hidden rounded-xl border p-3 text-left transition ${
+                      isSelected
+                        ? "border-purple-500 bg-purple-950/20"
+                        : "border-slate-800 bg-slate-950/40 hover:border-slate-600"
+                    }`}
+                  >
+                    <div className="aspect-square overflow-hidden rounded-lg bg-white">
+                      <img
+                        src={`data:image/png;base64,${logo.image_base64}`}
+                        alt={`${projectName.trim() || "Project"} logo version ${
+                          index + 1
+                        }`}
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <span className="font-semibold text-white">
+                        Version {index + 1}
+                      </span>
+
+                      {isCurrent && (
+                        <span className="rounded-md border border-emerald-800 bg-emerald-950 px-2 py-1 text-xs font-semibold text-emerald-300">
+                          Current
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-xs capitalize text-slate-400">
+                      {logo.style || "default"} style
+                    </p>
+
+                    {logo.created_at && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        {new Date(logo.created_at).toLocaleString()}
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!logoBase64 &&
+          !logoLoading &&
+          !logoGalleryLoading &&
+          !logoError && (
+            <p className="text-slate-500">
+              Your generated logo will appear here.
+            </p>
+          )}
       </div>
 
       <div

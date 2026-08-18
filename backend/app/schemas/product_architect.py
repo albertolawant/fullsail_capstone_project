@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -9,6 +10,7 @@ class ProductArchitectRequest(BaseModel):
         min_length=2,
         max_length=100,
     )
+
     description: str = Field(
         ...,
         min_length=10,
@@ -64,4 +66,15 @@ class ProductLogoRequest(BaseModel):
 
 
 class ProductLogoResponse(BaseModel):
+    id: int
+    project_id: int
     image_base64: str
+    style: str
+    preferred_colors: str
+    logo_ideas: str
+    branding_direction: str
+    created_at: datetime
+
+
+class ProductLogoGalleryResponse(BaseModel):
+    logos: list[ProductLogoResponse]

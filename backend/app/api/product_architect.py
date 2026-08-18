@@ -13,12 +13,14 @@ from app.api.auth import get_current_user
 from app.core.config import settings
 from app.db.database import get_db
 from app.models.content import GeneratedContent
+from app.models.product_logo import ProductLogo
 from app.models.project import Project
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.schemas.product_architect import (
     ProductArchitectRequest,
     ProductArchitectResponse,
+    ProductLogoGalleryResponse,
     ProductLogoRequest,
     ProductLogoResponse,
 )
@@ -464,6 +466,7 @@ why each major technology is appropriate.
 )
 def generate_product_logo(
     request: ProductLogoRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not settings.OPENAI_API_KEY:
@@ -474,6 +477,13 @@ def generate_product_logo(
 
     cleaned_project_name = request.project_name.strip()
     cleaned_description = request.description.strip()
+
+    project = get_or_create_user_project(
+        db=db,
+        current_user=current_user,
+        project_name=cleaned_project_name,
+        description=cleaned_description,
+    )
 
     customization_instructions = []
 
@@ -556,8 +566,41 @@ Requirements:
                 detail="The AI did not return a valid logo. Please try again.",
             )
 
-        return ProductLogoResponse(
+        saved_logo = ProductLogo(
+            project_id=project.id,
+            owner_id=current_user.id,
             image_base64=image_base64,
+            style=request.style,
+            preferred_colors=request.preferred_colors.strip(),
+            logo_ideas=request.logo_ideas.strip(),
+            branding_direction=request.branding_direction.strip(),
+        )
+
+        try:
+            db.add(saved_logo)
+            db.commit()
+            db.refresh(saved_logo)
+
+        except Exception:
+            db.rollback()
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "The logo was generated but could not be saved. "
+                    "Please try again."
+                ),
+            )
+
+        return ProductLogoResponse(
+            id=saved_logo.id,
+            project_id=saved_logo.project_id,
+            image_base64=saved_logo.image_base64,
+            style=saved_logo.style,
+            preferred_colors=saved_logo.preferred_colors,
+            logo_ideas=saved_logo.logo_ideas,
+            branding_direction=saved_logo.branding_direction,
+            created_at=saved_logo.created_at,
         )
 
     except APITimeoutError:
@@ -600,3 +643,56 @@ Requirements:
             status_code=500,
             detail="Something went wrong while generating the logo. Please try again.",
         )
+
+@router.get(
+    "/logos/{project_id}",
+    response_model=ProductLogoGalleryResponse,
+)
+def get_product_logo_gallery(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found.",
+        )
+
+    logos = (
+        db.query(ProductLogo)
+        .filter(
+            ProductLogo.project_id == project_id,
+            ProductLogo.owner_id == current_user.id,
+        )
+        .order_by(
+            ProductLogo.created_at.asc(),
+            ProductLogo.id.asc(),
+        )
+        .all()
+    )
+
+    return ProductLogoGalleryResponse(
+        logos=[
+            ProductLogoResponse(
+                id=logo.id,
+                project_id=logo.project_id,
+                image_base64=logo.image_base64,
+                style=logo.style,
+                preferred_colors=logo.preferred_colors,
+                logo_ideas=logo.logo_ideas,
+                branding_direction=logo.branding_direction,
+                created_at=logo.created_at,
+            )
+            for logo in logos
+        ]
+    )
