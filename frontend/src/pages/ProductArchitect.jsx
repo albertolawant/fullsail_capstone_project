@@ -112,6 +112,10 @@ function ProductArchitect() {
   const [logoBase64, setLogoBase64] = useState("");
   const [logoLoading, setLogoLoading] = useState(false);
   const [logoError, setLogoError] = useState("");
+  const [logoStyle, setLogoStyle] = useState("default");
+  const [preferredColors, setPreferredColors] = useState("");
+  const [logoIdeas, setLogoIdeas] = useState("");
+  const [brandingDirection, setBrandingDirection] = useState("");
 
   const endpointMap = {
     prd: "/product-architect/prd",
@@ -442,6 +446,21 @@ ${aiPreferenceInstructions}`;
       return;
     }
 
+    if (preferredColors.trim().length > 200) {
+      setLogoError("Preferred colors cannot be longer than 200 characters.");
+      return;
+    }
+
+    if (logoIdeas.trim().length > 300) {
+      setLogoError("Logo ideas cannot be longer than 300 characters.");
+      return;
+    }
+
+    if (brandingDirection.trim().length > 500) {
+      setLogoError("Branding direction cannot be longer than 500 characters.");
+      return;
+    }
+
     setLogoLoading(true);
 
     try {
@@ -462,6 +481,10 @@ ${aiPreferenceInstructions}`;
           body: JSON.stringify({
             project_name: cleanedProjectName,
             description: cleanedDescription,
+            style: logoStyle,
+            preferred_colors: preferredColors.trim(),
+            logo_ideas: logoIdeas.trim(),
+            branding_direction: brandingDirection.trim(),
           }),
         }
       );
@@ -507,7 +530,13 @@ ${aiPreferenceInstructions}`;
       addRecentActivity({
         type: "Logo Generated",
         title: `${cleanedProjectName} logo generated`,
-        description: "Generated a new AI product logo.",
+        description:
+          logoStyle !== "default" ||
+          preferredColors.trim() ||
+          logoIdeas.trim() ||
+          brandingDirection.trim()
+            ? "Generated a new AI product logo with custom branding preferences."
+            : "Generated a new AI product logo.",
         projectName: cleanedProjectName,
       });
     } catch (err) {
@@ -887,6 +916,108 @@ ${aiPreferenceInstructions}`;
                 Download Logo
               </button>
             )}
+          </div>
+        </div>
+
+        <div className="mb-6 rounded-xl border border-slate-800 bg-slate-950/40 p-5">
+          <div className="mb-4">
+            <h3 className="font-semibold text-white">Customize Logo Prompt</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              Optional. Add branding preferences before generating your logo.
+              Leave these fields unchanged to use the default prompt.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="logo-style" className="mb-2 block text-sm text-slate-400">
+                Logo Style
+              </label>
+              <select
+                id="logo-style"
+                value={logoStyle}
+                onChange={(e) => {
+                  setLogoStyle(e.target.value);
+                  setLogoError("");
+                }}
+                disabled={logoLoading}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
+              >
+                <option value="default">Default</option>
+                <option value="modern">Modern</option>
+                <option value="minimalist">Minimalist</option>
+                <option value="bold">Bold</option>
+                <option value="playful">Playful</option>
+                <option value="luxury">Luxury</option>
+                <option value="futuristic">Futuristic</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="preferred-colors" className="mb-2 block text-sm text-slate-400">
+                Preferred Colors
+              </label>
+              <input
+                id="preferred-colors"
+                type="text"
+                value={preferredColors}
+                onChange={(e) => {
+                  setPreferredColors(e.target.value);
+                  setLogoError("");
+                }}
+                maxLength={200}
+                disabled={logoLoading}
+                placeholder="e.g. navy blue, purple, silver"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-purple-500 focus:outline-none disabled:opacity-50"
+              />
+              <p className="mt-2 text-right text-xs text-slate-500">
+                {preferredColors.length}/200
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="logo-ideas" className="mb-2 block text-sm text-slate-400">
+                Logo Ideas / Symbols
+              </label>
+              <input
+                id="logo-ideas"
+                type="text"
+                value={logoIdeas}
+                onChange={(e) => {
+                  setLogoIdeas(e.target.value);
+                  setLogoError("");
+                }}
+                maxLength={300}
+                disabled={logoLoading}
+                placeholder="e.g. letter T, spark, circuit, shield"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-purple-500 focus:outline-none disabled:opacity-50"
+              />
+              <p className="mt-2 text-right text-xs text-slate-500">
+                {logoIdeas.length}/300
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="branding-direction" className="mb-2 block text-sm text-slate-400">
+                Branding Direction
+              </label>
+              <input
+                id="branding-direction"
+                type="text"
+                value={brandingDirection}
+                onChange={(e) => {
+                  setBrandingDirection(e.target.value);
+                  setLogoError("");
+                }}
+                maxLength={500}
+                disabled={logoLoading}
+                placeholder="e.g. Clean, trustworthy SaaS brand for creative professionals"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-purple-500 focus:outline-none disabled:opacity-50"
+              />
+              <p className="mt-2 text-right text-xs text-slate-500">
+                {brandingDirection.length}/500
+              </p>
+            </div>
           </div>
         </div>
 

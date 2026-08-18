@@ -19,6 +19,7 @@ from app.models.workspace import Workspace
 from app.schemas.product_architect import (
     ProductArchitectRequest,
     ProductArchitectResponse,
+    ProductLogoRequest,
     ProductLogoResponse,
 )
 
@@ -462,7 +463,7 @@ why each major technology is appropriate.
     response_model=ProductLogoResponse,
 )
 def generate_product_logo(
-    request: ProductArchitectRequest,
+    request: ProductLogoRequest,
     current_user: User = Depends(get_current_user),
 ):
     if not settings.OPENAI_API_KEY:
@@ -473,6 +474,40 @@ def generate_product_logo(
 
     cleaned_project_name = request.project_name.strip()
     cleaned_description = request.description.strip()
+
+    customization_instructions = []
+
+    if request.style != "default":
+        customization_instructions.append(
+            f"- Visual style: {request.style}"
+        )
+
+    if request.preferred_colors.strip():
+        customization_instructions.append(
+            f"- Preferred colors: {request.preferred_colors.strip()}"
+        )
+
+    if request.logo_ideas.strip():
+        customization_instructions.append(
+            f"- Logo ideas or symbols: {request.logo_ideas.strip()}"
+        )
+
+    if request.branding_direction.strip():
+        customization_instructions.append(
+            f"- Branding direction: {request.branding_direction.strip()}"
+        )
+
+    customization_text = ""
+
+    if customization_instructions:
+        customization_text = f"""
+
+User Customization:
+{chr(10).join(customization_instructions)}
+
+Follow the user's customization preferences while still producing
+a professional and visually coherent logo.
+"""
 
     prompt = f"""
 Create a clean, professional logo for this product.
@@ -491,6 +526,7 @@ Requirements:
 - Professional branding
 - Include the product name only if it improves the logo
 - Square composition
+{customization_text}
 """
 
     client = OpenAI(
