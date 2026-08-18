@@ -109,6 +109,9 @@ function ProductArchitect() {
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [logoBase64, setLogoBase64] = useState("");
+  const [logoLoading, setLogoLoading] = useState(false);
+  const [logoError, setLogoError] = useState("");
 
   const endpointMap = {
     prd: "/product-architect/prd",
@@ -407,6 +410,159 @@ ${aiPreferenceInstructions}`;
     }
   };
 
+
+  const handleGenerateLogo = async () => {
+    if (logoLoading) {
+      return;
+    }
+
+    const cleanedProjectName = projectName.trim();
+    const cleanedDescription = description.trim();
+
+    setLogoError("");
+    setLogoBase64("");
+
+    if (cleanedProjectName.length < 2) {
+      setLogoError("Project name must contain at least 2 characters.");
+      return;
+    }
+
+    if (cleanedProjectName.length > 100) {
+      setLogoError("Project name cannot be longer than 100 characters.");
+      return;
+    }
+
+    if (cleanedDescription.length < 10) {
+      setLogoError("Project description must contain at least 10 characters.");
+      return;
+    }
+
+    if (cleanedDescription.length > 5000) {
+      setLogoError("Project description cannot be longer than 5,000 characters.");
+      return;
+    }
+
+    setLogoLoading(true);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const response = await fetch(
+        "http://127.0.0.1:8000/product-architect/logo",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            project_name: cleanedProjectName,
+            description: cleanedDescription,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message = "Failed to generate logo. Please try again.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (response.status === 401) {
+          message = "Your session has expired. Please sign in again.";
+        } else if (response.status === 403) {
+          message = "You are not authorized to perform this action.";
+        } else if (response.status === 422) {
+          message =
+            "Please enter a valid project name and a more detailed description.";
+        } else if (response.status === 429) {
+          message =
+            "Too many logo generation requests. Please wait a moment and try again.";
+        } else if (response.status === 502) {
+          message =
+            "The AI image service could not generate the logo. Please try again.";
+        } else if (response.status === 503) {
+          message =
+            "The AI image service is temporarily unavailable. Please try again later.";
+        } else if (response.status === 504) {
+          message = "Logo generation took too long. Please try again.";
+        }
+
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+
+      if (!data?.image_base64) {
+        throw new Error("The AI did not return a logo. Please try again.");
+      }
+
+      setLogoBase64(data.image_base64);
+
+      addRecentActivity({
+        type: "Logo Generated",
+        title: `${cleanedProjectName} logo generated`,
+        description: "Generated a new AI product logo.",
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("Logo generation error:", err);
+
+      if (err instanceof TypeError) {
+        setLogoError(
+          "Could not connect to the server. Make sure the backend is running and try again."
+        );
+      } else {
+        setLogoError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while generating the logo."
+        );
+      }
+    } finally {
+      setLogoLoading(false);
+    }
+  };
+
+
+  const handleDownloadLogo = () => {
+    if (!logoBase64) {
+      return;
+    }
+
+    try {
+      const cleanedProjectName = projectName.trim() || "Tanio AI";
+      const safeProjectName =
+        cleanedProjectName
+          .replace(/[^a-zA-Z0-9-_ ]/g, "")
+          .trim()
+          .replace(/\s+/g, "-") || "product";
+
+      const link = document.createElement("a");
+      link.href = `data:image/png;base64,${logoBase64}`;
+      link.download = `${safeProjectName}-logo.png`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      addRecentActivity({
+        type: "Logo Downloaded",
+        title: `${cleanedProjectName} logo downloaded`,
+        description: "Downloaded the generated AI product logo as a PNG file.",
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("Logo download error:", err);
+      setLogoError("Something went wrong while downloading the logo.");
+    }
+  };
+
   const handleExportPdf = () => {
     try {
       setError("");
@@ -547,6 +703,12 @@ ${aiPreferenceInstructions}`;
               if (successMessage) {
                 setSuccessMessage("");
               }
+              if (logoError) {
+                setLogoError("");
+              }
+              if (logoBase64) {
+                setLogoBase64("");
+              }
             }}
             maxLength={100}
             aria-describedby="project-name-help"
@@ -577,6 +739,12 @@ ${aiPreferenceInstructions}`;
               }
               if (successMessage) {
                 setSuccessMessage("");
+              }
+              if (logoError) {
+                setLogoError("");
+              }
+              if (logoBase64) {
+                setLogoBase64("");
               }
             }}
             rows="4"
@@ -676,6 +844,104 @@ ${aiPreferenceInstructions}`;
               {successMessage}
             </p>
           </div>
+        )}
+      </div>
+
+
+      <div
+        className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8"
+        aria-busy={logoLoading}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-xl font-bold">AI Product Logo</h2>
+            <p className="text-slate-400 mt-1">
+              Generate a logo using your project name and description.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleGenerateLogo}
+              disabled={
+                logoLoading ||
+                projectName.trim().length < 2 ||
+                description.trim().length < 10
+              }
+              className="bg-purple-500 hover:bg-purple-400 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {logoLoading
+                ? "Generating Logo..."
+                : logoBase64
+                ? "Generate New Logo"
+                : "Generate Logo"}
+            </button>
+
+            {logoBase64 && !logoLoading && (
+              <button
+                type="button"
+                onClick={handleDownloadLogo}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors"
+              >
+                Download Logo
+              </button>
+            )}
+          </div>
+        </div>
+
+        {logoError && (
+          <div
+            className="mb-4 bg-red-950/50 border border-red-800 rounded-lg p-4"
+            role="alert"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-red-300">
+              Logo generation failed
+            </p>
+
+            <p className="text-sm text-red-300 mt-1">{logoError}</p>
+
+            <button
+              type="button"
+              onClick={handleGenerateLogo}
+              disabled={logoLoading}
+              className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {logoLoading && (
+          <div
+            className="flex items-center gap-3 text-slate-400 py-6"
+            role="status"
+            aria-live="polite"
+          >
+            <div
+              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-purple-400 animate-spin"
+              aria-hidden="true"
+            />
+
+            <p>Generating your logo. This may take a moment...</p>
+          </div>
+        )}
+
+        {logoBase64 && !logoLoading && (
+          <div className="mt-6">
+            <img
+              src={`data:image/png;base64,${logoBase64}`}
+              alt={`${projectName.trim() || "Project"} generated logo`}
+              className="w-full max-w-md rounded-xl border border-slate-700 bg-white"
+            />
+          </div>
+        )}
+
+        {!logoBase64 && !logoLoading && !logoError && (
+          <p className="text-slate-500">
+            Your generated logo will appear here.
+          </p>
         )}
       </div>
 

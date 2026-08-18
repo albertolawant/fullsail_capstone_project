@@ -19,6 +19,7 @@ from app.models.workspace import Workspace
 from app.schemas.product_architect import (
     ProductArchitectRequest,
     ProductArchitectResponse,
+    ProductLogoResponse,
 )
 
 
@@ -455,3 +456,111 @@ why each major technology is appropriate.
         db=db,
         current_user=current_user,
     )
+
+@router.post(
+    "/logo",
+    response_model=ProductLogoResponse,
+)
+def generate_product_logo(
+    request: ProductArchitectRequest,
+    current_user: User = Depends(get_current_user),
+):
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="The AI image service is temporarily unavailable.",
+        )
+
+    cleaned_project_name = request.project_name.strip()
+    cleaned_description = request.description.strip()
+
+    prompt = f"""
+Create a clean, professional logo for this product.
+
+Product Name: {cleaned_project_name}
+
+Product Description:
+{cleaned_description}
+
+Requirements:
+- Modern, polished startup-style logo
+- Simple and memorable design
+- Suitable for a software or technology product
+- Center the logo composition
+- Minimal visual clutter
+- Professional branding
+- Include the product name only if it improves the logo
+- Square composition
+"""
+
+    client = OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        timeout=30.0,
+        max_retries=1,
+    )
+
+    try:
+        response = client.images.generate(
+            model="gpt-image-2",
+            prompt=prompt,
+            size="1024x1024",
+        )
+
+        if not response.data:
+            raise HTTPException(
+                status_code=502,
+                detail="The AI did not return a logo. Please try again.",
+            )
+
+        image_base64 = response.data[0].b64_json
+
+        if not image_base64:
+            raise HTTPException(
+                status_code=502,
+                detail="The AI did not return a valid logo. Please try again.",
+            )
+
+        return ProductLogoResponse(
+            image_base64=image_base64,
+        )
+
+    except APITimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Logo generation took too long. Please try again.",
+        )
+
+    except RateLimitError:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many logo generation requests. Please wait a moment and try again.",
+        )
+
+    except AuthenticationError:
+        raise HTTPException(
+            status_code=503,
+            detail="The AI image service is temporarily unavailable.",
+        )
+
+    except APIConnectionError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not connect to the AI image service. Please try again.",
+        )
+
+    except APIError:
+        raise HTTPException(
+            status_code=502,
+            detail="The AI image service could not generate the logo. Please try again.",
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        print(f"Logo generation error: {error}")
+
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong while generating the logo. Please try again.",
+        )

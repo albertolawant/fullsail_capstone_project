@@ -20,3 +20,7 @@ class ProductArchitectResponse(BaseModel):
     title: str
     content_type: str
     body: str
+
+
+class ProductLogoResponse(BaseModel):
+    image_base64: str
