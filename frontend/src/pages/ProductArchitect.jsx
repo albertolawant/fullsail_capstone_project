@@ -103,7 +103,10 @@ function ProductArchitect() {
 
   const [contentType, setContentType] = useState("prd");
   const [generatedContent, setGeneratedContent] = useState("");
+  const [generationHistory, setGenerationHistory] = useState([]);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -199,6 +202,30 @@ function ProductArchitect() {
     ),
   };
 
+  const handlePreviousVersion = () => {
+    if (currentVersionIndex <= 0) {
+      return;
+    }
+
+    const previousIndex = currentVersionIndex - 1;
+    setCurrentVersionIndex(previousIndex);
+    setGeneratedContent(generationHistory[previousIndex].content);
+    setSuccessMessage("");
+    setError("");
+  };
+
+  const handleNextVersion = () => {
+    if (currentVersionIndex >= generationHistory.length - 1) {
+      return;
+    }
+
+    const nextIndex = currentVersionIndex + 1;
+    setCurrentVersionIndex(nextIndex);
+    setGeneratedContent(generationHistory[nextIndex].content);
+    setSuccessMessage("");
+    setError("");
+  };
+
   const handleGenerate = async (isRegeneration = false) => {
     if (loading) {
       return;
@@ -211,6 +238,8 @@ function ProductArchitect() {
     setSuccessMessage("");
     if (!isRegeneration) {
       setGeneratedContent("");
+      setGenerationHistory([]);
+      setCurrentVersionIndex(-1);
     }
 
     if (cleanedProjectName.length < 2) {
@@ -234,6 +263,7 @@ function ProductArchitect() {
     }
 
     setLoading(true);
+    setRegenerating(isRegeneration && Boolean(generatedContent));
     const controller = new AbortController();
     const timeoutId = window.setTimeout(
       () => controller.abort(),
@@ -314,7 +344,21 @@ ${aiPreferenceInstructions}`;
         throw new Error("The AI did not return any content. Please try again.");
       }
 
+      const newVersion = {
+        content: data.body,
+        createdAt: new Date().toISOString(),
+        documentType: contentType,
+      };
+
+      const nextHistory =
+        isRegeneration && generationHistory.length > 0
+          ? [...generationHistory, newVersion]
+          : [newVersion];
+
+      setGenerationHistory(nextHistory);
+      setCurrentVersionIndex(nextHistory.length - 1);
       setGeneratedContent(data.body);
+
       setSuccessMessage(
         `${documentTypeLabels[contentType] || "Content"} ${
           isRegeneration ? "regenerated" : "generated"
@@ -359,6 +403,7 @@ ${aiPreferenceInstructions}`;
       }
 
       setLoading(false);
+      setRegenerating(false);
     }
   };
 
@@ -616,7 +661,7 @@ ${aiPreferenceInstructions}`;
             </button>
           </div>
         )}
-        
+
         {successMessage && (
           <div
             className="mt-4 bg-emerald-950/50 border border-emerald-800 rounded-lg p-4"
@@ -645,17 +690,39 @@ ${aiPreferenceInstructions}`;
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
+                onClick={handlePreviousVersion}
+                disabled={loading || currentVersionIndex <= 0}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ← Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNextVersion}
+                disabled={
+                  loading ||
+                  currentVersionIndex >= generationHistory.length - 1
+                }
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleGenerate(true)}
                 disabled={loading}
                 className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Regenerating..." : "Regenerate"}
+                {regenerating ? "Regenerating..." : "Regenerate"}
               </button>
 
               <button
                 type="button"
                 onClick={handleExportTxt}
-                className="bg-slate-600 hover:bg-slate-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                disabled={loading}
+                className="bg-slate-600 hover:bg-slate-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Export TXT
               </button>
@@ -663,7 +730,8 @@ ${aiPreferenceInstructions}`;
               <button
                 type="button"
                 onClick={handleExportMarkdown}
-                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                disabled={loading}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Export Markdown
               </button>
@@ -671,7 +739,8 @@ ${aiPreferenceInstructions}`;
               <button
                 type="button"
                 onClick={handleExportPdf}
-                className="bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                disabled={loading}
+                className="bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Export PDF
               </button>
@@ -679,7 +748,7 @@ ${aiPreferenceInstructions}`;
           )}
         </div>
 
-        {loading ? (
+        {loading && !generatedContent ? (
           <div className="flex items-center gap-3 text-slate-400">
             <div
               className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
@@ -689,14 +758,54 @@ ${aiPreferenceInstructions}`;
             <p>Generating your document. This may take a moment...</p>
           </div>
         ) : generatedContent ? (
-          <div className="max-w-none">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
-              {generatedContent}
-            </ReactMarkdown>
-          </div>
+          <>
+            {regenerating && (
+              <div
+                className="mb-6 flex items-center gap-3 rounded-lg border border-cyan-800/60 bg-cyan-950/30 p-4 text-cyan-200"
+                role="status"
+                aria-live="polite"
+              >
+                <div
+                  className="h-5 w-5 shrink-0 rounded-full border-2 border-cyan-800 border-t-cyan-300 animate-spin"
+                  aria-hidden="true"
+                />
+
+                <p>
+                  Regenerating your document. Your current version will stay
+                  visible until the new one is ready.
+                </p>
+              </div>
+            )}
+
+            {generationHistory.length > 0 && (
+              <div className="mb-5 flex flex-wrap items-center gap-3 text-sm">
+                <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                  Version {currentVersionIndex + 1} of {generationHistory.length}
+                </span>
+
+                <span
+                  className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                    currentVersionIndex === generationHistory.length - 1
+                      ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                      : "border-slate-700 bg-slate-800 text-slate-400"
+                  }`}
+                >
+                  {currentVersionIndex === generationHistory.length - 1
+                    ? "Current Version"
+                    : "Previous Version"}
+                </span>
+              </div>
+            )}
+
+            <div className="max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {generatedContent}
+              </ReactMarkdown>
+            </div>
+          </>
         ) : (
           <p className="text-slate-500">
             Generated content will appear here.
