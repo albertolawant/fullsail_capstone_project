@@ -221,7 +221,20 @@ def delete_content(
             detail="Not authorized to delete this content",
         )
 
-    db.delete(content)
-    db.commit()
+    try:
+        db.query(ContentVersion).filter(
+            ContentVersion.content_id == content.id
+        ).delete(synchronize_session=False)
 
-    return {"message": "Content deleted successfully"}
+        db.delete(content)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Content could not be deleted. Please try again.",
+        )
+
+    return {"message": "Content deleted permanently"}

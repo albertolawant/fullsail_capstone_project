@@ -696,3 +696,41 @@ def get_product_logo_gallery(
             for logo in logos
         ]
     )
+
+@router.delete("/logos/{logo_id}")
+def delete_product_logo(
+    logo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    logo = (
+        db.query(ProductLogo)
+        .filter(ProductLogo.id == logo_id)
+        .first()
+    )
+
+    if not logo:
+        raise HTTPException(
+            status_code=404,
+            detail="Logo not found.",
+        )
+
+    if logo.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to delete this logo.",
+        )
+
+    try:
+        db.delete(logo)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Logo could not be deleted. Please try again.",
+        )
+
+    return {"message": "Logo deleted permanently"}

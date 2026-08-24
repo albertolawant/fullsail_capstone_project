@@ -18,6 +18,7 @@ const API_BASE_URL = "http://127.0.0.1:8000";
 const CATEGORY_ALL = "All";
 const CATEGORY_PRODUCT = "Product Architect";
 const CATEGORY_TABLETOP = "Tabletop Creator";
+const CATEGORY_LOGOS = "Saved Logos";
 const CATEGORY_OTHER = "Other";
 
 function determineCategory(contentType = "") {
@@ -70,6 +71,10 @@ function getCategoryIcon(category) {
     return <FaDiceD20 />;
   }
 
+  if (category === CATEGORY_LOGOS) {
+    return <FaFileAlt />;
+  }
+
   return <FaFileAlt />;
 }
 
@@ -80,6 +85,10 @@ function getCategoryBadgeClasses(category) {
 
   if (category === CATEGORY_TABLETOP) {
     return "border-purple-800 bg-purple-950/50 text-purple-300";
+  }
+
+  if (category === CATEGORY_LOGOS) {
+    return "border-emerald-800 bg-emerald-950/50 text-emerald-300";
   }
 
   return "border-slate-700 bg-slate-800 text-slate-300";
@@ -101,7 +110,6 @@ function createPreview(body = "", maximumLength = 220) {
 
   return `${plainText.slice(0, maximumLength).trim()}...`;
 }
-
 
 const contentMarkdownClasses = `
   text-slate-200 leading-relaxed
@@ -138,6 +146,11 @@ function Content() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+  const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const loadLibrary = useCallback(async (isRefresh = false) => {
     const token = localStorage.getItem("token");
@@ -199,8 +212,52 @@ function Content() {
         projectsResponse.json(),
       ]);
 
-      setContentItems(Array.isArray(contentData) ? contentData : []);
-      setProjects(Array.isArray(projectData) ? projectData : []);
+      const safeProjects = Array.isArray(projectData) ? projectData : [];
+
+      const logoRequests = await Promise.all(
+        safeProjects.map(async (project) => {
+          try {
+            const logoResponse = await fetch(
+              `${API_BASE_URL}/product-architect/logos/${project.id}`,
+              requestOptions
+            );
+
+            if (!logoResponse.ok) {
+              return [];
+            }
+
+            const logoData = await logoResponse.json();
+
+            return Array.isArray(logoData?.logos)
+              ? logoData.logos.map((logo) => ({
+                  id: `logo-${logo.id}`,
+                  project_id: logo.project_id,
+                  title: `${project.title} Logo`,
+                  content_type: "Saved Logo",
+                  body: "",
+                  image_base64: logo.image_base64,
+                  style: logo.style,
+                  preferred_colors: logo.preferred_colors,
+                  logo_ideas: logo.logo_ideas,
+                  branding_direction: logo.branding_direction,
+                  created_at: logo.created_at,
+                  isLogo: true,
+                }))
+              : [];
+          } catch {
+            return [];
+          }
+        })
+      );
+
+      const logoItems = logoRequests.flat();
+
+      setContentItems([
+        ...(Array.isArray(contentData) ? contentData : []),
+        ...logoItems,
+      ]);
+
+      setProjects(safeProjects);
     } catch (requestError) {
       console.error("Content Library request failed:", requestError);
 
@@ -247,7 +304,9 @@ function Content() {
   const preparedContent = useMemo(() => {
     return contentItems.map((item) => ({
       ...item,
-      category: determineCategory(item.content_type),
+      category: item.isLogo
+        ? CATEGORY_LOGOS
+        : determineCategory(item.content_type),
       projectName:
         projectNames[item.project_id] || `Project #${item.project_id}`,
     }));
@@ -262,6 +321,7 @@ function Content() {
       CATEGORY_ALL,
       CATEGORY_PRODUCT,
       CATEGORY_TABLETOP,
+      ...(categories.has(CATEGORY_LOGOS) ? [CATEGORY_LOGOS] : []),
       ...(categories.has(CATEGORY_OTHER) ? [CATEGORY_OTHER] : []),
     ];
   }, [preparedContent]);
@@ -286,7 +346,11 @@ function Content() {
         item.title?.toLowerCase().includes(normalizedSearch) ||
         item.content_type?.toLowerCase().includes(normalizedSearch) ||
         item.body?.toLowerCase().includes(normalizedSearch) ||
-        item.projectName?.toLowerCase().includes(normalizedSearch)
+        item.projectName?.toLowerCase().includes(normalizedSearch) ||
+        item.style?.toLowerCase().includes(normalizedSearch) ||
+        item.preferred_colors?.toLowerCase().includes(normalizedSearch) ||
+        item.logo_ideas?.toLowerCase().includes(normalizedSearch) ||
+        item.branding_direction?.toLowerCase().includes(normalizedSearch)
       );
     });
   }, [preparedContent, searchTerm, selectedCategory]);
@@ -304,12 +368,98 @@ function Content() {
 
   const visibleCategoryOrder =
     selectedCategory === CATEGORY_ALL
-      ? [CATEGORY_PRODUCT, CATEGORY_TABLETOP, CATEGORY_OTHER]
+      ? [CATEGORY_PRODUCT, CATEGORY_TABLETOP, CATEGORY_LOGOS, CATEGORY_OTHER]
       : [selectedCategory];
 
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedCategory(CATEGORY_ALL);
+  };
+
+  const openDeleteConfirmation = (item) => {
+    setDeleteTarget(item);
+    setDeleteConfirmationText("");
+    setDeleteFinalConfirmed(false);
+    setDeleteError("");
+  };
+
+  const closeDeleteConfirmation = () => {
+    if (deleteLoading) {
+      return;
+    }
+
+    setDeleteTarget(null);
+    setDeleteConfirmationText("");
+    setDeleteFinalConfirmed(false);
+    setDeleteError("");
+  };
+
+  const handleDeleteContentItem = async () => {
+    if (!deleteTarget || deleteConfirmationText !== "DELETE" || !deleteFinalConfirmed) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setDeleteError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setDeleteLoading(true);
+    setDeleteError("");
+
+    try {
+      const endpoint = deleteTarget.isLogo
+        ? `${API_BASE_URL}/product-architect/logos/${String(deleteTarget.id).replace("logo-", "")}`
+        : `${API_BASE_URL}/content/${deleteTarget.id}`;
+
+      const response = await fetch(endpoint, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "This item could not be deleted. Please try again."
+        );
+      }
+
+      setContentItems((previousItems) =>
+        previousItems.filter(
+          (item) => String(item.id) !== String(deleteTarget.id)
+        )
+      );
+
+      if (selectedContent?.id === deleteTarget.id) {
+        setSelectedContent(null);
+      }
+
+      closeDeleteConfirmation();
+    } catch (requestError) {
+      console.error("Delete content failed:", requestError);
+
+      setDeleteError(
+        requestError instanceof Error
+          ? requestError.message
+          : "This item could not be deleted. Please try again."
+      );
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   return (
@@ -342,7 +492,7 @@ function Content() {
             type="search"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by title, type, project, or content..."
+            placeholder="Search by title, type, project, content, or logo details..."
             className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500"
           />
         </div>
@@ -413,8 +563,8 @@ function Content() {
             </h3>
 
             <p className="mt-2 text-slate-400">
-              Generate and save content from Product Architect or Tabletop
-              Creator, and it will appear here.
+              Generate and save content or logos from Product Architect or
+              Tabletop Creator, and it will appear here.
             </p>
           </div>
         </section>
@@ -506,15 +656,39 @@ function Content() {
                         </span>
                       </div>
 
-                      <p className="mt-4 flex-1 text-sm leading-6 text-slate-400">
-                        {createPreview(item.body)}
-                      </p>
+                      {item.isLogo ? (
+                        <div className="mt-4 flex-1">
+                          <img
+                            src={`data:image/png;base64,${item.image_base64}`}
+                            alt={`${item.projectName} saved logo`}
+                            className="h-40 w-full rounded-xl border border-slate-700 bg-white object-contain"
+                          />
 
-                      <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4">
-                        <span className="text-xs text-slate-500">
-                          Content #{item.id}
-                        </span>
+                          <p className="mt-3 text-sm text-slate-400">
+                            Style: {item.style || "default"}
+                          </p>
 
+                          {(item.preferred_colors ||
+                            item.logo_ideas ||
+                            item.branding_direction) && (
+                            <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+                              {[
+                                item.preferred_colors,
+                                item.logo_ideas,
+                                item.branding_direction,
+                              ]
+                                .filter(Boolean)
+                                .join(" • ")}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-4 flex-1 text-sm leading-6 text-slate-400">
+                          {createPreview(item.body)}
+                        </p>
+                      )}
+
+                      <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => setSelectedContent(item)}
@@ -522,6 +696,14 @@ function Content() {
                         >
                           <FaEye />
                           View
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openDeleteConfirmation(item)}
+                          className="rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+                        >
+                          Delete
                         </button>
                       </div>
                     </article>
@@ -585,11 +767,51 @@ function Content() {
 
             <div className="overflow-y-auto p-6">
               <div className="rounded-xl border border-slate-800 bg-slate-950 p-6">
-                <div className={contentMarkdownClasses}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {selectedContent.body}
-                  </ReactMarkdown>
-                </div>
+                {selectedContent.isLogo ? (
+                  <div>
+                    <img
+                      src={`data:image/png;base64,${selectedContent.image_base64}`}
+                      alt={`${selectedContent.projectName} saved logo`}
+                      className="mx-auto max-h-[60vh] rounded-xl border border-slate-700 bg-white object-contain"
+                    />
+
+                    <dl className="mt-6 space-y-3 text-sm">
+                      <div>
+                        <dt className="text-slate-500">Style</dt>
+                        <dd className="mt-1 capitalize text-slate-200">
+                          {selectedContent.style || "default"}
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt className="text-slate-500">Preferred Colors</dt>
+                        <dd className="mt-1 text-slate-200">
+                          {selectedContent.preferred_colors || "Default"}
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt className="text-slate-500">Logo Ideas / Symbols</dt>
+                        <dd className="mt-1 text-slate-200">
+                          {selectedContent.logo_ideas || "None"}
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt className="text-slate-500">Branding Direction</dt>
+                        <dd className="mt-1 text-slate-200">
+                          {selectedContent.branding_direction || "Default"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                ) : (
+                  <div className={contentMarkdownClasses}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {selectedContent.body}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -600,6 +822,115 @@ function Content() {
                 className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700"
               >
                 Close
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+      
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeDeleteConfirmation();
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-dialog-title"
+            className="w-full max-w-xl rounded-2xl border border-red-900 bg-slate-900 shadow-2xl"
+          >
+            <header className="border-b border-red-900/60 p-6">
+              <h3 id="delete-dialog-title" className="text-2xl font-bold text-white">
+                Delete this item?
+              </h3>
+
+              <p className="mt-2 text-red-300">
+                This action is permanent. This item will be removed from your Content
+                Vault and cannot be restored.
+              </p>
+            </header>
+
+            <div className="space-y-5 p-6">
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-sm text-slate-500">Item</p>
+                <p className="mt-1 font-semibold text-white">{deleteTarget.title}</p>
+
+                <p className="mt-3 text-sm text-slate-500">Type</p>
+                <p className="mt-1 text-slate-300">{deleteTarget.content_type}</p>
+
+                <p className="mt-3 text-sm text-slate-500">Project</p>
+                <p className="mt-1 text-slate-300">{deleteTarget.projectName}</p>
+              </div>
+
+              {deleteError && (
+                <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-red-300">
+                  {deleteError}
+                </div>
+              )}
+
+              <div>
+                <label
+                  htmlFor="delete-confirmation-text"
+                  className="block text-sm font-semibold text-slate-300"
+                >
+                  Type DELETE to confirm.
+                </label>
+
+                <input
+                  id="delete-confirmation-text"
+                  type="text"
+                  value={deleteConfirmationText}
+                  onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                  disabled={deleteLoading}
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-red-500 disabled:opacity-50"
+                  placeholder="DELETE"
+                />
+              </div>
+
+              <label className="flex items-start gap-3 rounded-xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-200">
+                <input
+                  type="checkbox"
+                  checked={deleteFinalConfirmed}
+                  onChange={(event) => setDeleteFinalConfirmed(event.target.checked)}
+                  disabled={deleteLoading}
+                  className="mt-1"
+                />
+
+                <span>
+                  I understand I am about to permanently delete this item from the
+                  Content Vault.
+                </span>
+              </label>
+            </div>
+
+            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
+              <button
+                type="button"
+                onClick={closeDeleteConfirmation}
+                disabled={deleteLoading}
+                className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteContentItem}
+                disabled={
+                  deleteLoading ||
+                  deleteConfirmationText !== "DELETE" ||
+                  !deleteFinalConfirmed
+                }
+                className="rounded-lg bg-red-700 px-5 py-2 font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleteLoading
+                  ? "Deleting..."
+                  : "I understand, permanently delete this item"}
               </button>
             </footer>
           </section>

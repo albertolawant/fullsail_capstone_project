@@ -488,6 +488,11 @@ ${aiPreferenceInstructions}`;
 
   useEffect(() => {
     if (!selectedProject?.id) {
+      setLogoProjectId(null);
+      setLogoGallery([]);
+      setSelectedLogoIndex(-1);
+      setLogoBase64("");
+      setLogoGalleryError("");
       return;
     }
 
@@ -636,7 +641,8 @@ ${aiPreferenceInstructions}`;
 
       if (data?.project_id) {
         setLogoProjectId(data.project_id);
-
+        localStorage.removeItem("tanioLogoProjectId");
+        
         const refreshedLogos = await loadLogoGallery(data.project_id, token);
 
         if (refreshedLogos.length === 0) {
