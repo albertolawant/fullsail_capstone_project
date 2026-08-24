@@ -10,7 +10,7 @@ from app.api import project as project_api
 from app.api import tabletop_creator
 from app.api import workspace as workspace_api
 from app.db.database import Base, engine
-from app.models import ai_usage, content, project, user, workspace
+from app.models import ai_usage, content, product_logo, project, user, workspace
 from app.models.content_version import ContentVersion
 
 app = FastAPI(title="Tanio AI API")
