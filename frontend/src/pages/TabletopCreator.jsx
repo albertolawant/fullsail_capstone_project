@@ -117,6 +117,23 @@ function cleanGeneratedMarkdown(content) {
     .trim();
 }
 
+
+const RELATED_CONTENT_MAP = {
+  campaign: ["npc", "quest", "encounter", "location"],
+  npc: ["quest", "encounter"],
+  quest: ["encounter"],
+  encounter: [],
+  location: ["quest", "encounter"],
+};
+
+const CONTENT_LABELS = {
+  campaign: "Campaign",
+  npc: "NPCs",
+  quest: "Quests",
+  encounter: "Encounters",
+  location: "Locations",
+};
+
 function TabletopCreator() {
   const [campaignName, setCampaignName] = useState("");
   const [campaignDescription, setCampaignDescription] = useState("");
@@ -152,6 +169,9 @@ function TabletopCreator() {
     encounter: -1,
     location: -1,
   });
+
+  const [relatedContentWarning, setRelatedContentWarning] = useState(null);
+  const [selectedRelatedContent, setSelectedRelatedContent] = useState([]);
 
   const activeRequestsRef = useRef(new Set());
 
@@ -213,6 +233,39 @@ function TabletopCreator() {
     }));
   };
 
+  const getGeneratedContentByKey = (contentKey) => {
+    const contentMap = {
+      campaign: generatedCampaignContent,
+      npc: generatedNPCContent,
+      quest: generatedQuestContent,
+      encounter: generatedEncounterContent,
+      location: generatedLocationContent,
+    };
+
+    return contentMap[contentKey] || "";
+  };
+
+  const checkForRelatedContent = (regeneratedKey) => {
+    const possibleRelatedContent = RELATED_CONTENT_MAP[regeneratedKey] || [];
+
+    const existingRelatedContent = possibleRelatedContent.filter((contentKey) =>
+      getGeneratedContentByKey(contentKey).trim()
+    );
+
+    if (existingRelatedContent.length === 0) {
+      setRelatedContentWarning(null);
+      setSelectedRelatedContent([]);
+      return;
+    }
+
+    setRelatedContentWarning({
+      source: regeneratedKey,
+      related: existingRelatedContent,
+    });
+
+    setSelectedRelatedContent([]);
+  };
+
   const requestAIContent = async ({
     requestKey,
     endpoint,
@@ -226,6 +279,7 @@ function TabletopCreator() {
     setSuccess,
     successMessage,
     isRegeneration = false,
+    suppressRelatedWarning = false,
     historyKey,
   }) => {
     if (activeRequestsRef.current.has(requestKey)) {
@@ -316,6 +370,10 @@ function TabletopCreator() {
 
       setContent(generatedContent);
       setSuccess(successMessage);
+
+      if (isRegeneration && !suppressRelatedWarning) {
+        checkForRelatedContent(historyKey);
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setError(
@@ -341,7 +399,57 @@ function TabletopCreator() {
     }
   };
 
-  const handleGenerateCampaign = async (isRegeneration = false) => {
+  const handleRelatedContentToggle = (contentKey) => {
+    setSelectedRelatedContent((previous) =>
+      previous.includes(contentKey)
+        ? previous.filter((key) => key !== contentKey)
+        : [...previous, contentKey]
+    );
+  };
+
+  const handleKeepRelatedContentAsIs = () => {
+    setRelatedContentWarning(null);
+    setSelectedRelatedContent([]);
+    setGenerateSuccess("Related content was kept as is.");
+  };
+
+  const handleUpdateSelectedRelatedContent = async () => {
+    if (selectedRelatedContent.length === 0 || isAnyGenerationInProgress) {
+      return;
+    }
+
+    const contentToUpdate = [...selectedRelatedContent];
+
+    setRelatedContentWarning(null);
+    setSelectedRelatedContent([]);
+    setGenerateSuccess("");
+
+    const regenerateByKey = {
+      campaign: () => handleGenerateCampaign(true, true),
+      npc: () => handleGenerateNPCs(true, true),
+      quest: () => handleGenerateQuests(true, true),
+      encounter: () => handleGenerateEncounters(true, true),
+      location: () => handleGenerateLocations(true, true),
+    };
+
+    for (const contentKey of contentToUpdate) {
+      const regenerate = regenerateByKey[contentKey];
+
+      if (regenerate) {
+        await regenerate();
+      }
+    }
+
+    const updatedLabels = contentToUpdate
+      .map((contentKey) => CONTENT_LABELS[contentKey])
+      .join(", ");
+
+    setGenerateSuccess(
+      `${updatedLabels} ${contentToUpdate.length === 1 ? "was" : "were"} updated successfully.`
+    );
+  };
+
+  const handleGenerateCampaign = async (isRegeneration = false, suppressRelatedWarning = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -373,10 +481,11 @@ function TabletopCreator() {
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
       isRegeneration,
+      suppressRelatedWarning,
     });
   };
 
-  const handleGenerateNPCs = async (isRegeneration = false) => {
+  const handleGenerateNPCs = async (isRegeneration = false, suppressRelatedWarning = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -406,10 +515,11 @@ function TabletopCreator() {
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
       isRegeneration,
+      suppressRelatedWarning,
     });
   };
 
-  const handleGenerateQuests = async (isRegeneration = false) => {
+  const handleGenerateQuests = async (isRegeneration = false, suppressRelatedWarning = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -439,10 +549,11 @@ function TabletopCreator() {
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
       isRegeneration,
+      suppressRelatedWarning,
     });
   };
 
-  const handleGenerateEncounters = async (isRegeneration = false) => {
+  const handleGenerateEncounters = async (isRegeneration = false, suppressRelatedWarning = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -474,10 +585,11 @@ function TabletopCreator() {
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
       isRegeneration,
+      suppressRelatedWarning,
     });
   };
 
-  const handleGenerateLocations = async (isRegeneration = false) => {
+  const handleGenerateLocations = async (isRegeneration = false, suppressRelatedWarning = false) => {
     const cleanedName = campaignName.trim();
     const cleanedDescription = campaignDescription.trim();
 
@@ -509,6 +621,7 @@ function TabletopCreator() {
         isRegeneration ? "regenerated" : "generated"
       } successfully.`,
       isRegeneration,
+      suppressRelatedWarning,
     });
   };
 
@@ -694,6 +807,85 @@ function TabletopCreator() {
           )}
         </form>
       </section>
+
+      {relatedContentWarning && (
+        <section
+          className="mb-8 rounded-xl border border-amber-700 bg-amber-950/30 p-6"
+          data-testid="related-content-warning"
+        >
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-amber-400">
+                Related Content May Need Updating
+              </p>
+
+              <h3 className="mt-1 text-2xl font-bold text-white">
+                {CONTENT_LABELS[relatedContentWarning.source]} was regenerated
+              </h3>
+
+              <p className="mt-2 max-w-3xl text-slate-300">
+                Some content you already generated may no longer match the new
+                version. Choose anything you want Tanio to regenerate, or keep
+                the existing content as is.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {relatedContentWarning.related.map((contentKey) => {
+                const isSelected = selectedRelatedContent.includes(contentKey);
+
+                return (
+                  <label
+                    key={contentKey}
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition ${
+                      isSelected
+                        ? "border-amber-500 bg-amber-950/60"
+                        : "border-slate-700 bg-slate-950/60 hover:border-slate-600"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleRelatedContentToggle(contentKey)}
+                      disabled={isAnyGenerationInProgress}
+                      className="h-4 w-4 accent-amber-500"
+                    />
+
+                    <span className="font-semibold text-white">
+                      {CONTENT_LABELS[contentKey]}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleUpdateSelectedRelatedContent}
+                disabled={
+                  selectedRelatedContent.length === 0 ||
+                  isAnyGenerationInProgress
+                }
+                className="rounded-lg bg-amber-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isAnyGenerationInProgress
+                  ? "Updating..."
+                  : "Update Selected"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleKeepRelatedContentAsIs}
+                disabled={isAnyGenerationInProgress}
+                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Keep As Is
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {(generateError || generatedCampaignContent) && (
         <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
