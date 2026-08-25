@@ -173,6 +173,17 @@ function TabletopCreator() {
   const [relatedContentWarning, setRelatedContentWarning] = useState(null);
   const [selectedRelatedContent, setSelectedRelatedContent] = useState([]);
 
+  const [saveWorkspaceOpen, setSaveWorkspaceOpen] = useState(false);
+  const [contentToSave, setContentToSave] = useState(null);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedSaveProjectId, setSelectedSaveProjectId] = useState("");
+  const [workspaceOptionsLoading, setWorkspaceOptionsLoading] = useState(false);
+  const [savingToWorkspace, setSavingToWorkspace] = useState(false);
+  const [saveWorkspaceError, setSaveWorkspaceError] = useState("");
+  const [saveWorkspaceSuccess, setSaveWorkspaceSuccess] = useState("");
+
   const activeRequestsRef = useRef(new Set());
 
   const isAnyGenerationInProgress =
@@ -625,6 +636,234 @@ function TabletopCreator() {
     });
   };
 
+  const getProjectsForWorkspace = (workspaceId) => {
+    if (!workspaceId) {
+      return [];
+    }
+
+    return projects.filter(
+      (project) => String(project.workspace_id) === String(workspaceId)
+    );
+  };
+
+  const loadWorkspaceOptions = async () => {
+    setWorkspaceOptionsLoading(true);
+    setSaveWorkspaceError("");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const [workspaceResponse, projectResponse] = await Promise.all([
+        fetch("http://127.0.0.1:8000/workspaces/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch("http://127.0.0.1:8000/projects/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
+
+      if (!workspaceResponse.ok) {
+        const errorData = await workspaceResponse.json().catch(() => null);
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Could not load your workspaces."
+        );
+      }
+
+      if (!projectResponse.ok) {
+        const errorData = await projectResponse.json().catch(() => null);
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Could not load your projects."
+        );
+      }
+
+      const workspaceData = await workspaceResponse.json();
+      const projectData = await projectResponse.json();
+
+      const loadedWorkspaces = Array.isArray(workspaceData)
+        ? workspaceData
+        : [];
+      const loadedProjects = Array.isArray(projectData) ? projectData : [];
+
+      setWorkspaces(loadedWorkspaces);
+      setProjects(loadedProjects);
+
+      if (loadedWorkspaces.length === 0) {
+        setSelectedWorkspaceId("");
+        setSelectedSaveProjectId("");
+        return;
+      }
+
+      const firstWorkspace = loadedWorkspaces[0];
+      setSelectedWorkspaceId(String(firstWorkspace.id));
+
+      const firstProject = loadedProjects.find(
+        (project) =>
+          String(project.workspace_id) === String(firstWorkspace.id)
+      );
+
+      setSelectedSaveProjectId(firstProject ? String(firstProject.id) : "");
+    } catch (error) {
+      console.error("Workspace options load error:", error);
+      setSaveWorkspaceError(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while loading your workspaces."
+      );
+    } finally {
+      setWorkspaceOptionsLoading(false);
+    }
+  };
+
+  const handleOpenSaveWorkspace = async (contentKey) => {
+    const body = getGeneratedContentByKey(contentKey);
+
+    if (!body.trim() || savingToWorkspace) {
+      return;
+    }
+
+    setContentToSave({
+      key: contentKey,
+      label: CONTENT_LABELS[contentKey],
+      body,
+    });
+    setSaveWorkspaceError("");
+    setSaveWorkspaceSuccess("");
+    setSaveWorkspaceOpen(true);
+    await loadWorkspaceOptions();
+  };
+
+  const handleCloseSaveWorkspace = () => {
+    if (savingToWorkspace) {
+      return;
+    }
+
+    setSaveWorkspaceOpen(false);
+    setContentToSave(null);
+    setSaveWorkspaceError("");
+  };
+
+  const handleWorkspaceSelection = (workspaceId) => {
+    setSelectedWorkspaceId(workspaceId);
+    setSaveWorkspaceError("");
+
+    const firstProject = projects.find(
+      (project) => String(project.workspace_id) === String(workspaceId)
+    );
+
+    setSelectedSaveProjectId(firstProject ? String(firstProject.id) : "");
+  };
+
+  const handleSaveToWorkspace = async () => {
+    if (savingToWorkspace || !contentToSave) {
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      setSaveWorkspaceError("Please choose a workspace.");
+      return;
+    }
+
+    if (!selectedSaveProjectId) {
+      setSaveWorkspaceError(
+        "Please choose a project in the selected workspace."
+      );
+      return;
+    }
+
+    const selectedProject = projects.find(
+      (project) => String(project.id) === String(selectedSaveProjectId)
+    );
+
+    if (
+      !selectedProject ||
+      String(selectedProject.workspace_id) !== String(selectedWorkspaceId)
+    ) {
+      setSaveWorkspaceError(
+        "The selected project does not belong to that workspace."
+      );
+      return;
+    }
+
+    setSavingToWorkspace(true);
+    setSaveWorkspaceError("");
+    setSaveWorkspaceSuccess("");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const cleanedCampaignName = campaignName.trim() || "Untitled Campaign";
+      const response = await fetch("http://127.0.0.1:8000/content/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: `${cleanedCampaignName} - ${contentToSave.label}`,
+          content_type: `tabletop_${contentToSave.key}`,
+          body: contentToSave.body,
+          project_id: Number(selectedSaveProjectId),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message = "Content could not be saved. Please try again.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (response.status === 401) {
+          message = "Your session has expired. Please sign in again.";
+        } else if (response.status === 403) {
+          message = "You are not authorized to save content to this project.";
+        } else if (response.status === 404) {
+          message = "The selected project could not be found.";
+        }
+
+        throw new Error(message);
+      }
+
+      const selectedWorkspace = workspaces.find(
+        (workspace) => String(workspace.id) === String(selectedWorkspaceId)
+      );
+
+      setSaveWorkspaceSuccess(
+        `${contentToSave.label} saved to ${
+          selectedWorkspace?.name || "the selected workspace"
+        } successfully.`
+      );
+
+      setSaveWorkspaceOpen(false);
+      setContentToSave(null);
+    } catch (error) {
+      console.error("Save to workspace error:", error);
+      setSaveWorkspaceError(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while saving the content."
+      );
+    } finally {
+      setSavingToWorkspace(false);
+    }
+  };
+
   return (
     <main className="flex-1 p-10" data-testid="tabletop-creator-page">
       <div className="mb-8">
@@ -808,6 +1047,19 @@ function TabletopCreator() {
         </form>
       </section>
 
+      {saveWorkspaceSuccess && (
+        <div
+          className="mb-8 rounded-xl border border-emerald-800 bg-emerald-950/50 p-4"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="font-semibold text-emerald-300">Saved successfully</p>
+          <p className="mt-1 text-sm text-emerald-300">
+            {saveWorkspaceSuccess}
+          </p>
+        </div>
+      )}
+
       {relatedContentWarning && (
         <section
           className="mb-8 rounded-xl border border-amber-700 bg-amber-950/30 p-6"
@@ -929,6 +1181,15 @@ function TabletopCreator() {
               >
                 {generating ? "Regenerating..." : "Regenerate Campaign"}
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenSaveWorkspace("campaign")}
+                disabled={isAnyGenerationInProgress || savingToWorkspace}
+                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save to Workspace
+              </button>
             </div>
           )}
           
@@ -1027,6 +1288,15 @@ function TabletopCreator() {
                 className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {generatingNPCs ? "Regenerating..." : "Regenerate NPCs"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenSaveWorkspace("npc")}
+                disabled={isAnyGenerationInProgress || savingToWorkspace}
+                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save to Workspace
               </button>
             </div>
           )}
@@ -1127,6 +1397,15 @@ function TabletopCreator() {
               >
                 {generatingQuests ? "Regenerating..." : "Regenerate Quests"}
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenSaveWorkspace("quest")}
+                disabled={isAnyGenerationInProgress || savingToWorkspace}
+                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save to Workspace
+              </button>
             </div>
           )}
 
@@ -1225,6 +1504,15 @@ function TabletopCreator() {
                 className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {generatingEncounters ? "Regenerating..." : "Regenerate Encounters"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenSaveWorkspace("encounter")}
+                disabled={isAnyGenerationInProgress || savingToWorkspace}
+                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save to Workspace
               </button>
             </div>
           )}
@@ -1325,6 +1613,15 @@ function TabletopCreator() {
               >
                 {generatingLocations ? "Regenerating..." : "Regenerate Locations"}
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenSaveWorkspace("location")}
+                disabled={isAnyGenerationInProgress || savingToWorkspace}
+                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save to Workspace
+              </button>
             </div>
           )}
 
@@ -1382,7 +1679,166 @@ function TabletopCreator() {
         </section>
       )}
 
+      {saveWorkspaceOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tabletop-save-workspace-title"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="tabletop-save-workspace-title"
+                  className="text-2xl font-bold text-white"
+                >
+                  Save to Workspace
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Save {contentToSave?.label || "this content"} to one of your
+                  workspace projects.
+                </p>
+              </div>
 
+              <button
+                type="button"
+                onClick={handleCloseSaveWorkspace}
+                disabled={savingToWorkspace}
+                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                aria-label="Close save to workspace dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            {workspaceOptionsLoading ? (
+              <div className="mt-6 flex items-center gap-3 text-slate-400">
+                <div
+                  className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-indigo-400 animate-spin"
+                  aria-hidden="true"
+                />
+                <p>Loading your workspaces and projects...</p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-6">
+                  <label
+                    htmlFor="tabletop-save-workspace"
+                    className="mb-2 block text-sm font-medium text-slate-300"
+                  >
+                    Workspace
+                  </label>
+                  <select
+                    id="tabletop-save-workspace"
+                    value={selectedWorkspaceId}
+                    onChange={(event) =>
+                      handleWorkspaceSelection(event.target.value)
+                    }
+                    disabled={savingToWorkspace || workspaces.length === 0}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                  >
+                    {workspaces.length === 0 ? (
+                      <option value="">No workspaces available</option>
+                    ) : (
+                      workspaces.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div className="mt-4">
+                  <label
+                    htmlFor="tabletop-save-project"
+                    className="mb-2 block text-sm font-medium text-slate-300"
+                  >
+                    Project
+                  </label>
+                  <select
+                    id="tabletop-save-project"
+                    value={selectedSaveProjectId}
+                    onChange={(event) => {
+                      setSelectedSaveProjectId(event.target.value);
+                      setSaveWorkspaceError("");
+                    }}
+                    disabled={
+                      savingToWorkspace ||
+                      !selectedWorkspaceId ||
+                      getProjectsForWorkspace(selectedWorkspaceId).length === 0
+                    }
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                  >
+                    {getProjectsForWorkspace(selectedWorkspaceId).length ===
+                    0 ? (
+                      <option value="">No projects in this workspace</option>
+                    ) : (
+                      getProjectsForWorkspace(selectedWorkspaceId).map(
+                        (project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.title}
+                          </option>
+                        )
+                      )
+                    )}
+                  </select>
+
+                  {selectedWorkspaceId &&
+                    getProjectsForWorkspace(selectedWorkspaceId).length ===
+                      0 && (
+                      <p className="mt-2 text-sm text-amber-300">
+                        This workspace does not have any projects yet. Create a
+                        project there first, then try saving again.
+                      </p>
+                    )}
+                </div>
+              </>
+            )}
+
+            {saveWorkspaceError && (
+              <div
+                className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4"
+                role="alert"
+                aria-live="polite"
+              >
+                <p className="font-semibold text-red-300">
+                  Content could not be saved
+                </p>
+                <p className="mt-1 text-sm text-red-300">
+                  {saveWorkspaceError}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseSaveWorkspace}
+                disabled={savingToWorkspace}
+                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveToWorkspace}
+                disabled={
+                  workspaceOptionsLoading ||
+                  savingToWorkspace ||
+                  !selectedWorkspaceId ||
+                  !selectedSaveProjectId
+                }
+                className="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingToWorkspace ? "Saving..." : "Save Content"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

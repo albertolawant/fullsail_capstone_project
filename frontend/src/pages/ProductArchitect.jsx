@@ -122,6 +122,16 @@ function ProductArchitect() {
   const [logoGalleryLoading, setLogoGalleryLoading] = useState(false);
   const [logoGalleryError, setLogoGalleryError] = useState("");
 
+  const [saveWorkspaceOpen, setSaveWorkspaceOpen] = useState(false);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedSaveProjectId, setSelectedSaveProjectId] = useState("");
+  const [workspaceOptionsLoading, setWorkspaceOptionsLoading] = useState(false);
+  const [savingToWorkspace, setSavingToWorkspace] = useState(false);
+  const [saveWorkspaceError, setSaveWorkspaceError] = useState("");
+  const [saveWorkspaceSuccess, setSaveWorkspaceSuccess] = useState("");
+
   const endpointMap = {
     prd: "/product-architect/prd",
     persona: "/product-architect/persona",
@@ -725,6 +735,265 @@ ${aiPreferenceInstructions}`;
     } catch (err) {
       console.error("Logo download error:", err);
       setLogoError("Something went wrong while downloading the logo.");
+    }
+  };
+
+  const getProjectsForWorkspace = (workspaceId) => {
+    if (!workspaceId) {
+      return [];
+    }
+
+    return projects.filter(
+      (project) => String(project.workspace_id) === String(workspaceId)
+    );
+  };
+
+  const loadWorkspaceOptions = async () => {
+    setWorkspaceOptionsLoading(true);
+    setSaveWorkspaceError("");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const [workspaceResponse, projectResponse] = await Promise.all([
+        fetch("http://127.0.0.1:8000/workspaces/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch("http://127.0.0.1:8000/projects/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
+
+      if (!workspaceResponse.ok) {
+        const errorData = await workspaceResponse.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Could not load your workspaces."
+        );
+      }
+
+      if (!projectResponse.ok) {
+        const errorData = await projectResponse.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Could not load your projects."
+        );
+      }
+
+      const workspaceData = await workspaceResponse.json();
+      const projectData = await projectResponse.json();
+
+      const loadedWorkspaces = Array.isArray(workspaceData)
+        ? workspaceData
+        : [];
+      const loadedProjects = Array.isArray(projectData) ? projectData : [];
+
+      setWorkspaces(loadedWorkspaces);
+      setProjects(loadedProjects);
+
+      if (loadedWorkspaces.length === 0) {
+        setSelectedWorkspaceId("");
+        setSelectedSaveProjectId("");
+        return;
+      }
+
+      const preferredWorkspace =
+        loadedWorkspaces.find(
+          (workspace) =>
+            selectedProject?.workspace_id &&
+            String(workspace.id) === String(selectedProject.workspace_id)
+        ) || loadedWorkspaces[0];
+
+      const nextWorkspaceId = String(preferredWorkspace.id);
+      setSelectedWorkspaceId(nextWorkspaceId);
+
+      const projectsInWorkspace = loadedProjects.filter(
+        (project) =>
+          String(project.workspace_id) === String(preferredWorkspace.id)
+      );
+
+      const preferredProject =
+        projectsInWorkspace.find(
+          (project) =>
+            selectedProject?.id &&
+            String(project.id) === String(selectedProject.id)
+        ) || projectsInWorkspace[0];
+
+      setSelectedSaveProjectId(
+        preferredProject ? String(preferredProject.id) : ""
+      );
+    } catch (err) {
+      console.error("Workspace options load error:", err);
+
+      setSaveWorkspaceError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while loading your workspaces."
+      );
+    } finally {
+      setWorkspaceOptionsLoading(false);
+    }
+  };
+
+  const handleOpenSaveWorkspace = async () => {
+    if (!generatedContent || savingToWorkspace) {
+      return;
+    }
+
+    setSaveWorkspaceError("");
+    setSaveWorkspaceSuccess("");
+    setSaveWorkspaceOpen(true);
+    await loadWorkspaceOptions();
+  };
+
+  const handleCloseSaveWorkspace = () => {
+    if (savingToWorkspace) {
+      return;
+    }
+
+    setSaveWorkspaceOpen(false);
+    setSaveWorkspaceError("");
+  };
+
+  const handleWorkspaceSelection = (workspaceId) => {
+    setSelectedWorkspaceId(workspaceId);
+    setSaveWorkspaceError("");
+
+    const firstProject = projects.find(
+      (project) => String(project.workspace_id) === String(workspaceId)
+    );
+
+    setSelectedSaveProjectId(firstProject ? String(firstProject.id) : "");
+  };
+
+  const handleSaveToWorkspace = async () => {
+    if (savingToWorkspace) {
+      return;
+    }
+
+    if (!generatedContent.trim()) {
+      setSaveWorkspaceError("Generate some content before saving it.");
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      setSaveWorkspaceError("Please choose a workspace.");
+      return;
+    }
+
+    if (!selectedSaveProjectId) {
+      setSaveWorkspaceError(
+        "Please choose a project in the selected workspace."
+      );
+      return;
+    }
+
+    const selectedProjectForSave = projects.find(
+      (project) => String(project.id) === String(selectedSaveProjectId)
+    );
+
+    if (
+      !selectedProjectForSave ||
+      String(selectedProjectForSave.workspace_id) !==
+        String(selectedWorkspaceId)
+    ) {
+      setSaveWorkspaceError(
+        "The selected project does not belong to that workspace."
+      );
+      return;
+    }
+
+    setSavingToWorkspace(true);
+    setSaveWorkspaceError("");
+    setSaveWorkspaceSuccess("");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const cleanedProjectName = projectName.trim() || "Untitled Project";
+      const documentLabel =
+        documentTypeLabels[contentType] || "Generated Content";
+
+      const response = await fetch("http://127.0.0.1:8000/content/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: `${cleanedProjectName} - ${documentLabel}`,
+          content_type: contentType,
+          body: generatedContent,
+          project_id: Number(selectedSaveProjectId),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message = "Content could not be saved. Please try again.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (response.status === 401) {
+          message = "Your session has expired. Please sign in again.";
+        } else if (response.status === 403) {
+          message = "You are not authorized to save content to this project.";
+        } else if (response.status === 404) {
+          message = "The selected project could not be found.";
+        } else if (response.status === 422) {
+          message = "The generated content could not be saved in its current form.";
+        }
+
+        throw new Error(message);
+      }
+
+      const selectedWorkspace = workspaces.find(
+        (workspace) => String(workspace.id) === String(selectedWorkspaceId)
+      );
+
+      const workspaceName = selectedWorkspace?.name || "the selected workspace";
+      const savedProjectName =
+        selectedProjectForSave?.title || "the selected project";
+
+      setSaveWorkspaceSuccess(
+        `${documentLabel} saved to ${workspaceName} successfully.`
+      );
+
+      addRecentActivity({
+        type: "Content Saved",
+        title: `${cleanedProjectName} content saved`,
+        description: `Saved the ${documentLabel} to ${savedProjectName} in ${workspaceName}.`,
+        projectName: cleanedProjectName,
+      });
+
+      setSaveWorkspaceOpen(false);
+    } catch (err) {
+      console.error("Save to workspace error:", err);
+
+      setSaveWorkspaceError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while saving the content."
+      );
+    } finally {
+      setSavingToWorkspace(false);
     }
   };
 
@@ -1465,6 +1734,15 @@ ${aiPreferenceInstructions}`;
 
               <button
                 type="button"
+                onClick={handleOpenSaveWorkspace}
+                disabled={loading || savingToWorkspace}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingToWorkspace ? "Saving..." : "Save to Workspace"}
+              </button>
+
+              <button
+                type="button"
                 onClick={handleExportTxt}
                 disabled={loading}
                 className="bg-slate-600 hover:bg-slate-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1492,6 +1770,19 @@ ${aiPreferenceInstructions}`;
             </div>
           )}
         </div>
+
+        {saveWorkspaceSuccess && (
+          <div
+            className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/50 p-4"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-emerald-300">Saved successfully</p>
+            <p className="mt-1 text-sm text-emerald-300">
+              {saveWorkspaceSuccess}
+            </p>
+          </div>
+        )}
 
         {loading && !generatedContent ? (
           <div className="flex items-center gap-3 text-slate-400">
@@ -1557,6 +1848,171 @@ ${aiPreferenceInstructions}`;
           </p>
         )}
       </div>
+
+      {saveWorkspaceOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-workspace-title"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="save-workspace-title"
+                  className="text-2xl font-bold text-white"
+                >
+                  Save to Workspace
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Choose the workspace and project where you want to save this
+                  generated content.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseSaveWorkspace}
+                disabled={savingToWorkspace}
+                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close save to workspace dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            {workspaceOptionsLoading ? (
+              <div
+                className="mt-6 flex items-center gap-3 text-slate-400"
+                role="status"
+                aria-live="polite"
+              >
+                <div
+                  className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-indigo-400 animate-spin"
+                  aria-hidden="true"
+                />
+                <p>Loading your workspaces and projects...</p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-6">
+                  <label
+                    htmlFor="save-workspace"
+                    className="mb-2 block text-sm font-medium text-slate-300"
+                  >
+                    Workspace
+                  </label>
+
+                  <select
+                    id="save-workspace"
+                    value={selectedWorkspaceId}
+                    onChange={(e) => handleWorkspaceSelection(e.target.value)}
+                    disabled={savingToWorkspace || workspaces.length === 0}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                  >
+                    {workspaces.length === 0 ? (
+                      <option value="">No workspaces available</option>
+                    ) : (
+                      workspaces.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div className="mt-4">
+                  <label
+                    htmlFor="save-project"
+                    className="mb-2 block text-sm font-medium text-slate-300"
+                  >
+                    Project
+                  </label>
+
+                  <select
+                    id="save-project"
+                    value={selectedSaveProjectId}
+                    onChange={(e) => {
+                      setSelectedSaveProjectId(e.target.value);
+                      setSaveWorkspaceError("");
+                    }}
+                    disabled={
+                      savingToWorkspace ||
+                      !selectedWorkspaceId ||
+                      getProjectsForWorkspace(selectedWorkspaceId).length === 0
+                    }
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                  >
+                    {getProjectsForWorkspace(selectedWorkspaceId).length ===
+                    0 ? (
+                      <option value="">No projects in this workspace</option>
+                    ) : (
+                      getProjectsForWorkspace(selectedWorkspaceId).map(
+                        (project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.title}
+                          </option>
+                        )
+                      )
+                    )}
+                  </select>
+
+                  {selectedWorkspaceId &&
+                    getProjectsForWorkspace(selectedWorkspaceId).length ===
+                      0 && (
+                      <p className="mt-2 text-sm text-amber-300">
+                        This workspace does not have any projects yet. Create a
+                        project there first, then try saving again.
+                      </p>
+                    )}
+                </div>
+              </>
+            )}
+
+            {saveWorkspaceError && (
+              <div
+                className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4"
+                role="alert"
+                aria-live="polite"
+              >
+                <p className="font-semibold text-red-300">
+                  Content could not be saved
+                </p>
+                <p className="mt-1 text-sm text-red-300">
+                  {saveWorkspaceError}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseSaveWorkspace}
+                disabled={savingToWorkspace}
+                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveToWorkspace}
+                disabled={
+                  workspaceOptionsLoading ||
+                  savingToWorkspace ||
+                  !selectedWorkspaceId ||
+                  !selectedSaveProjectId
+                }
+                className="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingToWorkspace ? "Saving..." : "Save Content"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
