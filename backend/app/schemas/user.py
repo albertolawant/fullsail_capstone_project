@@ -26,14 +26,26 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 class UserUpdate(BaseModel):
     username: str
     email: EmailStr
 
 
+class EmailUpdate(BaseModel):
+    new_email: EmailStr
+
+
+class EmailUpdateResponse(BaseModel):
+    email: EmailStr
+    access_token: str
+    token_type: str
+
+
 class PasswordUpdate(BaseModel):
     current_password: str
     new_password: str
+
 
 class UserProfileUpdateResponse(BaseModel):
     id: int
@@ -44,4 +56,4 @@ class UserProfileUpdateResponse(BaseModel):
     token_type: str
 
     class Config:
-        from_attributes = True    
+        from_attributes = True

@@ -39,6 +39,15 @@ function Settings() {
   const [successMessage, setSuccessMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [emailSuccess, setEmailSuccess] = useState("");
+  const [emailForm, setEmailForm] = useState({
+    newEmail: "",
+    confirmEmail: "",
+  });
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
@@ -191,6 +200,98 @@ function Settings() {
       setSuccessMessage("Settings reset to defaults.");
     } catch {
       setError("Unable to reset settings.");
+    }
+  };
+
+  const closeEmailModal = () => {
+    if (emailSaving) {
+      return;
+    }
+
+    setShowEmailModal(false);
+    setEmailError("");
+    setEmailSuccess("");
+    setEmailForm({
+      newEmail: "",
+      confirmEmail: "",
+    });
+  };
+
+  const updateEmailForm = (key, value) => {
+    setEmailForm((currentForm) => ({
+      ...currentForm,
+      [key]: value,
+    }));
+
+    setEmailError("");
+    setEmailSuccess("");
+  };
+
+  const handleUpdateEmail = async () => {
+    const token = localStorage.getItem("token");
+    const newEmail = emailForm.newEmail.trim();
+    const confirmEmail = emailForm.confirmEmail.trim();
+
+    setEmailError("");
+    setEmailSuccess("");
+
+    if (!token) {
+      setEmailError("You must be signed in to update your email.");
+      return;
+    }
+
+    if (!newEmail) {
+      setEmailError("New email is required.");
+      return;
+    }
+
+    if (newEmail !== confirmEmail) {
+      setEmailError("Email addresses do not match.");
+      return;
+    }
+
+    setEmailSaving(true);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/auth/me/email",
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            new_email: newEmail,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || "Unable to update your email."
+        );
+      }
+
+      if (data?.access_token) {
+        localStorage.setItem("token", data.access_token);
+      }
+
+      setEmailForm({
+        newEmail: "",
+        confirmEmail: "",
+      });
+      setEmailSuccess("Email updated successfully.");
+    } catch (err) {
+      setEmailError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update your email."
+      );
+    } finally {
+      setEmailSaving(false);
     }
   };
 
@@ -702,19 +803,157 @@ function Settings() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setPasswordError("");
-              setPasswordSuccess("");
-              setShowPasswordModal(true);
-            }}
-            className="absolute bottom-5 right-6 text-xs font-medium text-cyan-400 transition hover:text-cyan-300 hover:underline"
-          >
-            Forgot Password?
-          </button>
+          <div className="absolute bottom-5 right-6 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setEmailError("");
+                setEmailSuccess("");
+                setShowEmailModal(true);
+              }}
+              className="text-xs font-medium text-cyan-400 transition hover:text-cyan-300 hover:underline"
+            >
+              Update Email
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPasswordError("");
+                setPasswordSuccess("");
+                setShowPasswordModal(true);
+              }}
+              className="text-xs font-medium text-cyan-400 transition hover:text-cyan-300 hover:underline"
+            >
+              Update Password
+            </button>
+          </div>
         </section>
       </div>
+
+      {/* Email Modal */}
+      {showEmailModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="email-modal-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeEmailModal();
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="email-modal-title"
+                  className="text-2xl font-bold text-white"
+                >
+                  Update Email
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-400">
+                  Enter and confirm the new email for your account.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeEmailModal}
+                disabled={emailSaving}
+                className="rounded-lg px-2 py-1 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close email dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            {emailError && (
+              <div
+                className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+                role="alert"
+              >
+                {emailError}
+              </div>
+            )}
+
+            {emailSuccess && (
+              <div
+                className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"
+                role="status"
+              >
+                {emailSuccess}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label
+                  htmlFor="new-email"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  New Email
+                </label>
+
+                <input
+                  id="new-email"
+                  type="email"
+                  value={emailForm.newEmail}
+                  onChange={(event) =>
+                    updateEmailForm("newEmail", event.target.value)
+                  }
+                  autoComplete="email"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
+                  placeholder="Enter your new email"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="confirm-email"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  Confirm New Email
+                </label>
+
+                <input
+                  id="confirm-email"
+                  type="email"
+                  value={emailForm.confirmEmail}
+                  onChange={(event) =>
+                    updateEmailForm("confirmEmail", event.target.value)
+                  }
+                  autoComplete="email"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
+                  placeholder="Re-enter your new email"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeEmailModal}
+                disabled={emailSaving}
+                className="rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleUpdateEmail}
+                disabled={emailSaving}
+                className="rounded-lg bg-cyan-500 px-4 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {emailSaving ? "Updating..." : "Update Email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Password Modal */}
       {showPasswordModal && (
