@@ -1,9 +1,7 @@
 from typing import List, Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-
 from app.api.auth import get_current_user
 from app.db.database import get_db
 from app.models.content import GeneratedContent
@@ -71,6 +69,10 @@ def get_all_content(
         default=None,
         description="Filter content by its exact content type",
     ),
+    project_id: Optional[int] = Query(
+        default=None,
+        description="Filter content by project ID",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -78,8 +80,10 @@ def get_all_content(
     Return all generated content owned by the authenticated user.
 
     Optional query parameters:
+
     - search: searches the title, content type, and body
     - content_type: filters by an exact content type
+    - project_id: filters content by project
 
     Results are returned with the newest content first.
     """
@@ -102,6 +106,11 @@ def get_all_content(
     if content_type and content_type.strip():
         query = query.filter(
             GeneratedContent.content_type == content_type.strip()
+        )
+
+    if project_id is not None:
+        query = query.filter(
+            GeneratedContent.project_id == project_id
         )
 
     return query.order_by(GeneratedContent.id.desc()).all()

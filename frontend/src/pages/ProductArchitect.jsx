@@ -88,6 +88,29 @@ function buildAiPreferenceInstructions(aiSettings) {
   ].join("\n");
 }
 
+function normalizeProductArchitectContentType(contentType) {
+  const normalized = String(contentType || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  const typeMap = {
+    prd: "prd",
+    "product requirements document": "prd",
+    persona: "persona",
+    "user persona": "persona",
+    "user stories": "userStories",
+    userstories: "userStories",
+    "feature list": "featureList",
+    featurelist: "featureList",
+    "technical architecture": "technicalArchitecture",
+    technicalarchitecture: "technicalArchitecture",
+  };
+
+  return typeMap[normalized] || null;
+}
+
 function ProductArchitect() {
   const location = useLocation();
   const selectedProject = location.state?.project;
@@ -131,6 +154,9 @@ function ProductArchitect() {
   const [savingToWorkspace, setSavingToWorkspace] = useState(false);
   const [saveWorkspaceError, setSaveWorkspaceError] = useState("");
   const [saveWorkspaceSuccess, setSaveWorkspaceSuccess] = useState("");
+
+  const [projectContentLoading, setProjectContentLoading] = useState(false);
+  const [projectContentError, setProjectContentError] = useState("");
 
   const endpointMap = {
     prd: "/product-architect/prd",
@@ -430,6 +456,102 @@ ${aiPreferenceInstructions}`;
   };
 
 
+  const loadProjectContent = async (projectId, existingToken = null) => {
+    if (!projectId) {
+      setGeneratedContent("");
+      setGenerationHistory([]);
+      setCurrentVersionIndex(-1);
+      setProjectContentError("");
+      return [];
+    }
+
+    setProjectContentLoading(true);
+    setProjectContentError("");
+
+    try {
+      const token = existingToken || localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/content/?project_id=${encodeURIComponent(
+          projectId
+        )}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Could not load this project's saved content."
+        );
+      }
+
+      const data = await response.json();
+      const savedContent = Array.isArray(data) ? data : [];
+
+      const productArchitectContent = savedContent
+        .map((item) => ({
+          ...item,
+          productArchitectType: normalizeProductArchitectContentType(
+            item.content_type
+          ),
+        }))
+        .filter((item) => item.productArchitectType && item.body?.trim());
+
+      if (productArchitectContent.length === 0) {
+        setGeneratedContent("");
+        setGenerationHistory([]);
+        setCurrentVersionIndex(-1);
+        return [];
+      }
+
+      const chronologicalContent = [...productArchitectContent].reverse();
+
+      const restoredHistory = chronologicalContent.map((item) => ({
+        id: item.id,
+        content: item.body,
+        createdAt: item.created_at || null,
+        documentType: item.productArchitectType,
+        title: item.title,
+      }));
+
+      const latestIndex = restoredHistory.length - 1;
+      const latestVersion = restoredHistory[latestIndex];
+
+      setGenerationHistory(restoredHistory);
+      setCurrentVersionIndex(latestIndex);
+      setGeneratedContent(latestVersion.content);
+      setContentType(latestVersion.documentType);
+
+      return productArchitectContent;
+    } catch (err) {
+      console.error("Project content load error:", err);
+
+      setGeneratedContent("");
+      setGenerationHistory([]);
+      setCurrentVersionIndex(-1);
+      setProjectContentError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while loading this project's saved content."
+      );
+
+      return [];
+    } finally {
+      setProjectContentLoading(false);
+    }
+  };
+
   const loadLogoGallery = async (projectId, existingToken = null) => {
     if (!projectId) {
       return [];
@@ -503,12 +625,30 @@ ${aiPreferenceInstructions}`;
       setSelectedLogoIndex(-1);
       setLogoBase64("");
       setLogoGalleryError("");
+      setGeneratedContent("");
+      setGenerationHistory([]);
+      setCurrentVersionIndex(-1);
+      setProjectContentError("");
       return;
     }
 
+    setProjectName(selectedProject.title || "");
+    setDescription(selectedProject.description || "");
+    setError("");
+    setSuccessMessage("");
+    setSaveWorkspaceSuccess("");
+
     setLogoProjectId(selectedProject.id);
-    loadLogoGallery(selectedProject.id);
-  }, [selectedProject?.id]);
+
+    const token = localStorage.getItem("token");
+
+    loadLogoGallery(selectedProject.id, token);
+    loadProjectContent(selectedProject.id, token);
+  }, [
+    selectedProject?.id,
+    selectedProject?.title,
+    selectedProject?.description,
+  ]);
 
   const handleSelectLogoVersion = (index) => {
     if (index < 0 || index >= logoGallery.length) {
@@ -1770,6 +1910,44 @@ ${aiPreferenceInstructions}`;
             </div>
           )}
         </div>
+
+        {projectContentLoading && (
+          <div
+            className="mb-6 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-slate-400"
+            role="status"
+            aria-live="polite"
+          >
+            <div
+              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
+              aria-hidden="true"
+            />
+            <p>Loading saved project content...</p>
+          </div>
+        )}
+
+        {projectContentError && (
+          <div
+            className="mb-6 rounded-lg border border-amber-800 bg-amber-950/40 p-4"
+            role="alert"
+          >
+            <p className="font-semibold text-amber-300">
+              Saved content could not be loaded
+            </p>
+            <p className="mt-1 text-sm text-amber-300">
+              {projectContentError}
+            </p>
+            {selectedProject?.id && (
+              <button
+                type="button"
+                onClick={() => loadProjectContent(selectedProject.id)}
+                disabled={projectContentLoading}
+                className="mt-3 rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
 
         {saveWorkspaceSuccess && (
           <div
