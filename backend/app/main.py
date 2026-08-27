@@ -12,6 +12,7 @@ from app.api import workspace as workspace_api
 from app.db.database import Base, engine
 from app.models import ai_usage, content, product_logo, project, user, workspace
 from app.models.content_version import ContentVersion
+from app.api import dashboard
 
 app = FastAPI(title="Tanio AI API")
 
@@ -36,6 +37,7 @@ app.include_router(content_version_api.router)
 app.include_router(ai.router)
 app.include_router(product_architect.router)
 app.include_router(tabletop_creator.router)
+app.include_router(dashboard.router)
 
 
 @app.get("/")

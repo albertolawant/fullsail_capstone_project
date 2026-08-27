@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
+
 from openai import OpenAI
+
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.db.database import get_db
+from app.models.ai_usage import AIUsage
 from app.models.content import GeneratedContent
 from app.models.project import Project
 from app.models.user import User
@@ -30,7 +33,10 @@ def generate_ai_content(
     )
 
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found",
+        )
 
     if project.owner_id != current_user.id:
         raise HTTPException(
@@ -44,7 +50,9 @@ def generate_ai_content(
             detail="OpenAI API key is missing",
         )
 
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+    )
 
     try:
         response = client.responses.create(
@@ -53,6 +61,15 @@ def generate_ai_content(
         )
 
         generated_text = response.output_text
+
+        if not generated_text or not generated_text.strip():
+            raise HTTPException(
+                status_code=502,
+                detail="The AI did not return any content. Please try again.",
+            )
+
+    except HTTPException:
+        raise
 
     except Exception as error:
         raise HTTPException(
@@ -63,13 +80,32 @@ def generate_ai_content(
     content = GeneratedContent(
         title=request.title,
         content_type=request.content_type,
-        body=generated_text,
+        body=generated_text.strip(),
         project_id=request.project_id,
         owner_id=current_user.id,
     )
 
-    db.add(content)
-    db.commit()
-    db.refresh(content)
+    usage = AIUsage(
+        user_id=current_user.id,
+        project_id=request.project_id,
+        feature_type="AI Generate",
+        content_type=request.content_type,
+        status="success",
+    )
+
+    try:
+        db.add(content)
+        db.add(usage)
+
+        db.commit()
+        db.refresh(content)
+
+    except Exception:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Generated content could not be saved. Please try again.",
+        )
 
     return content

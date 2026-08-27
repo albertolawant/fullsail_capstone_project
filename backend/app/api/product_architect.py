@@ -19,6 +19,7 @@ from app.models.product_logo import ProductLogo
 from app.models.project import Project
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.services.ai_usage_service import log_ai_usage
 from app.schemas.product_architect import (
     ProductArchitectRequest,
     ProductArchitectResponse,
@@ -308,7 +309,20 @@ def generate_and_save_content(
         db.add(content)
         db.commit()
         db.refresh(content)
+
+        log_ai_usage(
+            db=db,
+            user_id=current_user.id,
+            project_id=project.id,
+            feature_type="Product Architect",
+            content_type=content_type,
+            status="success",
+        )
+
         return content
+
+    except HTTPException:
+        raise
 
     except Exception:
         db.rollback()
@@ -640,6 +654,18 @@ Requirements:
             db.add(saved_logo)
             db.commit()
             db.refresh(saved_logo)
+
+            log_ai_usage(
+                db=db,
+                user_id=current_user.id,
+                project_id=project.id,
+                feature_type="Logo Generator",
+                content_type="Product Logo",
+                status="success",
+            )
+
+        except HTTPException:
+            raise
 
         except Exception:
             db.rollback()
