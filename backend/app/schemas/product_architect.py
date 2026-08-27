@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,16 @@ class ProductArchitectRequest(BaseModel):
         ...,
         min_length=10,
         max_length=5000,
+    )
+
+    original_content: Optional[str] = Field(
+        default=None,
+        max_length=50000,
+    )
+
+    regeneration_instructions: Optional[str] = Field(
+        default=None,
+        max_length=1000,
     )
 
 

@@ -130,6 +130,9 @@ function ProductArchitect() {
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [regenerateModalOpen, setRegenerateModalOpen] = useState(false);
+  const [regenerateInstructions, setRegenerateInstructions] = useState("");
+  const [regenerateError, setRegenerateError] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [logoBase64, setLogoBase64] = useState("");
@@ -274,7 +277,49 @@ function ProductArchitect() {
     setError("");
   };
 
-  const handleGenerate = async (isRegeneration = false) => {
+  const handleOpenRegenerate = () => {
+    if (!generatedContent || loading) {
+      return;
+    }
+
+    setRegenerateInstructions("");
+    setRegenerateError("");
+    setRegenerateModalOpen(true);
+  };
+
+  const handleCloseRegenerate = () => {
+    if (loading) {
+      return;
+    }
+
+    setRegenerateModalOpen(false);
+    setRegenerateInstructions("");
+    setRegenerateError("");
+  };
+
+  const handleConfirmRegenerate = async () => {
+    const cleanedInstructions = regenerateInstructions.trim();
+
+    if (cleanedInstructions.length > 1000) {
+      setRegenerateError(
+        "Regeneration instructions must be 1,000 characters or fewer."
+      );
+      return;
+    }
+
+    setRegenerateError("");
+    setRegenerateModalOpen(false);
+
+    await handleGenerate(true, cleanedInstructions);
+
+    setRegenerateInstructions("");
+  };
+
+
+  const handleGenerate = async (
+    isRegeneration = false,
+    customInstructions = ""
+  ) => {
     if (loading) {
       return;
     }
@@ -337,6 +382,8 @@ function ProductArchitect() {
       const aiPreferenceInstructions =
         buildAiPreferenceInstructions(aiSettings);
 
+      const cleanedCustomInstructions = customInstructions.trim();
+
       const descriptionWithPreferences = `${cleanedDescription}
 
 ${aiPreferenceInstructions}`;
@@ -350,6 +397,14 @@ ${aiPreferenceInstructions}`;
         body: JSON.stringify({
           project_name: cleanedProjectName,
           description: descriptionWithPreferences,
+          original_content:
+            isRegeneration && generatedContent
+              ? generatedContent
+              : null,
+          regeneration_instructions:
+            isRegeneration
+              ? cleanedCustomInstructions || null
+              : null,
         }),
         signal: controller.signal,
       });
@@ -396,6 +451,9 @@ ${aiPreferenceInstructions}`;
         content: data.body,
         createdAt: new Date().toISOString(),
         documentType: contentType,
+        regenerationInstructions: isRegeneration
+          ? customInstructions.trim()
+          : "",
       };
 
       const nextHistory =
@@ -418,9 +476,14 @@ ${aiPreferenceInstructions}`;
         title: `${cleanedProjectName} content ${
           isRegeneration ? "regenerated" : "generated"
         }`,
-        description: `Created a new ${
-          documentTypeLabels[contentType] || contentType
-        }.`,
+        description:
+          isRegeneration && customInstructions.trim()
+            ? `Regenerated the ${
+                documentTypeLabels[contentType] || contentType
+              } using custom instructions.`
+            : `Created a new ${
+                documentTypeLabels[contentType] || contentType
+              }.`,
         projectName: cleanedProjectName,
       });
     } catch (err) {
@@ -1865,7 +1928,7 @@ ${aiPreferenceInstructions}`;
 
               <button
                 type="button"
-                onClick={() => handleGenerate(true)}
+                onClick={handleOpenRegenerate}
                 disabled={loading}
                 className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -2011,6 +2074,17 @@ ${aiPreferenceInstructions}`;
               </div>
             )}
 
+            {generationHistory[currentVersionIndex]?.regenerationInstructions && (
+              <div className="mb-5 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                  Regeneration Instructions
+                </p>
+                <p className="mt-2 text-sm text-slate-300">
+                  {generationHistory[currentVersionIndex].regenerationInstructions}
+                </p>
+              </div>
+            )}
+
             <div className="max-w-none">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -2026,6 +2100,99 @@ ${aiPreferenceInstructions}`;
           </p>
         )}
       </div>
+
+      {regenerateModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="regenerate-title"
+        >
+          <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="regenerate-title"
+                  className="text-2xl font-bold text-white"
+                >
+                  Regenerate Content
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Tell the AI what you want changed in the new version. You can
+                  also leave this blank for a general regeneration.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseRegenerate}
+                disabled={loading}
+                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close regenerate dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6">
+              <label
+                htmlFor="regenerate-instructions"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                What would you like to change?
+              </label>
+
+              <textarea
+                id="regenerate-instructions"
+                value={regenerateInstructions}
+                onChange={(e) => {
+                  setRegenerateInstructions(e.target.value);
+                  setRegenerateError("");
+                }}
+                rows="6"
+                maxLength={1000}
+                disabled={loading}
+                placeholder="e.g. Make it shorter, add more technical detail, and keep the risk section mostly the same."
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
+              />
+
+              <div className="mt-2 flex items-center justify-between gap-4 text-xs text-slate-500">
+                <span>Optional</span>
+                <span>{regenerateInstructions.length}/1000</span>
+              </div>
+            </div>
+
+            {regenerateError && (
+              <div
+                className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4"
+                role="alert"
+              >
+                <p className="text-sm text-red-300">{regenerateError}</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseRegenerate}
+                disabled={loading}
+                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmRegenerate}
+                disabled={loading}
+                className="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? "Regenerating..." : "Regenerate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {saveWorkspaceOpen && (
         <div

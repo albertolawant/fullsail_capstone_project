@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+
 from openai import (
     APIConnectionError,
     APIError,
@@ -7,6 +8,7 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
+
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -30,6 +32,45 @@ router = APIRouter(
     prefix="/product-architect",
     tags=["Product Architect"],
 )
+
+
+def build_regeneration_context(
+    request: ProductArchitectRequest,
+) -> str:
+    original_content = (request.original_content or "").strip()
+    regeneration_instructions = (
+        request.regeneration_instructions or ""
+    ).strip()
+
+    if not original_content:
+        return ""
+
+    instructions = (
+        regeneration_instructions
+        or (
+            "Create an improved new version while keeping the original "
+            "content, structure, and intent as consistent as possible."
+        )
+    )
+
+    return f"""
+Regeneration Request:
+
+You are revising an existing version of this document.
+
+Original Content:
+--- BEGIN ORIGINAL CONTENT ---
+{original_content}
+--- END ORIGINAL CONTENT ---
+
+Requested Changes:
+{instructions}
+
+Important:
+- Follow the requested changes closely.
+- Keep anything the user did not ask to change whenever possible.
+- Return the complete revised document.
+"""
 
 
 def get_or_create_user_workspace(
@@ -294,7 +335,10 @@ def generate_prd(
 Create a clear Product Requirements Document for this project.
 
 Project Name: {request.project_name}
+
 Description: {request.description}
+
+{build_regeneration_context(request)}
 
 Include:
 - Overview
@@ -331,7 +375,10 @@ def generate_persona(
 Create a detailed user persona for this project.
 
 Project Name: {request.project_name}
+
 Description: {request.description}
+
+{build_regeneration_context(request)}
 
 Include:
 - Name
@@ -366,9 +413,13 @@ def generate_user_stories(
 Create user stories for this project.
 
 Project Name: {request.project_name}
+
 Description: {request.description}
 
+{build_regeneration_context(request)}
+
 Use this format:
+
 As a [type of user], I want [goal], so that [benefit].
 
 Include at least 10 user stories.
@@ -397,7 +448,10 @@ def generate_feature_list(
 Create a feature recommendation list for this project.
 
 Project Name: {request.project_name}
+
 Description: {request.description}
+
+{build_regeneration_context(request)}
 
 Organize the recommended features into:
 - MVP Features
@@ -431,7 +485,10 @@ def generate_technical_architecture(
 Create a detailed technical architecture recommendation for this project.
 
 Project Name: {request.project_name}
+
 Description: {request.description}
+
+{build_regeneration_context(request)}
 
 Include:
 - Architecture Overview
@@ -459,6 +516,7 @@ why each major technology is appropriate.
         db=db,
         current_user=current_user,
     )
+
 
 @router.post(
     "/logo",
@@ -511,8 +569,8 @@ def generate_product_logo(
 
     if customization_instructions:
         customization_text = f"""
-
 User Customization:
+
 {chr(10).join(customization_instructions)}
 
 Follow the user's customization preferences while still producing
@@ -525,6 +583,7 @@ Create a clean, professional logo for this product.
 Product Name: {cleaned_project_name}
 
 Product Description:
+
 {cleaned_description}
 
 Requirements:
@@ -536,6 +595,7 @@ Requirements:
 - Professional branding
 - Include the product name only if it improves the logo
 - Square composition
+
 {customization_text}
 """
 
@@ -612,7 +672,10 @@ Requirements:
     except RateLimitError:
         raise HTTPException(
             status_code=429,
-            detail="Too many logo generation requests. Please wait a moment and try again.",
+            detail=(
+                "Too many logo generation requests. "
+                "Please wait a moment and try again."
+            ),
         )
 
     except AuthenticationError:
@@ -643,6 +706,7 @@ Requirements:
             status_code=500,
             detail="Something went wrong while generating the logo. Please try again.",
         )
+
 
 @router.get(
     "/logos/{project_id}",
@@ -696,6 +760,7 @@ def get_product_logo_gallery(
             for logo in logos
         ]
     )
+
 
 @router.delete("/logos/{logo_id}")
 def delete_product_logo(
