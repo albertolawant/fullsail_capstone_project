@@ -2,6 +2,11 @@ import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import {
+  notifyGenerationComplete,
+  notifyContentSaved,
+} from "../utils/notifications";
+
 const AI_REQUEST_TIMEOUT_MS = 35000;
 const SLOW_REQUEST_THRESHOLD_MS = 30000;
 
@@ -485,6 +490,8 @@ function TabletopCreator() {
 
       setContent(generatedContent);
       setSuccess(successMessage);
+
+      notifyGenerationComplete("Tabletop Creator", cleanedName);
 
       if (isRegeneration && !suppressRelatedWarning) {
         checkForRelatedContent(historyKey);
@@ -996,6 +1003,10 @@ function TabletopCreator() {
 
       const selectedWorkspace = workspaces.find(
         (workspace) => String(workspace.id) === String(selectedWorkspaceId)
+      );
+
+      notifyContentSaved(
+        `${cleanedCampaignName} - ${contentToSave.label}`
       );
 
       setSaveWorkspaceSuccess(

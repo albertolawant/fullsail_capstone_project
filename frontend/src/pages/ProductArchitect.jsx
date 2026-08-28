@@ -6,6 +6,11 @@ import { addRecentActivity } from "../utils/activityStorage";
 import { exportContentAsPdf } from "../utils/exportPdf";
 import { exportContentAsMarkdown } from "../utils/exportMarkdown";
 import { exportContentAsTxt } from "../utils/exportTxt";
+import {
+  notifyGenerationComplete,
+  notifyLogoGenerated,
+  notifyContentSaved,
+} from "../utils/notifications";
 
 const AI_REQUEST_TIMEOUT_MS = 35000;
 const SLOW_REQUEST_THRESHOLD_MS = 30000;
@@ -471,6 +476,11 @@ ${aiPreferenceInstructions}`;
         } successfully.`
       );
 
+      notifyGenerationComplete(
+        "Product Architect",
+        cleanedProjectName
+      );
+
       addRecentActivity({
         type: "Content Generated",
         title: `${cleanedProjectName} content ${
@@ -876,6 +886,8 @@ ${aiPreferenceInstructions}`;
         }
       }
 
+      notifyLogoGenerated(cleanedProjectName);
+
       addRecentActivity({
         type: "Logo Generated",
         title: `${cleanedProjectName} logo generated`,
@@ -1178,6 +1190,8 @@ ${aiPreferenceInstructions}`;
       setSaveWorkspaceSuccess(
         `${documentLabel} saved to ${workspaceName} successfully.`
       );
+
+      notifyContentSaved(documentLabel);
 
       addRecentActivity({
         type: "Content Saved",

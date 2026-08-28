@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import RecentContent from "../components/RecentContent";
+import { notifyProjectCreated } from "../utils/notifications";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -362,6 +363,8 @@ function Dashboard() {
       }
 
       const createdProject = await response.json();
+
+      notifyProjectCreated(cleanedTitle);
 
       setProjectCreateSuccess(
         `"${cleanedTitle}" was created successfully. Opening your module...`

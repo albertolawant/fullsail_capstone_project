@@ -10,6 +10,8 @@ import {
   FaArrowRight,
 } from "react-icons/fa";
 
+import { notifyWorkspaceCreated } from "../utils/notifications";
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
@@ -169,6 +171,12 @@ function Workspaces() {
               editingWorkspace ? "update" : "create"
             } workspace.`
         );
+      }
+
+      // Only create a notification for a brand-new workspace.
+      // Editing an existing workspace will not create one.
+      if (!editingWorkspace) {
+        notifyWorkspaceCreated(trimmedName);
       }
 
       await loadWorkspaces(true);
