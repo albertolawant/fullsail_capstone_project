@@ -7,7 +7,8 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  min-height: 100vh;
+  background-color: #020617;
 }
 
 body {
@@ -15,6 +16,7 @@ body {
 }
 
 /* Smooth visual changes */
+
 body,
 header,
 aside,
@@ -36,8 +38,13 @@ select {
    Light Theme
    ======================================== */
 
-html[data-tanio-theme="light"] body {
+html[data-tanio-theme="light"],
+html[data-tanio-theme="light"] body,
+html[data-tanio-theme="light"] #root {
   background-color: #f8fafc;
+}
+
+html[data-tanio-theme="light"] body {
   color: #0f172a;
 }
 
@@ -98,6 +105,7 @@ html[data-tanio-theme="light"] textarea::placeholder {
 }
 
 /* Sidebar/navigation hover states */
+
 html[data-tanio-theme="light"] .hover\:bg-slate-800:hover {
   background-color: #e2e8f0 !important;
 }
@@ -111,8 +119,13 @@ html[data-tanio-theme="light"] .hover\:bg-slate-700:hover {
    ======================================== */
 
 @media (prefers-color-scheme: light) {
-  html[data-tanio-theme="system"] body {
+  html[data-tanio-theme="system"],
+  html[data-tanio-theme="system"] body,
+  html[data-tanio-theme="system"] #root {
     background-color: #f8fafc;
+  }
+
+  html[data-tanio-theme="system"] body {
     color: #0f172a;
   }
 
