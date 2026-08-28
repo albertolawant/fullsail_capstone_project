@@ -1,5 +1,7 @@
 import logo from "../assets/cropped_logo.png";
+
 import { NavLink, useNavigate } from "react-router-dom";
+
 import {
   FaHome,
   FaFolder,
@@ -8,6 +10,7 @@ import {
   FaCog,
   FaBrain,
   FaDice,
+  FaQuestionCircle,
   FaSignOutAlt,
 } from "react-icons/fa";
 
@@ -87,7 +90,12 @@ function Sidebar() {
           <FaDice />
           Tabletop Creator
         </NavLink>
-        
+
+        <NavLink to="/help" className={linkClass}>
+          <FaQuestionCircle />
+          Help Guide
+        </NavLink>
+
         <NavLink to="/settings" className={linkClass}>
           <FaCog />
           Settings

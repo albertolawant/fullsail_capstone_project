@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-
 import SignIn from "./pages/SignIn";
-
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
-
 import Dashboard from "./pages/Dashboard";
 import Workspaces from "./pages/Workspaces";
 import Projects from "./pages/Projects";
@@ -13,6 +10,7 @@ import Content from "./pages/Content";
 import Settings from "./pages/Settings";
 import ProductArchitect from "./pages/ProductArchitect";
 import TabletopCreator from "./pages/TabletopCreator";
+import HelpGuide from "./pages/HelpGuide";
 
 const SETTINGS_KEY = "tanioSettings";
 
@@ -50,6 +48,7 @@ function App() {
   );
 
   const isSignInPage = location.pathname === "/signin";
+
   const isSignedIn =
     localStorage.getItem("tanioSession") === "true";
 
@@ -131,7 +130,7 @@ function App() {
               path="/content"
               element={<Content />}
             />
-            
+
             <Route
               path="/product-architect"
               element={<ProductArchitect />}
@@ -140,6 +139,11 @@ function App() {
             <Route
               path="/tabletop-creator"
               element={<TabletopCreator />}
+            />
+
+            <Route
+              path="/help"
+              element={<HelpGuide />}
             />
 
             <Route
