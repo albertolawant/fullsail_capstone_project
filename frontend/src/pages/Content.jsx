@@ -151,6 +151,7 @@ function Content() {
   const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [showFilterHelp, setShowFilterHelp] = useState(false);
 
   const loadLibrary = useCallback(async (isRefresh = false) => {
     const token = localStorage.getItem("token");
@@ -495,6 +496,31 @@ function Content() {
             placeholder="Search by title, type, project, content, or logo details..."
             className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500"
           />
+        </div>
+
+        <div className="mt-5 flex items-center gap-2">
+          <p className="text-sm font-semibold text-slate-300">
+            Filter by module
+          </p>
+
+          <div className="group relative">
+            <span
+              className="flex h-6 w-6 cursor-help items-center justify-center rounded-full border border-slate-700 bg-slate-950 text-xs font-bold text-slate-400 transition group-hover:border-cyan-500 group-hover:text-cyan-300"
+              aria-label="Module filter help"
+            >
+              ?
+            </span>
+
+            <div className="pointer-events-none absolute left-0 top-8 z-20 hidden w-72 rounded-xl border border-slate-700 bg-slate-950 p-4 shadow-2xl group-hover:block">
+              <p className="text-sm font-semibold text-white">
+                What does this filter do?
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Choose a module to show only that type of saved content. Select All to view everything in your Content Library.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
