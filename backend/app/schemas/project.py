@@ -2,9 +2,29 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ProjectCreate(BaseModel):
-    title: str
-    description: str | None = None
+    title: str = Field(
+        ...,
+        min_length=1,
+        max_length=100
+    )
+    description: str | None = Field(
+        default=None,
+        max_length=5000
+    )
     workspace_id: int
+
+    @field_validator("title")
+    @classmethod
+    def validate_create_title(cls, value):
+        if not value.strip():
+            raise ValueError("Project name cannot be blank")
+
+        return value.strip()
+
+    @field_validator("description")
+    @classmethod
+    def clean_create_description(cls, value):
+        return value.strip() if value is not None else value
 
 
 class ProjectUpdate(BaseModel):
