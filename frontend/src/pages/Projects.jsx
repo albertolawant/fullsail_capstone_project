@@ -20,6 +20,9 @@ function Projects() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaces, setWorkspaces] = useState([]);
+  const [projectSearchTerm, setProjectSearchTerm] = useState("");
+  const [selectedWorkspaceFilter, setSelectedWorkspaceFilter] = useState("all");
 
   const [editingProject, setEditingProject] = useState(null);
   const [editTitle, setEditTitle] = useState("");
@@ -48,23 +51,52 @@ function Projects() {
       // Demo mode
       if (!token) {
         initializeDemoData();
-        setProjects(getDemoProjects());
+
+        const demoProjects = getDemoProjects();
+
+        setProjects(demoProjects);
+
+        setWorkspaces(
+          Array.from(
+            new Set(demoProjects.map((project) => project.workspace_id).filter(Boolean))
+          ).map((workspaceId) => ({
+            id: workspaceId,
+            name: `Workspace ${workspaceId}`,
+          }))
+        );
+
         setLoading(false);
         return;
       }
 
-      const response = await fetch("http://127.0.0.1:8000/projects/", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const [projectsResponse, workspacesResponse] = await Promise.all([
+        fetch("http://127.0.0.1:8000/projects/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch("http://127.0.0.1:8000/workspaces/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
 
-      if (!response.ok) {
+      if (!projectsResponse.ok) {
         throw new Error("Unable to load projects.");
       }
 
-      const data = await response.json();
-      setProjects(data);
+      if (!workspacesResponse.ok) {
+        throw new Error("Unable to load workspaces.");
+      }
+
+      const [projectData, workspaceData] = await Promise.all([
+        projectsResponse.json(),
+        workspacesResponse.json(),
+      ]);
+
+      setProjects(Array.isArray(projectData) ? projectData : []);
+      setWorkspaces(Array.isArray(workspaceData) ? workspaceData : []);
     } catch {
       setError(
         "Unable to load projects. Make sure you are logged in and the backend is running."
@@ -121,15 +153,38 @@ function Projects() {
   }, [selectedWorkspaceId]);
 
   const filteredProjects = useMemo(() => {
-    if (!selectedWorkspaceId) {
-      return projects;
+    let workspaceFilteredProjects = selectedWorkspaceId
+      ? projects.filter(
+          (project) => Number(project.workspace_id) === selectedWorkspaceId
+        )
+      : projects;
+
+    if (selectedWorkspaceFilter !== "all") {
+      workspaceFilteredProjects = workspaceFilteredProjects.filter(
+        (project) =>
+          Number(project.workspace_id) === Number(selectedWorkspaceFilter)
+      );
     }
 
-    return projects.filter(
-      (project) =>
-        Number(project.workspace_id) === selectedWorkspaceId
-    );
-  }, [projects, selectedWorkspaceId]);
+    const normalizedSearch = projectSearchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return workspaceFilteredProjects;
+    }
+
+    return workspaceFilteredProjects.filter((project) => {
+      return (
+        project.title?.toLowerCase().includes(normalizedSearch) ||
+        project.description?.toLowerCase().includes(normalizedSearch) ||
+        String(project.workspace_id).includes(normalizedSearch)
+      );
+    });
+  }, [
+    projects,
+    selectedWorkspaceId,
+    selectedWorkspaceFilter,
+    projectSearchTerm,
+  ]);
 
   const displayWorkspaceName =
     workspaceName ||
@@ -141,6 +196,36 @@ function Projects() {
     setSearchParams({});
     setWorkspaceName("");
   };
+
+  const clearFilters = () => {
+    setProjectSearchTerm("");
+    setSelectedWorkspaceFilter("all");
+  };
+
+  const availableWorkspaces = useMemo(() => {
+    if (workspaces.length > 0) {
+      return workspaces.map((workspace) => ({
+        id: workspace.id,
+        name: workspace.name || `Workspace ${workspace.id}`,
+      }));
+    }
+
+    const workspaceMap = new Map();
+
+    projects.forEach((project) => {
+      if (project.workspace_id) {
+        workspaceMap.set(
+          Number(project.workspace_id),
+          `Workspace ${project.workspace_id}`
+        );
+      }
+    });
+
+    return Array.from(workspaceMap.entries()).map(([id, name]) => ({
+      id,
+      name,
+    }));
+  }, [workspaces, projects]);
 
   const openProject = (project) => {
     navigate("/product-architect", {
@@ -383,6 +468,91 @@ function Projects() {
         </div>
       </div>
 
+      {!loading && !error && (
+        <section className="mb-6 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-500">Total Projects</p>
+            <p className="mt-2 text-3xl font-bold text-white">{projects.length}</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-500">Showing</p>
+            <p className="mt-2 text-3xl font-bold text-cyan-400">
+              {filteredProjects.length}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-500">Workspace</p>
+            <p className="mt-2 truncate text-lg font-semibold text-white">
+              {selectedWorkspaceId
+                ? displayWorkspaceName
+                : selectedWorkspaceFilter === "all"
+                ? "All"
+                : availableWorkspaces.find(
+                    (workspace) =>
+                      String(workspace.id) === String(selectedWorkspaceFilter)
+                  )?.name || "Selected"}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {!loading && !error && (
+        <section className="mb-8 rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label
+                htmlFor="project-search"
+                className="mb-2 block text-sm font-semibold text-slate-300"
+              >
+                Search Projects
+              </label>
+
+              <input
+                id="project-search"
+                type="search"
+                value={projectSearchTerm}
+                onChange={(event) => setProjectSearchTerm(event.target.value)}
+                placeholder="Search by project name, description, or workspace..."
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="workspace-filter"
+                className="mb-2 block text-sm font-semibold text-slate-300"
+              >
+                Filter by Workspace
+              </label>
+
+              <select
+                id="workspace-filter"
+                value={selectedWorkspaceFilter}
+                onChange={(event) => setSelectedWorkspaceFilter(event.target.value)}
+                disabled={Boolean(selectedWorkspaceId)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="all">All Workspaces</option>
+
+                {availableWorkspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </option>
+                ))}
+              </select>
+
+              {selectedWorkspaceId && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Workspace filter is locked because you opened this page from a specific workspace.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Loading State */}
       {loading && (
         <div
@@ -453,6 +623,29 @@ function Projects() {
                 Show All Projects
               </button>
             </div>
+          </div>
+        )}
+
+      {!loading &&
+        !error &&
+        projects.length > 0 &&
+        filteredProjects.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
+            <h3 className="text-xl font-semibold text-white">
+              No matching projects
+            </h3>
+
+            <p className="mt-2 text-slate-400">
+              Try another search term or clear the workspace filter.
+            </p>
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-5 rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400"
+            >
+              Clear Search
+            </button>
           </div>
         )}
 
