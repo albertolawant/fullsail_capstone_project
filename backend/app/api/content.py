@@ -200,6 +200,24 @@ def update_content(
     if content_data.body is not None:
         content.body = content_data.body
 
+    if content_data.project_id is not None:
+        project = (
+            db.query(Project)
+            .filter(
+                Project.id == content_data.project_id,
+                Project.owner_id == current_user.id
+            )
+            .first()
+        )
+
+        if not project:
+            raise HTTPException(
+                status_code=404,
+                detail="Project not found",
+            )
+
+        content.project_id = content_data.project_id
+
     db.commit()
     db.refresh(content)
 

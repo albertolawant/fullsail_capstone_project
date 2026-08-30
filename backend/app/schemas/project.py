@@ -35,8 +35,9 @@ class ProjectUpdate(BaseModel):
     )
     description: str | None = Field(
         default=None,
-        max_length=500
+        max_length=5000
     )
+    workspace_id: int | None = None
 
     @field_validator("title")
     @classmethod

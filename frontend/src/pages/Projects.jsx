@@ -27,6 +27,7 @@ function Projects() {
   const [editingProject, setEditingProject] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editWorkspaceId, setEditWorkspaceId] = useState("");
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -239,6 +240,7 @@ function Projects() {
     setEditingProject(project);
     setEditTitle(project.title);
     setEditDescription(project.description || "");
+    setEditWorkspaceId(String(project.workspace_id || ""));
     setEditError("");
   };
 
@@ -246,6 +248,7 @@ function Projects() {
     setEditingProject(null);
     setEditTitle("");
     setEditDescription("");
+    setEditWorkspaceId("");
     setEditError("");
   };
 
@@ -266,10 +269,15 @@ function Projects() {
       return;
     }
 
-    if (cleanedDescription.length > 500) {
+    if (cleanedDescription.length > 5000) {
       setEditError(
-        "Project description must be 500 characters or fewer."
+        "Project description must be 5000 characters or fewer."
       );
+      return;
+    }
+
+    if (!editWorkspaceId) {
+      setEditError("Please choose a workspace.");
       return;
     }
 
@@ -284,6 +292,7 @@ function Projects() {
         updatedProject = updateDemoProject(editingProject.id, {
           title: cleanedTitle,
           description: cleanedDescription,
+          workspace_id: Number(editWorkspaceId),
         });
       } else {
         const response = await fetch(
@@ -297,6 +306,7 @@ function Projects() {
             body: JSON.stringify({
               title: cleanedTitle,
               description: cleanedDescription,
+              workspace_id: Number(editWorkspaceId),
             }),
           }
         );
@@ -773,6 +783,35 @@ function Projects() {
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
                 data-testid="edit-project-description"
               />
+            </div>
+
+            <div className="mt-5">
+              <label
+                htmlFor="edit-project-workspace"
+                className="mb-2 block text-sm text-slate-300"
+              >
+                Workspace
+              </label>
+
+              <select
+                id="edit-project-workspace"
+                value={editWorkspaceId}
+                onChange={(event) => setEditWorkspaceId(event.target.value)}
+                disabled={saving}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none disabled:opacity-50"
+              >
+                <option value="">Choose a workspace</option>
+
+                {availableWorkspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </option>
+                ))}
+              </select>
+
+              <p className="mt-2 text-xs text-slate-500">
+                Moving this project will place it under the selected workspace.
+              </p>
             </div>
 
             {editError && (

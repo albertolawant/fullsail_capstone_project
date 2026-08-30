@@ -109,6 +109,20 @@ def update_project(
     if project_data.description is not None:
         project.description = project_data.description
 
+    if project_data.workspace_id is not None:
+        workspace = (
+            db.query(Workspace)
+            .filter(
+                Workspace.id == project_data.workspace_id,
+                Workspace.owner_id == current_user.id
+            )
+            .first()
+        )
+
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        project.workspace_id = project_data.workspace_id
     db.commit()
     db.refresh(project)
 

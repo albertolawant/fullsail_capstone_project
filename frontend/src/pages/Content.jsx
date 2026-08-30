@@ -151,7 +151,10 @@ function Content() {
   const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  const [showFilterHelp, setShowFilterHelp] = useState(false);
+  const [moveTarget, setMoveTarget] = useState(null);
+  const [moveProjectId, setMoveProjectId] = useState("");
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [moveError, setMoveError] = useState("");
 
   const loadLibrary = useCallback(async (isRefresh = false) => {
     const token = localStorage.getItem("token");
@@ -375,6 +378,95 @@ function Content() {
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedCategory(CATEGORY_ALL);
+  };
+
+  const openMoveContent = (item) => {
+    setMoveTarget(item);
+    setMoveProjectId(String(item.project_id || ""));
+    setMoveError("");
+  };
+
+  const closeMoveContent = () => {
+    if (moveLoading) {
+      return;
+    }
+
+    setMoveTarget(null);
+    setMoveProjectId("");
+    setMoveError("");
+  };
+
+  const handleMoveContent = async () => {
+    if (!moveTarget || !moveProjectId) {
+      setMoveError("Please choose a project.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setMoveError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setMoveLoading(true);
+    setMoveError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/content/${moveTarget.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          project_id: Number(moveProjectId),
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "This content could not be moved. Please try again."
+        );
+      }
+
+      const updatedContent = await response.json();
+
+      setContentItems((previousItems) =>
+        previousItems.map((item) =>
+          String(item.id) === String(updatedContent.id)
+            ? updatedContent
+            : item
+        )
+      );
+
+      if (selectedContent?.id === updatedContent.id) {
+        setSelectedContent(updatedContent);
+      }
+
+      closeMoveContent();
+    } catch (requestError) {
+      console.error("Move content failed:", requestError);
+
+      setMoveError(
+        requestError instanceof Error
+          ? requestError.message
+          : "This content could not be moved. Please try again."
+      );
+    } finally {
+      setMoveLoading(false);
+    }
   };
 
   const openDeleteConfirmation = (item) => {
@@ -724,6 +816,16 @@ function Content() {
                           View
                         </button>
 
+                        {!item.isLogo && (
+                          <button
+                            type="button"
+                            onClick={() => openMoveContent(item)}
+                            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                          >
+                            Move
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => openDeleteConfirmation(item)}
@@ -853,6 +955,99 @@ function Content() {
           </section>
         </div>
       )}
+
+      {moveTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeMoveContent();
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="move-dialog-title"
+            className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+          >
+            <header className="border-b border-slate-800 p-6">
+              <h3 id="move-dialog-title" className="text-2xl font-bold text-white">
+                Move content
+              </h3>
+
+              <p className="mt-2 text-slate-400">
+                Choose the project this content should belong to. The workspace will update based on that project.
+              </p>
+            </header>
+
+            <div className="space-y-5 p-6">
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-sm text-slate-500">Item</p>
+                <p className="mt-1 font-semibold text-white">{moveTarget.title}</p>
+
+                <p className="mt-3 text-sm text-slate-500">Current Project</p>
+                <p className="mt-1 text-slate-300">{moveTarget.projectName}</p>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="move-project-select"
+                  className="block text-sm font-semibold text-slate-300"
+                >
+                  Move to project
+                </label>
+
+                <select
+                  id="move-project-select"
+                  value={moveProjectId}
+                  onChange={(event) => {
+                    setMoveProjectId(event.target.value);
+                    setMoveError("");
+                  }}
+                  disabled={moveLoading}
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                >
+                  <option value="">Choose a project</option>
+
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.title} — Workspace {project.workspace_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {moveError && (
+                <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-red-300">
+                  {moveError}
+                </div>
+              )}
+            </div>
+
+            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
+              <button
+                type="button"
+                onClick={closeMoveContent}
+                disabled={moveLoading}
+                className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleMoveContent}
+                disabled={moveLoading || !moveProjectId}
+                className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {moveLoading ? "Moving..." : "Move Content"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}      
       
       {deleteTarget && (
         <div

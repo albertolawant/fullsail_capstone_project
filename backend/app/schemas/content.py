@@ -13,6 +13,7 @@ class ContentUpdate(BaseModel):
     title: Optional[str] = None
     content_type: Optional[str] = None
     body: Optional[str] = None
+    project_id: Optional[int] = None
 
 
 class ContentResponse(BaseModel):
