@@ -140,6 +140,16 @@ function UserProfilePanel() {
     user.displayName
   );
 
+  const avatarContent = user.profileImage ? (
+    <img
+      src={user.profileImage}
+      alt={`${user.displayName} profile`}
+      className="h-full w-full object-cover"
+    />
+  ) : (
+    initials
+  ); 
+
   return (
     <div
       ref={panelRef}
@@ -173,13 +183,13 @@ function UserProfilePanel() {
           <div
             className="
               flex h-9 w-9 items-center justify-center
-              rounded-xl border border-cyan-500/25
+              overflow-hidden rounded-xl border border-cyan-500/25
               bg-gradient-to-br
               from-cyan-500/15 to-slate-800
               text-[11px] font-bold text-cyan-300
             "
           >
-            {initials}
+            {avatarContent}
           </div>
 
           <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-slate-950 bg-emerald-400" />
@@ -233,14 +243,14 @@ function UserProfilePanel() {
                 <div
                   className="
                     flex h-11 w-11 items-center
-                    justify-center rounded-xl
+                    justify-center overflow-hidden rounded-xl
                     border border-cyan-500/25
                     bg-gradient-to-br
                     from-cyan-500/15 to-slate-800
                     text-xs font-bold text-cyan-300
                   "
                 >
-                  {initials}
+                  {avatarContent}
                 </div>
 
                 <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-slate-900 bg-emerald-400" />

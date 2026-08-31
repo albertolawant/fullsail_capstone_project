@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -140,6 +141,12 @@ const CONTENT_LABELS = {
 };
 
 function TabletopCreator() {
+  const location = useLocation();
+  const selectedProject = location.state?.project;
+
+  const [selectedProjectId, setSelectedProjectId] = useState(
+    selectedProject?.id || null
+  );
   const [campaignName, setCampaignName] = useState("");
   const [campaignDescription, setCampaignDescription] = useState("");
   const [generatedCampaignContent, setGeneratedCampaignContent] = useState("");
@@ -195,6 +202,48 @@ function TabletopCreator() {
   const [saveWorkspaceSuccess, setSaveWorkspaceSuccess] = useState("");
 
   const activeRequestsRef = useRef(new Set());
+  useEffect(() => {
+    if (!selectedProject?.id) {
+      return;
+    }
+
+    setSelectedProjectId(selectedProject.id);
+    setCampaignName(selectedProject.title || "");
+    setCampaignDescription(selectedProject.description || "");
+  }, [
+    selectedProject?.id,
+    selectedProject?.title,
+    selectedProject?.description,
+  ]);
+
+  useEffect(() => {
+    const loadProjectsForSelection = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          return;
+        }
+
+        const response = await fetch("http://127.0.0.1:8000/projects/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        setProjects(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Project selection load error:", error);
+      }
+    };
+
+    loadProjectsForSelection();
+  }, []);
 
   const isAnyGenerationInProgress =
     generating ||
@@ -425,6 +474,7 @@ function TabletopCreator() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            project_id: selectedProjectId,
             campaign_name: cleanedName,
             campaign_description: cleanedDescription,
             original_content:
@@ -807,6 +857,31 @@ function TabletopCreator() {
     );
   };
 
+  const handleSelectedProjectChange = (projectId) => {
+    if (!projectId) {
+      setSelectedProjectId(null);
+      return;
+    }
+
+    const project = projects.find(
+      (item) => String(item.id) === String(projectId)
+    );
+
+    if (!project) {
+      return;
+    }
+
+    setSelectedProjectId(project.id);
+    setCampaignName(project.title || "");
+    setCampaignDescription(project.description || "");
+    setGenerateSuccess("");
+    setGenerateError("");
+    setNpcError("");
+    setQuestError("");
+    setEncounterError("");
+    setLocationError("");
+  };
+
   const loadWorkspaceOptions = async () => {
     setWorkspaceOptionsLoading(true);
     setSaveWorkspaceError("");
@@ -1079,6 +1154,36 @@ function TabletopCreator() {
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
         <h3 className="text-2xl font-bold">Create Campaign</h3>
+        
+        <div className="mb-5">
+          <label
+            htmlFor="existing-tabletop-project"
+            className="block text-sm text-slate-300 mb-2"
+          >
+            Choose Existing Project
+          </label>
+
+          <select
+            id="existing-tabletop-project"
+            value={selectedProjectId || ""}
+            onChange={(event) => handleSelectedProjectChange(event.target.value)}
+            disabled={isAnyGenerationInProgress}
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+          >
+            <option value="">Create a new project automatically</option>
+
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.title}
+              </option>
+            ))}
+          </select>
+
+          <p className="text-xs text-slate-500 mt-2">
+            Select an existing project to save generated tabletop content there.
+            Leave this blank to auto-create a new campaign project.
+          </p>
+        </div>
 
         <p className="text-slate-400 mt-2">
           Enter campaign details and world-building information.
@@ -1100,7 +1205,10 @@ function TabletopCreator() {
             <input
               id="campaign-name"
               value={campaignName}
-              onChange={(event) => setCampaignName(event.target.value)}
+              onChange={(event) => {
+                setCampaignName(event.target.value);
+                setSelectedProjectId(null);
+              }}
               maxLength={100}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
               data-testid="campaign-name"
@@ -1122,7 +1230,7 @@ function TabletopCreator() {
                 setCampaignDescription(event.target.value)
               }
               rows="5"
-              maxLength={500}
+              maxLength={5000}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
               data-testid="campaign-description"
             />

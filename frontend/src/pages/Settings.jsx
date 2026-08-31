@@ -25,9 +25,11 @@ const DEFAULT_SETTINGS = {
     activityUpdates: true,
     emailNotifications: false,
   },
+
   account: {
     displayName: "Tanio User",
     defaultWorkspace: "",
+    profileImage: "",
   },
 };
 
@@ -109,6 +111,39 @@ function Settings() {
 
     setError("");
     setSuccessMessage("");
+  };
+
+  const handleProfileImageUpload = (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file.");
+      setSuccessMessage("");
+      return;
+    }
+
+    if (file.size > 1024 * 1024) {
+      setError("Profile image must be 1MB or smaller.");
+      setSuccessMessage("");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      updateSetting("account", "profileImage", reader.result);
+    };
+
+    reader.onerror = () => {
+      setError("Unable to upload profile image.");
+      setSuccessMessage("");
+    };
+
+    reader.readAsDataURL(file);
   };
 
   const validateSettings = () => {
@@ -742,6 +777,51 @@ function Settings() {
 
           <div className="space-y-5">
             <div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                <label className="mb-3 block text-sm font-medium text-slate-300">
+                  Profile Image
+                </label>
+
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-700 bg-slate-900 text-xl font-bold text-cyan-300">
+                    {settings.account.profileImage ? (
+                      <img
+                        src={settings.account.profileImage}
+                        alt="Profile preview"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      settings.account.displayName?.charAt(0)?.toUpperCase() || "T"
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <input
+                      id="profile-image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfileImageUpload}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-300 file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-500 file:px-4 file:py-2 file:font-semibold file:text-slate-950 hover:file:bg-cyan-400"
+                    />
+
+                    <p className="mt-2 text-xs text-slate-500">
+                      Upload a square image if possible. Maximum size: 1MB.
+                    </p>
+
+                    {settings.account.profileImage && (
+                      <button
+                        type="button"
+                        onClick={() => updateSetting("account", "profileImage", "")}
+                        className="mt-3 text-xs font-semibold text-red-400 transition hover:text-red-300 hover:underline"
+                      >
+                        Remove Profile Image
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <label
                 htmlFor="display-name"
                 className="mb-2 block text-sm font-medium text-slate-300"

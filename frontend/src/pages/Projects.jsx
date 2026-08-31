@@ -10,6 +10,20 @@ import {
   updateDemoProject,
 } from "../utils/demodata";
 
+function createProjectSummaryFallback(project) {
+  if (project.ai_summary) {
+    return project.ai_summary;
+  }
+
+  if (project.description) {
+    return project.description.length > 140
+      ? `${project.description.slice(0, 140).trim()}...`
+      : project.description;
+  }
+
+  return "No AI summary has been created for this project yet.";
+}
+
 function Projects() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -175,8 +189,8 @@ function Projects() {
 
     return workspaceFilteredProjects.filter((project) => {
       return (
-        project.title?.toLowerCase().includes(normalizedSearch) ||
         project.description?.toLowerCase().includes(normalizedSearch) ||
+        project.ai_summary?.toLowerCase().includes(normalizedSearch) ||
         String(project.workspace_id).includes(normalizedSearch)
       );
     });
@@ -656,18 +670,43 @@ function Projects() {
             {filteredProjects.map((project) => (
               <article
                 key={project.id}
-                className="flex min-h-56 flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
+                className="flex min-h-[28rem] flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
                 data-testid={`project-${project.id}`}
               >
                 <div className="flex-1">
-                  <h3 className="text-xl font-semibold text-white">
-                    {project.title}
-                  </h3>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+                        Project
+                      </p>
 
-                  <p className="mt-3 min-h-12 text-slate-400">
-                    {project.description ||
-                      "No project description provided."}
-                  </p>
+                      <h3 className="mt-1 text-xl font-semibold text-white">
+                        {project.title}
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-4">
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Description
+                      </p>
+
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
+                        {project.description || "No project description provided."}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
+                        AI Summary
+                      </p>
+
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-cyan-100">
+                        {createProjectSummaryFallback(project)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mt-6 border-t border-slate-800 pt-4">

@@ -59,6 +59,20 @@ const contentMarkdownClasses = `
   [&_td]:border [&_td]:border-slate-700 [&_td]:p-3
 `;
 
+function createProjectSummaryFallback(project) {
+  if (project?.ai_summary) {
+    return project.ai_summary;
+  }
+
+  if (project?.description) {
+    return project.description.length > 180
+      ? `${project.description.slice(0, 180).trim()}...`
+      : project.description;
+  }
+
+  return "No AI summary has been created for this project yet.";
+}
+
 function ProjectDetail() {
   const { projectId } = useParams();
   const location = useLocation();
@@ -494,9 +508,27 @@ function ProjectDetail() {
                   {project.title}
                 </h1>
 
-                <p className="mt-3 max-w-4xl leading-7 text-slate-400">
-                  {project.description || "No project description provided."}
-                </p>
+                <div className="mt-6 grid max-w-5xl gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Original Description
+                    </p>
+
+                    <p className="mt-3 leading-7 text-slate-300">
+                      {project.description || "No project description provided."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
+                      AI Summary
+                    </p>
+
+                    <p className="mt-3 leading-7 text-cyan-100">
+                      {createProjectSummaryFallback(project)}
+                    </p>
+                  </div>
+                </div>
 
                 <div className="mt-5 flex flex-wrap gap-3 text-sm">
                   <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-slate-300">
@@ -655,11 +687,11 @@ function ProjectDetail() {
                 <FaImage className="mx-auto mb-4 text-5xl text-slate-500" />
 
                 <h3 className="text-xl font-bold text-white">
-                  No logos saved to this project yet
+                  No images saved to this project yet
                 </h3>
 
                 <p className="mt-2 text-slate-400">
-                  Generate a product logo in Product Architect to save it here.
+                  Generate or save images from Product Architect to view them here.
                 </p>
               </div>
             ) : (

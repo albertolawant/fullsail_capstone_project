@@ -38,9 +38,15 @@ export function getStoredUserProfile() {
     settings?.account?.email ||
     "";
 
+  const profileImage =
+    settings?.account?.profileImage ||
+    storedUser?.profileImage ||
+    "";
+
   return {
     displayName,
     email,
+    profileImage,
   };
 }
 

@@ -68,6 +68,59 @@ def create_activity_log(
 
     db.add(activity)
 
+def generate_project_summary(title: str, description: str | None) -> str:
+    clean_title = title.strip()
+    clean_description = description.strip() if description else ""
+
+    if not clean_description:
+        return (
+            f"{clean_title} is a Tanio AI project for organizing generated "
+            "content, planning details, and saved project materials."
+        )
+
+    try:
+        client = OpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=30.0,
+            max_retries=1,
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Write a short professional project summary. "
+                        "Do not copy the user's description word for word. "
+                        "Summarize the purpose of the project in 1-2 sentences. "
+                        "Keep it clear, polished, and concise."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Project name: {clean_title}\n"
+                        f"User description: {clean_description}"
+                    ),
+                },
+            ],
+            max_tokens=90,
+            temperature=0.4,
+        )
+
+        summary = response.choices[0].message.content.strip()
+
+        if summary:
+            return summary
+
+    except Exception as error:
+        print("Project summary generation failed:", error)
+
+    return (
+        f"{clean_title} is a Tanio AI project focused on organizing and developing "
+        "the ideas described by the user."
+    )
 
 def build_regeneration_context(
     request: ProductArchitectRequest,
@@ -151,6 +204,7 @@ def get_or_create_user_project(
     current_user: User,
     project_name: str,
     description: str,
+    project_id: int | None = None,
 ) -> Project:
     """
     Find a project with the same name owned by the authenticated user.
@@ -159,6 +213,43 @@ def get_or_create_user_project(
     """
     cleaned_name = project_name.strip()
     cleaned_description = description.strip()
+
+    if project_id is not None:
+        selected_project = (
+            db.query(Project)
+            .filter(
+                Project.id == project_id,
+                Project.owner_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not selected_project:
+            raise HTTPException(
+                status_code=404,
+                detail="Selected project was not found.",
+            )
+
+        if selected_project.description != cleaned_description or not selected_project.ai_summary:
+            selected_project.description = cleaned_description
+            selected_project.ai_summary = generate_project_summary(
+                selected_project.title,
+                cleaned_description,
+            )
+
+            try:
+                db.commit()
+                db.refresh(selected_project)
+
+            except Exception:
+                db.rollback()
+
+                raise HTTPException(
+                    status_code=500,
+                    detail="The selected project could not be updated. Please try again.",
+                )
+
+        return selected_project
 
     if not cleaned_name:
         raise HTTPException(
@@ -194,8 +285,12 @@ def get_or_create_user_project(
     )
 
     if project:
-        if project.description != cleaned_description:
+        if project.description != cleaned_description or not project.ai_summary:
             project.description = cleaned_description
+            project.ai_summary = generate_project_summary(
+                cleaned_name,
+                cleaned_description,
+            )
 
             try:
                 db.commit()
@@ -219,6 +314,10 @@ def get_or_create_user_project(
     project = Project(
         title=cleaned_name,
         description=cleaned_description,
+        ai_summary=generate_project_summary(
+            cleaned_name,
+            cleaned_description,
+        ),
         workspace_id=workspace.id,
         owner_id=current_user.id,
     )
@@ -255,6 +354,7 @@ def generate_and_save_content(
         current_user=current_user,
         project_name=request.project_name,
         description=request.description,
+        project_id=request.project_id,
     )
 
     if not settings.OPENAI_API_KEY:
@@ -605,6 +705,7 @@ def generate_product_logo(
         current_user=current_user,
         project_name=cleaned_project_name,
         description=cleaned_description,
+        project_id=request.project_id,
     )
 
     customization_instructions = []

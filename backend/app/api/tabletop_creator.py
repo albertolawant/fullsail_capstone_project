@@ -62,6 +62,60 @@ def create_activity_log(
 
     db.add(activity)
 
+def generate_project_summary(title: str, description: str | None) -> str:
+    clean_title = title.strip()
+    clean_description = description.strip() if description else ""
+
+    if not clean_description:
+        return (
+            f"{clean_title} is a Tanio AI project for organizing generated "
+            "content, planning details, and saved project materials."
+        )
+
+    try:
+        client = OpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=30.0,
+            max_retries=1,
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Write a short professional project summary. "
+                        "Do not copy the user's description word for word. "
+                        "Summarize the purpose of the project in 1-2 sentences. "
+                        "Keep it clear, polished, and concise."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Project name: {clean_title}\n"
+                        f"User description: {clean_description}"
+                    ),
+                },
+            ],
+            max_tokens=90,
+            temperature=0.4,
+        )
+
+        summary = response.choices[0].message.content.strip()
+
+        if summary:
+            return summary
+
+    except Exception as error:
+        print("Project summary generation failed:", error)
+
+    return (
+        f"{clean_title} is a Tanio AI project focused on organizing and developing "
+        "the ideas described by the user."
+    )
+
 def get_or_create_user_workspace(
     db: Session,
     current_user: User,
@@ -98,9 +152,45 @@ def get_or_create_campaign_project(
     current_user: User,
     campaign_name: str,
     campaign_description: str,
+    project_id: int | None = None,
 ) -> Project:
     cleaned_name = campaign_name.strip()
     cleaned_description = campaign_description.strip()
+
+    if project_id is not None:
+        selected_project = (
+            db.query(Project)
+            .filter(
+                Project.id == project_id,
+                Project.owner_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not selected_project:
+            raise HTTPException(
+                status_code=404,
+                detail="Selected project was not found.",
+            )
+
+        if selected_project.description != cleaned_description or not selected_project.ai_summary:
+            selected_project.description = cleaned_description
+            selected_project.ai_summary = generate_project_summary(
+                selected_project.title,
+                cleaned_description,
+            )
+
+            try:
+                db.commit()
+                db.refresh(selected_project)
+            except Exception:
+                db.rollback()
+                raise HTTPException(
+                    status_code=500,
+                    detail="The selected campaign project could not be updated.",
+                )
+
+        return selected_project
 
     project = (
         db.query(Project)
@@ -112,8 +202,12 @@ def get_or_create_campaign_project(
     )
 
     if project:
-        if project.description != cleaned_description: 
+        if project.description != cleaned_description or not project.ai_summary:
             project.description = cleaned_description
+            project.ai_summary = generate_project_summary(
+                cleaned_name,
+                cleaned_description,
+            )
 
             try:
                 db.commit()
@@ -135,6 +229,10 @@ def get_or_create_campaign_project(
     project = Project(
         title=cleaned_name,
         description=cleaned_description,
+        ai_summary=generate_project_summary(
+            cleaned_name,
+            cleaned_description,
+        ),
         workspace_id=workspace.id,
         owner_id=current_user.id,
     )
@@ -227,6 +325,7 @@ def generate_campaign_content(
         current_user=current_user,
         campaign_name=request.campaign_name,
         campaign_description=request.campaign_description,
+        project_id=request.project_id,
     )
 
     prompt = f"""
@@ -366,6 +465,7 @@ def generate_npc_content(
         current_user=current_user,
         campaign_name=request.campaign_name,
         campaign_description=request.campaign_description,
+        project_id=request.project_id,
     )
 
     prompt = f"""
@@ -461,6 +561,7 @@ def generate_quest_content(
         current_user=current_user,
         campaign_name=request.campaign_name,
         campaign_description=request.campaign_description,
+        project_id=request.project_id,
     )
 
     prompt = f"""
@@ -558,6 +659,7 @@ def generate_encounter_content(
         current_user=current_user,
         campaign_name=request.campaign_name,
         campaign_description=request.campaign_description,
+        project_id=request.project_id,
     )
 
     prompt = f"""
@@ -657,6 +759,7 @@ def generate_location_content(
         current_user=current_user,
         campaign_name=request.campaign_name,
         campaign_description=request.campaign_description,
+        project_id=request.project_id,
     )
 
     prompt = f"""

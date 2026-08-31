@@ -119,6 +119,9 @@ function normalizeProductArchitectContentType(contentType) {
 function ProductArchitect() {
   const location = useLocation();
   const selectedProject = location.state?.project;
+  const [selectedProjectId, setSelectedProjectId] = useState(
+    selectedProject?.id || null
+  );
 
   const [projectName, setProjectName] = useState(
     selectedProject?.title || "Tanio AI"
@@ -400,6 +403,7 @@ ${aiPreferenceInstructions}`;
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          project_id: selectedProjectId,
           project_name: cleanedProjectName,
           description: descriptionWithPreferences,
           original_content:
@@ -447,6 +451,12 @@ ${aiPreferenceInstructions}`;
       }
 
       const data = await response.json();
+      
+      if (data?.project_id) {
+        setSelectedProjectId(data.project_id);
+        setLogoProjectId(data.project_id);
+        localStorage.removeItem("tanioLogoProjectId");
+      }
 
       if (!data?.body || !data.body.trim()) {
         throw new Error("The AI did not return any content. Please try again.");
@@ -692,6 +702,35 @@ ${aiPreferenceInstructions}`;
   };
 
   useEffect(() => {
+    const loadProjectsForSelection = async () => {
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          return;
+        }
+
+        const response = await fetch("http://127.0.0.1:8000/projects/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        setProjects(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Project selection load error:", err);
+      }
+    };
+
+    loadProjectsForSelection();
+  }, []);
+
+  useEffect(() => {
     if (!selectedProject?.id) {
       setLogoProjectId(null);
       setLogoGallery([]);
@@ -712,6 +751,7 @@ ${aiPreferenceInstructions}`;
     setSaveWorkspaceSuccess("");
 
     setLogoProjectId(selectedProject.id);
+    setSelectedProjectId(selectedProject.id);
 
     const token = localStorage.getItem("token");
 
@@ -814,6 +854,7 @@ ${aiPreferenceInstructions}`;
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            project_id: selectedProjectId,
             project_name: cleanedProjectName,
             description: cleanedDescription,
             style: logoStyle,
@@ -863,6 +904,7 @@ ${aiPreferenceInstructions}`;
       setLogoBase64(data.image_base64);
 
       if (data?.project_id) {
+        setSelectedProjectId(data.project_id);
         setLogoProjectId(data.project_id);
         localStorage.removeItem("tanioLogoProjectId");
         
@@ -962,6 +1004,40 @@ ${aiPreferenceInstructions}`;
       (project) => String(project.workspace_id) === String(workspaceId)
     );
   };
+
+  const handleSelectedProjectChange = async (projectId) => {
+    if (!projectId) {
+      setSelectedProjectId(null);
+      setLogoProjectId(null);
+      setLogoGallery([]);
+      setSelectedLogoIndex(-1);
+      setLogoBase64("");
+      setProjectContentError("");
+      return;
+    }
+
+    const project = projects.find(
+      (item) => String(item.id) === String(projectId)
+    );
+
+    if (!project) {
+      return;
+    }
+
+    setSelectedProjectId(project.id);
+    setLogoProjectId(project.id);
+    setProjectName(project.title || "");
+    setDescription(project.description || "");
+    setError("");
+    setSuccessMessage("");
+    setLogoError("");
+    setLogoGalleryError("");
+
+    const token = localStorage.getItem("token");
+
+    await loadLogoGallery(project.id, token);
+    await loadProjectContent(project.id, token);
+  };  
 
   const loadWorkspaceOptions = async () => {
     setWorkspaceOptionsLoading(true);
@@ -1330,9 +1406,39 @@ ${aiPreferenceInstructions}`;
         <p className="text-slate-400 mt-2">
           Generate project planning documents with AI.
         </p>
-      </div>
+      </div>     
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <div className="mb-4">
+          <label
+            htmlFor="existing-project"
+            className="block text-sm text-slate-400 mb-2"
+          >
+            Choose Existing Project
+          </label>
+
+          <select
+            id="existing-project"
+            value={selectedProjectId || ""}
+            onChange={(e) => handleSelectedProjectChange(e.target.value)}
+            disabled={loading || logoLoading}
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+          >
+            <option value="">Create a new project automatically</option>
+
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.title}
+              </option>
+            ))}
+          </select>
+
+          <p className="text-xs text-slate-500 mt-2">
+            Select an existing project to save generated content and logos there.
+            Leave this blank to auto-create a new project.
+          </p>
+        </div> 
+
         <div className="mb-4">
           <label
             htmlFor="project-name"
@@ -1347,6 +1453,7 @@ ${aiPreferenceInstructions}`;
             value={projectName}
             onChange={(e) => {
               setProjectName(e.target.value);
+              setSelectedProjectId(null);
 
               if (error) {
                 setError("");
@@ -1360,11 +1467,6 @@ ${aiPreferenceInstructions}`;
               if (logoBase64) {
                 setLogoBase64("");
               }
-
-              setLogoProjectId(null);
-              setLogoGallery([]);
-              setSelectedLogoIndex(-1);
-              setLogoGalleryError("");
 
               setLogoProjectId(null);
               setLogoGallery([]);

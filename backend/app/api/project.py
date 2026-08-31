@@ -2,6 +2,8 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from openai import OpenAI
+from app.core.config import settings
 
 from app.db.database import get_db
 from app.models.project import Project
@@ -16,6 +18,8 @@ from app.api.auth import get_current_user
 from app.models.content import GeneratedContent
 from app.models.content_version import ContentVersion
 from app.models.activity_log import ActivityLog
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 router = APIRouter(
     prefix="/projects",
@@ -54,6 +58,53 @@ def create_activity_log(
 
     db.add(activity)
 
+def generate_project_summary(title: str, description: str | None) -> str:
+    clean_title = title.strip()
+    clean_description = description.strip() if description else ""
+
+    if not clean_description:
+        return (
+            f"{clean_title} is a Tanio AI project for organizing generated "
+            "content, planning details, and saved project materials."
+        )
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Write a short professional project summary. "
+                        "Do not copy the user's description word for word. "
+                        "Summarize the purpose of the project in 1-2 sentences. "
+                        "Keep it clear, polished, and concise."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Project name: {clean_title}\n"
+                        f"User description: {clean_description}"
+                    ),
+                },
+            ],
+            max_tokens=90,
+            temperature=0.4,
+        )
+
+        summary = response.choices[0].message.content.strip()
+
+        if summary:
+            return summary
+
+    except Exception as error:
+        print("Project summary generation failed:", error)
+
+    return (
+        f"{clean_title} is a Tanio AI project focused on organizing and developing "
+        "the ideas described by the user."
+    )
 
 @router.post("/", response_model=ProjectResponse)
 def create_project(
@@ -76,6 +127,10 @@ def create_project(
     new_project = Project(
         title=project_data.title,
         description=project_data.description,
+        ai_summary=generate_project_summary(
+            project_data.title,
+            project_data.description,
+        ),
         workspace_id=project_data.workspace_id,
         owner_id=current_user.id
     )
@@ -161,11 +216,14 @@ def update_project(
         .first()
     )
 
+    description_changed = False
+
     if project_data.title is not None:
         project.title = project_data.title
 
     if project_data.description is not None:
         project.description = project_data.description
+        description_changed = True
 
     if project_data.workspace_id is not None:
         workspace = (
@@ -181,6 +239,12 @@ def update_project(
             raise HTTPException(status_code=404, detail="Workspace not found")
 
         project.workspace_id = project_data.workspace_id
+
+    if project_data.title is not None or description_changed:
+        project.ai_summary = generate_project_summary(
+            project.title,
+            project.description,
+        )
 
     new_workspace = (
         db.query(Workspace)

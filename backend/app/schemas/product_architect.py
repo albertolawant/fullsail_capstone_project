@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 
 
 class ProductArchitectRequest(BaseModel):
+    project_id: Optional[int] = None
+
     project_name: str = Field(
         ...,
         min_length=2,
@@ -37,6 +39,8 @@ class ProductArchitectResponse(BaseModel):
 
 
 class ProductLogoRequest(BaseModel):
+    project_id: Optional[int] = None
+    
     project_name: str = Field(
         ...,
         min_length=2,
