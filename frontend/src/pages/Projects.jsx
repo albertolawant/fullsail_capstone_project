@@ -229,7 +229,7 @@ function Projects() {
   }, [workspaces, projects]);
 
   const openProject = (project) => {
-    navigate("/product-architect", {
+    navigate(`/projects/${project.id}`, {
       state: {
         project,
       },
@@ -330,13 +330,6 @@ function Projects() {
         )
       );
 
-      addRecentActivity({
-        type: "Project Updated",
-        title: `${updatedProject.title} updated`,
-        description: "Project name or description was updated.",
-        projectName: updatedProject.title,
-      });
-
       setSuccessMessage("Project updated successfully.");
       cancelEditing();
     } catch (error) {
@@ -390,13 +383,6 @@ function Projects() {
           (project) => project.id !== deletingProject.id
         )
       );
-
-      addRecentActivity({
-        type: "Project Deleted",
-        title: `${deletingProject.title} deleted`,
-        description: "The project was permanently removed.",
-        projectName: deletingProject.title,
-      });
 
       setSuccessMessage("Project deleted successfully.");
       cancelDeleting();
@@ -779,7 +765,7 @@ function Projects() {
                   setEditDescription(event.target.value)
                 }
                 rows="5"
-                maxLength={500}
+                maxLength={5000}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
                 data-testid="edit-project-description"
               />

@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 
-import {
-  activityEventName,
-  getRecentActivities,
-} from "../utils/activityStorage";
+const API_BASE_URL = "http://127.0.0.1:8000";
 
 function RecentContent({
   refreshKey = 0,
@@ -12,36 +9,70 @@ function RecentContent({
 }) {
   const [activities, setActivities] = useState([]);
 
-  const loadActivities = () => {
-    setActivities(getRecentActivities());
-  };
+  const loadActivities = async () => {
+    const token = localStorage.getItem("token");
 
-  useEffect(() => {
-    loadActivities();
+    if (!token) {
+      setActivities([]);
+      return;
+    }
 
-    window.addEventListener(
-      activityEventName,
-      loadActivities
-    );
+    try {
+      const response = await fetch(`${API_BASE_URL}/activity/?limit=20`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
 
-    return () => {
-      window.removeEventListener(
-        activityEventName,
-        loadActivities
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        setActivities([]);
+        return;
+      }
+
+      if (!response.ok) {
+        setActivities([]);
+        return;
+      }
+
+      const data = await response.json();
+
+      const activityLog = Array.isArray(data) ? data : [];
+
+      setActivities(
+        activityLog.map((activity) => ({
+          id: activity.id,
+          type: activity.action_type,
+          title: activity.title,
+          description: activity.description || "",
+          projectName:
+            activity.project_name ||
+            activity.new_project_name ||
+            activity.old_project_name ||
+            "General",
+          createdAt: activity.created_at,
+        }))
       );
-    };
-  }, []);
+    } catch (error) {
+      console.error("Recent activity load failed:", error);
+      setActivities([]);
+    }
+  };
 
   useEffect(() => {
     loadActivities();
   }, [refreshKey]);
 
   const handleRefresh = async () => {
-    loadActivities();
-
     if (onRefresh) {
       await onRefresh();
     }
+
+    await loadActivities();
   };
 
   const getActivityAppearance = (activity) => {

@@ -8,6 +8,7 @@ from app.models.content import GeneratedContent
 from app.models.content_version import ContentVersion
 from app.models.project import Project
 from app.models.user import User
+from app.models.activity_log import ActivityLog
 from app.schemas.content import (
     ContentCreate,
     ContentResponse,
@@ -19,6 +20,37 @@ router = APIRouter(
     tags=["Content"],
 )
 
+def create_activity_log(
+    db: Session,
+    current_user: User,
+    action_type: str,
+    item_type: str,
+    item_id: int | None,
+    title: str,
+    description: str | None = None,
+    project_id: int | None = None,
+    project_name: str | None = None,
+    old_project_id: int | None = None,
+    old_project_name: str | None = None,
+    new_project_id: int | None = None,
+    new_project_name: str | None = None,
+):
+    activity = ActivityLog(
+        owner_id=current_user.id,
+        action_type=action_type,
+        item_type=item_type,
+        item_id=item_id,
+        title=title,
+        description=description,
+        project_id=project_id,
+        project_name=project_name,
+        old_project_id=old_project_id,
+        old_project_name=old_project_name,
+        new_project_id=new_project_id,
+        new_project_name=new_project_name,
+    )
+
+    db.add(activity)
 
 @router.post("/", response_model=ContentResponse)
 def create_content(
@@ -53,6 +85,22 @@ def create_content(
     )
 
     db.add(content)
+    db.flush()
+
+    create_activity_log(
+        db=db,
+        current_user=current_user,
+        action_type="Content Created",
+        item_type="Content",
+        item_id=content.id,
+        title=f"{content.title} created",
+        description=f"{content.content_type} was saved to {project.title}.",
+        project_id=project.id,
+        project_name=project.title,
+        new_project_id=project.id,
+        new_project_name=project.title,
+    )
+
     db.commit()
     db.refresh(content)
 
@@ -162,6 +210,14 @@ def update_content(
             detail="Content not found",
         )
 
+    old_project_id = content.project_id
+
+    old_project = (
+        db.query(Project)
+        .filter(Project.id == old_project_id)
+        .first()
+    )
+
     if content.owner_id != current_user.id:
         raise HTTPException(
             status_code=403,
@@ -218,6 +274,47 @@ def update_content(
 
         content.project_id = content_data.project_id
 
+    new_project = (
+        db.query(Project)
+        .filter(Project.id == content.project_id)
+        .first()
+    )
+
+    project_changed = old_project_id != content.project_id
+
+    if project_changed:
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Content Moved",
+            item_type="Content",
+            item_id=content.id,
+            title=f"{content.title} moved",
+            description=(
+                f"Content moved from "
+                f"{old_project.title if old_project else 'Unknown Project'} "
+                f"to {new_project.title if new_project else 'Unknown Project'}."
+            ),
+            project_id=content.project_id,
+            project_name=new_project.title if new_project else None,
+            old_project_id=old_project_id,
+            old_project_name=old_project.title if old_project else None,
+            new_project_id=content.project_id,
+            new_project_name=new_project.title if new_project else None,
+        )
+    else:
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Content Updated",
+            item_type="Content",
+            item_id=content.id,
+            title=f"{content.title} updated",
+            description=f"{content.content_type} was updated.",
+            project_id=content.project_id,
+            project_name=new_project.title if new_project else None,
+        )
+
     db.commit()
     db.refresh(content)
 
@@ -248,10 +345,28 @@ def delete_content(
             detail="Not authorized to delete this content",
         )
 
+    project = (
+        db.query(Project)
+        .filter(Project.id == content.project_id)
+        .first()
+    )
+
     try:
         db.query(ContentVersion).filter(
             ContentVersion.content_id == content.id
         ).delete(synchronize_session=False)
+
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Content Deleted",
+            item_type="Content",
+            item_id=content.id,
+            title=f"{content.title} deleted",
+            description=f"{content.content_type} was permanently deleted.",
+            project_id=content.project_id,
+            project_name=project.title if project else None,
+        )
 
         db.delete(content)
         db.commit()

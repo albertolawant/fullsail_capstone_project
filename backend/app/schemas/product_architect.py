@@ -74,6 +74,8 @@ class ProductLogoRequest(BaseModel):
         max_length=500,
     )
 
+class ProductLogoUpdate(BaseModel):
+    project_id: int
 
 class ProductLogoResponse(BaseModel):
     id: int

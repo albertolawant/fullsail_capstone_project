@@ -19,6 +19,7 @@ from app.models.product_logo import ProductLogo
 from app.models.project import Project
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.models.activity_log import ActivityLog
 from app.services.ai_usage_service import log_ai_usage
 from app.schemas.product_architect import (
     ProductArchitectRequest,
@@ -26,6 +27,7 @@ from app.schemas.product_architect import (
     ProductLogoGalleryResponse,
     ProductLogoRequest,
     ProductLogoResponse,
+    ProductLogoUpdate,
 )
 
 
@@ -33,6 +35,38 @@ router = APIRouter(
     prefix="/product-architect",
     tags=["Product Architect"],
 )
+
+def create_activity_log(
+    db: Session,
+    current_user: User,
+    action_type: str,
+    item_type: str,
+    item_id: int | None,
+    title: str,
+    description: str | None = None,
+    project_id: int | None = None,
+    project_name: str | None = None,
+    old_project_id: int | None = None,
+    old_project_name: str | None = None,
+    new_project_id: int | None = None,
+    new_project_name: str | None = None,
+):
+    activity = ActivityLog(
+        owner_id=current_user.id,
+        action_type=action_type,
+        item_type=item_type,
+        item_id=item_id,
+        title=title,
+        description=description,
+        project_id=project_id,
+        project_name=project_name,
+        old_project_id=old_project_id,
+        old_project_name=old_project_name,
+        new_project_id=new_project_id,
+        new_project_name=new_project_name,
+    )
+
+    db.add(activity)
 
 
 def build_regeneration_context(
@@ -307,6 +341,22 @@ def generate_and_save_content(
 
     try:
         db.add(content)
+        db.flush()
+
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Content Created",
+            item_type="Content",
+            item_id=content.id,
+            title=f"{content.title} created",
+            description=f"{content.content_type} was generated in Product Architect.",
+            project_id=project.id,
+            project_name=project.title,
+            new_project_id=project.id,
+            new_project_name=project.title,
+        )
+
         db.commit()
         db.refresh(content)
 
@@ -652,6 +702,22 @@ Requirements:
 
         try:
             db.add(saved_logo)
+            db.flush()
+
+            create_activity_log(
+                db=db,
+                current_user=current_user,
+                action_type="Logo Created",
+                item_type="Logo",
+                item_id=saved_logo.id,
+                title=f"{project.title} logo created",
+                description="A product logo was generated and saved.",
+                project_id=project.id,
+                project_name=project.title,
+                new_project_id=project.id,
+                new_project_name=project.title,
+            )
+
             db.commit()
             db.refresh(saved_logo)
 
@@ -787,6 +853,117 @@ def get_product_logo_gallery(
         ]
     )
 
+@router.put(
+    "/logos/{logo_id}",
+    response_model=ProductLogoResponse,
+)
+def update_product_logo(
+    logo_id: int,
+    logo_data: ProductLogoUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    logo = (
+        db.query(ProductLogo)
+        .filter(ProductLogo.id == logo_id)
+        .first()
+    )
+
+    if not logo:
+        raise HTTPException(
+            status_code=404,
+            detail="Logo not found.",
+        )
+
+    if logo.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to update this logo.",
+        )
+
+    old_project = (
+        db.query(Project)
+        .filter(
+            Project.id == logo.project_id,
+            Project.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    new_project = (
+        db.query(Project)
+        .filter(
+            Project.id == logo_data.project_id,
+            Project.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not new_project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found.",
+        )
+
+    old_project_id = logo.project_id
+
+    if old_project_id == new_project.id:
+        return ProductLogoResponse(
+            id=logo.id,
+            project_id=logo.project_id,
+            image_base64=logo.image_base64,
+            style=logo.style,
+            preferred_colors=logo.preferred_colors,
+            logo_ideas=logo.logo_ideas,
+            branding_direction=logo.branding_direction,
+            created_at=logo.created_at,
+        )
+
+    try:
+        logo.project_id = new_project.id
+
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Logo Moved",
+            item_type="Logo",
+            item_id=logo.id,
+            title=f"{new_project.title} logo moved",
+            description=(
+                f"Logo moved from "
+                f"{old_project.title if old_project else 'Unknown Project'} "
+                f"to {new_project.title}."
+            ),
+            project_id=new_project.id,
+            project_name=new_project.title,
+            old_project_id=old_project_id,
+            old_project_name=old_project.title if old_project else None,
+            new_project_id=new_project.id,
+            new_project_name=new_project.title,
+        )
+
+        db.commit()
+        db.refresh(logo)
+
+    except Exception:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Logo could not be moved. Please try again.",
+        )
+
+    return ProductLogoResponse(
+        id=logo.id,
+        project_id=logo.project_id,
+        image_base64=logo.image_base64,
+        style=logo.style,
+        preferred_colors=logo.preferred_colors,
+        logo_ideas=logo.logo_ideas,
+        branding_direction=logo.branding_direction,
+        created_at=logo.created_at,
+    )
+
 
 @router.delete("/logos/{logo_id}")
 def delete_product_logo(
@@ -812,7 +989,25 @@ def delete_product_logo(
             detail="Not authorized to delete this logo.",
         )
 
+    project = (
+        db.query(Project)
+        .filter(Project.id == logo.project_id)
+        .first()
+    )
+
     try:
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Logo Deleted",
+            item_type="Logo",
+            item_id=logo.id,
+            title=f"{project.title if project else 'Project'} logo deleted",
+            description="A saved logo was permanently deleted.",
+            project_id=logo.project_id,
+            project_name=project.title if project else None,
+        )
+
         db.delete(logo)
         db.commit()
 

@@ -6,6 +6,7 @@ import TopBar from "./components/TopBar";
 import Dashboard from "./pages/Dashboard";
 import Workspaces from "./pages/Workspaces";
 import Projects from "./pages/Projects";
+import ProjectDetail from "./pages/ProjectDetail";
 import Content from "./pages/Content";
 import Settings from "./pages/Settings";
 import ProductArchitect from "./pages/ProductArchitect";
@@ -124,6 +125,11 @@ function App() {
             <Route
               path="/projects"
               element={<Projects />}
+            />
+
+            <Route
+              path="/projects/:projectId"
+              element={<ProjectDetail />}
             />
 
             <Route

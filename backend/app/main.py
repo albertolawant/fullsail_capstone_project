@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import ai
 from app.api import auth
+from app.api import activity_log as activity_log_api
 from app.api import content as content_api
 from app.api import content_version as content_version_api
 from app.api import product_architect
@@ -10,7 +11,7 @@ from app.api import project as project_api
 from app.api import tabletop_creator
 from app.api import workspace as workspace_api
 from app.db.database import Base, engine
-from app.models import ai_usage, content, product_logo, project, user, workspace
+from app.models import ai_usage, content, product_logo, project, user, workspace, activity_log
 from app.models.content_version import ContentVersion
 from app.api import dashboard
 
@@ -38,7 +39,7 @@ app.include_router(ai.router)
 app.include_router(product_architect.router)
 app.include_router(tabletop_creator.router)
 app.include_router(dashboard.router)
-
+app.include_router(activity_log_api.router)
 
 @app.get("/")
 def root():

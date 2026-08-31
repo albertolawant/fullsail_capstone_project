@@ -413,7 +413,11 @@ function Content() {
     setMoveError("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/content/${moveTarget.id}`, {
+      const endpoint = moveTarget.isLogo
+        ? `${API_BASE_URL}/product-architect/logos/${String(moveTarget.id).replace("logo-", "")}`
+        : `${API_BASE_URL}/content/${moveTarget.id}`;
+
+      const response = await fetch(endpoint, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -437,22 +441,69 @@ function Content() {
         const errorData = await response.json().catch(() => null);
 
         throw new Error(
-          errorData?.detail || "This content could not be moved. Please try again."
+          errorData?.detail || "This item could not be moved. Please try again."
         );
       }
 
-      const updatedContent = await response.json();
+      const updatedItem = await response.json();
 
       setContentItems((previousItems) =>
-        previousItems.map((item) =>
-          String(item.id) === String(updatedContent.id)
-            ? updatedContent
-            : item
-        )
+        previousItems.map((item) => {
+          if (String(item.id) !== String(moveTarget.id)) {
+            return item;
+          }
+
+          if (moveTarget.isLogo) {
+            const newProject = projects.find(
+              (project) => Number(project.id) === Number(updatedItem.project_id)
+            );
+
+            return {
+              ...item,
+              project_id: updatedItem.project_id,
+              title: `${newProject?.title || "Project"} Logo`,
+              image_base64: updatedItem.image_base64,
+              style: updatedItem.style,
+              preferred_colors: updatedItem.preferred_colors,
+              logo_ideas: updatedItem.logo_ideas,
+              branding_direction: updatedItem.branding_direction,
+              created_at: updatedItem.created_at,
+              isLogo: true,
+            };
+          }
+
+          return updatedItem;
+        })
       );
 
-      if (selectedContent?.id === updatedContent.id) {
-        setSelectedContent(updatedContent);
+      if (selectedContent?.id === moveTarget.id) {
+        setSelectedContent((previousContent) => {
+          if (!previousContent) {
+            return previousContent;
+          }
+
+          if (moveTarget.isLogo) {
+            const newProject = projects.find(
+              (project) => Number(project.id) === Number(updatedItem.project_id)
+            );
+
+            return {
+              ...previousContent,
+              project_id: updatedItem.project_id,
+              projectName: newProject?.title || `Project #${updatedItem.project_id}`,
+              title: `${newProject?.title || "Project"} Logo`,
+              image_base64: updatedItem.image_base64,
+              style: updatedItem.style,
+              preferred_colors: updatedItem.preferred_colors,
+              logo_ideas: updatedItem.logo_ideas,
+              branding_direction: updatedItem.branding_direction,
+              created_at: updatedItem.created_at,
+              isLogo: true,
+            };
+          }
+
+          return updatedItem;
+        });
       }
 
       closeMoveContent();
@@ -462,7 +513,7 @@ function Content() {
       setMoveError(
         requestError instanceof Error
           ? requestError.message
-          : "This content could not be moved. Please try again."
+          : "This item could not be moved. Please try again."
       );
     } finally {
       setMoveLoading(false);
@@ -816,15 +867,13 @@ function Content() {
                           View
                         </button>
 
-                        {!item.isLogo && (
-                          <button
-                            type="button"
-                            onClick={() => openMoveContent(item)}
-                            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                          >
-                            Move
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => openMoveContent(item)}
+                          className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                        >
+                          Move
+                        </button>
 
                         <button
                           type="button"

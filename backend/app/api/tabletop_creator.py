@@ -9,6 +9,7 @@ from app.models.content import GeneratedContent
 from app.models.project import Project
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.models.activity_log import ActivityLog
 from app.schemas.tabletop_creator import (
     CampaignGenerateRequest,
     CampaignGenerateResponse,
@@ -29,6 +30,37 @@ router = APIRouter(
     tags=["Tabletop Creator"],
 )
 
+def create_activity_log(
+    db: Session,
+    current_user: User,
+    action_type: str,
+    item_type: str,
+    item_id: int | None,
+    title: str,
+    description: str | None = None,
+    project_id: int | None = None,
+    project_name: str | None = None,
+    old_project_id: int | None = None,
+    old_project_name: str | None = None,
+    new_project_id: int | None = None,
+    new_project_name: str | None = None,
+):
+    activity = ActivityLog(
+        owner_id=current_user.id,
+        action_type=action_type,
+        item_type=item_type,
+        item_id=item_id,
+        title=title,
+        description=description,
+        project_id=project_id,
+        project_name=project_name,
+        old_project_id=old_project_id,
+        old_project_name=old_project_name,
+        new_project_id=new_project_id,
+        new_project_name=new_project_name,
+    )
+
+    db.add(activity)
 
 def get_or_create_user_workspace(
     db: Session,
@@ -138,9 +170,27 @@ def save_generated_content(
 
     try:
         db.add(content)
+        db.flush()
+
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Content Created",
+            item_type="Content",
+            item_id=content.id,
+            title=f"{content.title} created",
+            description=f"{content.content_type} was generated in Tabletop Creator.",
+            project_id=project.id,
+            project_name=project.title,
+            new_project_id=project.id,
+            new_project_name=project.title,
+        )
+
         db.commit()
         db.refresh(content)
+        
         return content
+    
     except Exception:
         db.rollback()
         raise HTTPException(

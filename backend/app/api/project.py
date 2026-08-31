@@ -15,11 +15,44 @@ from app.schemas.project import (
 from app.api.auth import get_current_user
 from app.models.content import GeneratedContent
 from app.models.content_version import ContentVersion
+from app.models.activity_log import ActivityLog
 
 router = APIRouter(
     prefix="/projects",
     tags=["Projects"]
 )
+
+def create_activity_log(
+    db: Session,
+    current_user: User,
+    action_type: str,
+    item_type: str,
+    item_id: int | None,
+    title: str,
+    description: str | None = None,
+    project_id: int | None = None,
+    project_name: str | None = None,
+    old_project_id: int | None = None,
+    old_project_name: str | None = None,
+    new_project_id: int | None = None,
+    new_project_name: str | None = None,
+):
+    activity = ActivityLog(
+        owner_id=current_user.id,
+        action_type=action_type,
+        item_type=item_type,
+        item_id=item_id,
+        title=title,
+        description=description,
+        project_id=project_id,
+        project_name=project_name,
+        old_project_id=old_project_id,
+        old_project_name=old_project_name,
+        new_project_id=new_project_id,
+        new_project_name=new_project_name,
+    )
+
+    db.add(activity)
 
 
 @router.post("/", response_model=ProjectResponse)
@@ -48,6 +81,22 @@ def create_project(
     )
 
     db.add(new_project)
+    db.flush()
+
+    create_activity_log(
+        db=db,
+        current_user=current_user,
+        action_type="Project Created",
+        item_type="Project",
+        item_id=new_project.id,
+        title=f"{new_project.title} created",
+        description=f"Project was created in {workspace.name}.",
+        project_id=new_project.id,
+        project_name=new_project.title,
+        new_project_id=new_project.id,
+        new_project_name=new_project.title,
+    )
+
     db.commit()
     db.refresh(new_project)
 
@@ -103,6 +152,15 @@ def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    old_title = project.title
+    old_workspace_id = project.workspace_id
+
+    old_workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == old_workspace_id)
+        .first()
+    )
+
     if project_data.title is not None:
         project.title = project_data.title
 
@@ -123,6 +181,48 @@ def update_project(
             raise HTTPException(status_code=404, detail="Workspace not found")
 
         project.workspace_id = project_data.workspace_id
+
+    new_workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == project.workspace_id)
+        .first()
+    )
+
+    workspace_changed = old_workspace_id != project.workspace_id
+
+    if workspace_changed:
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Project Moved",
+            item_type="Project",
+            item_id=project.id,
+            title=f"{project.title} moved",
+            description=(
+                f"Project moved from "
+                f"{old_workspace.name if old_workspace else 'Unknown Workspace'} "
+                f"to {new_workspace.name if new_workspace else 'Unknown Workspace'}."
+            ),
+            project_id=project.id,
+            project_name=project.title,
+            old_project_id=project.id,
+            old_project_name=old_title,
+            new_project_id=project.id,
+            new_project_name=project.title,
+        )
+    else:
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Project Updated",
+            item_type="Project",
+            item_id=project.id,
+            title=f"{project.title} updated",
+            description="Project information was updated.",
+            project_id=project.id,
+            project_name=project.title,
+        )
+
     db.commit()
     db.refresh(project)
 
@@ -175,6 +275,18 @@ def delete_project(
             )
             .delete(synchronize_session=False)
         )
+
+    create_activity_log(
+        db=db,
+        current_user=current_user,
+        action_type="Project Deleted",
+        item_type="Project",
+        item_id=project.id,
+        title=f"{project.title} deleted",
+        description="Project and associated content were permanently deleted.",
+        project_id=project.id,
+        project_name=project.title,
+    )
 
     db.delete(project)
     db.commit()
