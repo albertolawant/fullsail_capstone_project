@@ -100,6 +100,13 @@ function ProjectDetail() {
   const [deleteError, setDeleteError] = useState("");
 
   const numericProjectId = Number(projectId);
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/projects");
+    }
+  };
 
   const loadProjectDetail = useCallback(
     async (isRefresh = false) => {
@@ -453,11 +460,11 @@ function ProjectDetail() {
       <div className="mb-6">
         <button
           type="button"
-          onClick={() => navigate("/projects")}
+          onClick={handleBack}
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400 transition hover:text-cyan-300"
         >
           <FaArrowLeft />
-          Back to Projects
+          Back
         </button>
       </div>
 
@@ -500,6 +507,35 @@ function ProjectDetail() {
           <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div>
+                <nav
+                  className="mb-3 flex flex-wrap items-center gap-2 text-sm text-slate-500"
+                  aria-label="Breadcrumb"
+                >
+                  <button
+                    type="button"
+                    onClick={() => navigate("/workspaces")}
+                    className="transition hover:text-cyan-300"
+                  >
+                    Workspaces
+                  </button>
+
+                  <span className="text-slate-600">&gt;</span>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/projects?workspace=${workspace.id}`)}
+                    className="text-slate-300 transition hover:text-cyan-300"
+                  >
+                    {workspace?.name || `Workspace ${project.workspace_id}`}
+                  </button>
+
+                  <span className="text-slate-600">&gt;</span>
+
+                  <span className="font-semibold text-cyan-300">
+                    {project.title}
+                  </span>
+                </nav>
+
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
                   Project File
                 </p>

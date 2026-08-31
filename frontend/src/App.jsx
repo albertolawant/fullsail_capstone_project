@@ -123,6 +123,11 @@ function App() {
             />
 
             <Route
+              path="/workspaces/:workspaceId"
+              element={<Workspaces />}
+            />
+
+            <Route
               path="/projects"
               element={<Projects />}
             />

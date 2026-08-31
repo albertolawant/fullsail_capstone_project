@@ -16,13 +16,7 @@ import {
   FaSignOutAlt,
   FaChevronRight,
   FaChevronLeft,
-  FaUser,
 } from "react-icons/fa";
-
-import {
-  getStoredUserProfile,
-  getUserInitials,
-} from "../utils/userProfile";
 
 const SIDEBAR_KEY = "tanioSidebarCollapsed";
 
@@ -33,61 +27,12 @@ function Sidebar() {
     return localStorage.getItem(SIDEBAR_KEY) === "true";
   });
 
-  const [currentUser, setCurrentUser] = useState(
-    getStoredUserProfile
-  );
-
   useEffect(() => {
     localStorage.setItem(
       SIDEBAR_KEY,
       collapsed ? "true" : "false"
     );
   }, [collapsed]);
-
-  useEffect(() => {
-    const updateUser = () => {
-      setCurrentUser(getStoredUserProfile());
-    };
-
-    window.addEventListener(
-      "tanio-settings-updated",
-      updateUser
-    );
-
-    window.addEventListener(
-      "tanio-user-updated",
-      updateUser
-    );
-
-    window.addEventListener(
-      "storage",
-      updateUser
-    );
-
-    return () => {
-      window.removeEventListener(
-        "tanio-settings-updated",
-        updateUser
-      );
-
-      window.removeEventListener(
-        "tanio-user-updated",
-        updateUser
-      );
-
-      window.removeEventListener(
-        "storage",
-        updateUser
-      );
-    };
-  }, []);
-
-  const userName = currentUser.displayName;
-
-  const userEmail =
-    currentUser.email || "My Account";
-
-  const initials = getUserInitials(userName);
 
   const mainNavigation = [
     {
@@ -571,59 +516,6 @@ function Sidebar() {
         </div>
 
         <div className="flex-1" />
-
-        {/* User Profile */}
-        <button
-          type="button"
-          onClick={() => navigate("/settings")}
-          title={collapsed ? userName : undefined}
-          className={`
-            group relative mt-6 rounded-2xl border
-            border-slate-800/80 bg-slate-900/40
-            transition-all duration-200
-            hover:border-cyan-500/20
-            hover:bg-slate-900/70
-            ${
-              collapsed
-                ? "flex h-11 w-11 items-center justify-center p-0"
-                : "w-full p-3 text-left"
-            }
-          `}
-        >
-          {collapsed ? (
-            <>
-              <div className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-slate-800 text-[10px] font-bold text-cyan-300">
-                {initials || <FaUser />}
-
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-slate-900 bg-emerald-400" />
-              </div>
-
-              <Tooltip
-                label={`${userName} · ${userEmail}`}
-              />
-            </>
-          ) : (
-            <div className="flex items-center gap-3">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-slate-800 text-xs font-bold text-cyan-300">
-                {initials || <FaUser />}
-
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-slate-900 bg-emerald-400" />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-200">
-                  {userName}
-                </p>
-
-                <p className="mt-0.5 truncate text-[10px] text-slate-600">
-                  {userEmail}
-                </p>
-              </div>
-
-              <FaChevronRight className="text-[9px] text-slate-700 transition-all group-hover:translate-x-0.5 group-hover:text-cyan-400" />
-            </div>
-          )}
-        </button>
       </div>
 
       {/* Footer */}
