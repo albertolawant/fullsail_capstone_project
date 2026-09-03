@@ -194,7 +194,7 @@ function Workspaces() {
 
   const handleDelete = async (workspace) => {
     const confirmed = window.confirm(
-      `Delete the workspace "${workspace.name}"?`
+      `Delete the workspace "${workspace.name}"?\n\nThis will also permanently delete all projects and generated content inside this workspace.`
     );
 
     if (!confirmed) {

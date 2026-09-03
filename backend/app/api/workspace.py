@@ -5,13 +5,20 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.models.workspace import Workspace
+from app.models.project import Project
+from app.models.content import GeneratedContent
+from app.models.content_version import ContentVersion
 from app.models.user import User
-from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate, WorkspaceResponse
+from app.schemas.workspace import (
+    WorkspaceCreate,
+    WorkspaceUpdate,
+    WorkspaceResponse,
+)
 from app.api.auth import get_current_user
 
 router = APIRouter(
     prefix="/workspaces",
-    tags=["Workspaces"]
+    tags=["Workspaces"],
 )
 
 
@@ -19,12 +26,12 @@ router = APIRouter(
 def create_workspace(
     workspace_data: WorkspaceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     new_workspace = Workspace(
         name=workspace_data.name,
         description=workspace_data.description,
-        owner_id=current_user.id
+        owner_id=current_user.id,
     )
 
     db.add(new_workspace)
@@ -37,7 +44,7 @@ def create_workspace(
 @router.get("/", response_model=List[WorkspaceResponse])
 def get_workspaces(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     return (
         db.query(Workspace)
@@ -50,19 +57,22 @@ def get_workspaces(
 def get_workspace(
     workspace_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     workspace = (
         db.query(Workspace)
         .filter(
             Workspace.id == workspace_id,
-            Workspace.owner_id == current_user.id
+            Workspace.owner_id == current_user.id,
         )
         .first()
     )
 
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
 
     return workspace
 
@@ -72,19 +82,22 @@ def update_workspace(
     workspace_id: int,
     workspace_data: WorkspaceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     workspace = (
         db.query(Workspace)
         .filter(
             Workspace.id == workspace_id,
-            Workspace.owner_id == current_user.id
+            Workspace.owner_id == current_user.id,
         )
         .first()
     )
 
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
 
     if workspace_data.name is not None:
         workspace.name = workspace_data.name
@@ -102,21 +115,80 @@ def update_workspace(
 def delete_workspace(
     workspace_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     workspace = (
         db.query(Workspace)
         .filter(
             Workspace.id == workspace_id,
-            Workspace.owner_id == current_user.id
+            Workspace.owner_id == current_user.id,
         )
         .first()
     )
 
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    projects = (
+        db.query(Project)
+        .filter(
+            Project.workspace_id == workspace.id,
+            Project.owner_id == current_user.id,
+        )
+        .all()
+    )
+
+    project_ids = [project.id for project in projects]
+
+    if project_ids:
+        generated_content = (
+            db.query(GeneratedContent)
+            .filter(
+                GeneratedContent.project_id.in_(project_ids),
+                GeneratedContent.owner_id == current_user.id,
+            )
+            .all()
+        )
+
+        content_ids = [
+            content.id
+            for content in generated_content
+        ]
+
+        if content_ids:
+            (
+                db.query(ContentVersion)
+                .filter(
+                    ContentVersion.content_id.in_(content_ids),
+                    ContentVersion.owner_id == current_user.id,
+                )
+                .delete(synchronize_session=False)
+            )
+
+        (
+            db.query(GeneratedContent)
+            .filter(
+                GeneratedContent.project_id.in_(project_ids),
+                GeneratedContent.owner_id == current_user.id,
+            )
+            .delete(synchronize_session=False)
+        )
+
+        (
+            db.query(Project)
+            .filter(
+                Project.workspace_id == workspace.id,
+                Project.owner_id == current_user.id,
+            )
+            .delete(synchronize_session=False)
+        )
 
     db.delete(workspace)
     db.commit()
 
-    return {"message": "Workspace deleted successfully"}
+    return {
+        "message": "Workspace and associated projects deleted successfully"
+    }
