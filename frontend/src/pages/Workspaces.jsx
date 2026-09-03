@@ -8,6 +8,7 @@ import {
   FaTrash,
   FaTimes,
   FaArrowRight,
+  FaExclamationTriangle,
 } from "react-icons/fa";
 
 import { notifyWorkspaceCreated } from "../utils/notifications";
@@ -29,6 +30,12 @@ function Workspaces() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Workspace deletion confirmation
+  const [workspaceToDelete, setWorkspaceToDelete] = useState(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const getRequestOptions = () => {
     const token = localStorage.getItem("token");
@@ -192,19 +199,43 @@ function Workspaces() {
     }
   };
 
-  const handleDelete = async (workspace) => {
-    const confirmed = window.confirm(
-      `Delete the workspace "${workspace.name}"?\n\nThis will also permanently delete all projects and generated content inside this workspace.`
-    );
+  const openDeleteModal = (workspace) => {
+    setWorkspaceToDelete(workspace);
+    setDeleteConfirmation("");
+    setDeleteError("");
+    setError("");
+  };
 
-    if (!confirmed) {
+  const closeDeleteModal = () => {
+    if (deleting) {
       return;
     }
 
-    setError("");
+    setWorkspaceToDelete(null);
+    setDeleteConfirmation("");
+    setDeleteError("");
+  };
+
+  const handleDelete = async () => {
+    if (!workspaceToDelete) {
+      return;
+    }
+
+    if (deleteConfirmation.trim() !== workspaceToDelete.name) {
+      return;
+    }
+
+    const workspace = workspaceToDelete;
+
+    setDeleting(true);
+    setDeleteError("");
 
     try {
       const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Please sign in to delete this workspace.");
+      }
 
       const response = await fetch(
         `${API_BASE_URL}/workspaces/${workspace.id}`,
@@ -238,10 +269,22 @@ function Workspaces() {
             currentWorkspace.id !== workspace.id
         )
       );
+
+      setWorkspaceToDelete(null);
+      setDeleteConfirmation("");
+      setDeleteError("");
     } catch (err) {
-      setError(err.message || "Unable to delete workspace.");
+      setDeleteError(
+        err.message || "Unable to delete workspace."
+      );
+    } finally {
+      setDeleting(false);
     }
   };
+
+  const deleteConfirmationMatches =
+    workspaceToDelete &&
+    deleteConfirmation.trim() === workspaceToDelete.name;
 
   return (
     <main className="flex-1 px-10 py-10">
@@ -361,7 +404,9 @@ function Workspaces() {
               <div className="mt-6 flex flex-col gap-4 border-t border-slate-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   type="button"
-                  onClick={() => handleOpenWorkspace(workspace)}
+                  onClick={() =>
+                    handleOpenWorkspace(workspace)
+                  }
                   className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                 >
                   Open Workspace
@@ -380,7 +425,9 @@ function Workspaces() {
 
                   <button
                     type="button"
-                    onClick={() => handleDelete(workspace)}
+                    onClick={() =>
+                      openDeleteModal(workspace)
+                    }
                     className="flex items-center gap-2 text-sm font-medium text-red-400 transition hover:text-red-300"
                   >
                     <FaTrash />
@@ -495,6 +542,125 @@ function Workspaces() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Workspace Modal */}
+      {workspaceToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-red-500/30 bg-slate-900 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-800 p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 text-xl text-red-400">
+                  <FaExclamationTriangle />
+                </div>
+
+                <div>
+                  <h2 className="text-2xl font-bold text-white">
+                    Delete Workspace?
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-400">
+                    This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                disabled={deleting}
+                className="rounded-lg bg-slate-800 p-3 text-slate-300 transition hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="space-y-5 p-6">
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                <p className="text-sm leading-6 text-red-200">
+                  Deleting{" "}
+                  <span className="font-bold text-white">
+                    {workspaceToDelete.name}
+                  </span>{" "}
+                  will permanently delete the workspace, all projects
+                  inside it, and their generated content.
+                </p>
+              </div>
+
+              <div>
+                <p className="mb-3 text-sm leading-6 text-slate-300">
+                  To confirm, type{" "}
+                  <span className="font-bold text-white">
+                    {workspaceToDelete.name}
+                  </span>{" "}
+                  below.
+                </p>
+
+                <label
+                  htmlFor="delete-workspace-confirmation"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  Workspace Name
+                </label>
+
+                <input
+                  id="delete-workspace-confirmation"
+                  type="text"
+                  value={deleteConfirmation}
+                  onChange={(event) =>
+                    setDeleteConfirmation(event.target.value)
+                  }
+                  disabled={deleting}
+                  placeholder={workspaceToDelete.name}
+                  autoComplete="off"
+                  autoFocus
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </div>
+
+              {deleteError && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {deleteError}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-800 pt-5 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  disabled={deleting}
+                  className="rounded-lg bg-slate-800 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={
+                    !deleteConfirmationMatches || deleting
+                  }
+                  className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-950 disabled:text-red-400 disabled:opacity-60"
+                >
+                  {deleting ? (
+                    <>
+                      <FaSyncAlt className="animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <FaTrash />
+                      Delete Workspace
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
