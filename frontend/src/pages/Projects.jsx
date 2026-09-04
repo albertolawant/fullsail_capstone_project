@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaArrowRight, FaChevronRight } from "react-icons/fa";
+import { FaArrowRight, FaChevronRight, FaPlus } from "react-icons/fa";
 import { addRecentActivity } from "../utils/activityStorage";
 
 import {
@@ -53,6 +53,14 @@ function Projects() {
 
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaces, setWorkspaces] = useState([]);
+
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [newProjectTitle, setNewProjectTitle] = useState("");
+  const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [newProjectWorkspaceId, setNewProjectWorkspaceId] = useState("");
+  const [newProjectType, setNewProjectType] = useState("product-architect");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const [projectSearchTerm, setProjectSearchTerm] =
     useState("");
@@ -325,6 +333,178 @@ function Projects() {
     });
   };
 
+  const openCreateProject = () => {
+    setNewProjectTitle("");
+    setNewProjectDescription("");
+    setNewProjectWorkspaceId(
+      selectedWorkspaceId
+        ? String(selectedWorkspaceId)
+        : availableWorkspaces.length > 0
+          ? String(availableWorkspaces[0].id)
+          : ""
+    );
+    setNewProjectType("product-architect");
+    setCreateError("");
+    setCreatingProject(true);
+  };
+
+  const closeCreateProject = () => {
+    if (creating) {
+      return;
+    }
+
+    setCreatingProject(false);
+    setNewProjectTitle("");
+    setNewProjectDescription("");
+    setNewProjectWorkspaceId("");
+    setNewProjectType("product-architect");
+    setCreateError("");
+  };
+
+  const createProject = async (event) => {
+    event.preventDefault();
+    setCreateError("");
+    setSuccessMessage("");
+
+    const cleanedTitle = newProjectTitle.trim();
+    const cleanedDescription = newProjectDescription.trim();
+
+    if (cleanedTitle.length < 2) {
+      setCreateError(
+        "Project name must be at least 2 characters."
+      );
+      return;
+    }
+
+    if (cleanedTitle.length > 100) {
+      setCreateError(
+        "Project name must be 100 characters or fewer."
+      );
+      return;
+    }
+
+    if (cleanedDescription.length < 10) {
+      setCreateError(
+        "Project description must be at least 10 characters."
+      );
+      return;
+    }
+
+    if (cleanedDescription.length > 5000) {
+      setCreateError(
+        "Project description must be 5000 characters or fewer."
+      );
+      return;
+    }
+
+    if (!newProjectWorkspaceId) {
+      setCreateError("Please choose a workspace.");
+      return;
+    }
+
+    if (
+      newProjectType !== "product-architect" &&
+      newProjectType !== "tabletop-creator"
+    ) {
+      setCreateError("Please choose a project type.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setCreateError(
+        "Your session has expired. Please sign in again."
+      );
+      return;
+    }
+
+    setCreating(true);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/projects/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: cleanedTitle,
+            description: cleanedDescription,
+            workspace_id: Number(newProjectWorkspaceId),
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => null);
+
+        let message = "Unable to create project.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (Array.isArray(errorData?.detail)) {
+          message = errorData.detail
+            .map((item) => item.msg)
+            .filter(Boolean)
+            .join(" ");
+        }
+
+        throw new Error(message);
+      }
+
+      const createdProject = await response.json();
+
+      setProjects((currentProjects) =>
+        sortProjectsNewestFirst([
+          createdProject,
+          ...currentProjects,
+        ])
+      );
+
+      if (!selectedWorkspaceId) {
+        setProjectSearchTerm("");
+        setSelectedWorkspaceFilter("all");
+      }
+
+      setSuccessMessage(
+        `"${createdProject.title}" created successfully.`
+      );
+
+      const destination =
+        newProjectType === "tabletop-creator"
+          ? "/tabletop-creator"
+          : "/product-architect";
+
+      setTimeout(() => {
+        setCreatingProject(false);
+        setNewProjectTitle("");
+        setNewProjectDescription("");
+        setNewProjectWorkspaceId("");
+        setNewProjectType("product-architect");
+        setCreateError("");
+
+        navigate(destination, {
+          state: {
+            project: createdProject,
+          },
+        });
+      }, 700);
+    } catch (error) {
+      setCreateError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create project."
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const startEditing = (project) => {
     setEditingProject(project);
     setEditTitle(project.title);
@@ -555,6 +735,16 @@ function Projects() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={openCreateProject}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400"
+            data-testid="new-project-button"
+          >
+            <FaPlus className="text-sm" />
+            New Project
+          </button>
+
           {selectedWorkspaceId && (
             <button
               type="button"
@@ -901,6 +1091,291 @@ function Projects() {
             ))}
           </div>
         )}
+
+      {/* Create Project Modal */}
+      {creatingProject && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-project-title"
+          data-testid="create-project-panel"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !creating
+            ) {
+              closeCreateProject();
+            }
+          }}
+        >
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl shadow-black/50">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
+                  New Project
+                </p>
+
+                <h2
+                  id="new-project-title"
+                  className="mt-1 text-2xl font-bold text-white"
+                >
+                  Create & launch your project
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-400">
+                  Choose where the project belongs and which Tanio module you want
+                  to open after creation.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCreateProject}
+                disabled={creating}
+                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close create project dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            {availableWorkspaces.length === 0 ? (
+              <div className="mt-6 rounded-xl border border-amber-800 bg-amber-950/30 p-5">
+                <p className="font-semibold text-amber-300">
+                  You need a workspace first
+                </p>
+
+                <p className="mt-2 text-sm text-amber-200/80">
+                  Projects must belong to a workspace. Create one before starting
+                  your project.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreatingProject(false);
+                    navigate("/workspaces");
+                  }}
+                  className="mt-4 rounded-lg bg-amber-700 px-4 py-2 font-semibold text-white transition hover:bg-amber-600"
+                >
+                  Go to Workspaces
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={createProject} className="mt-6 space-y-5">
+                <div>
+                  <label
+                    htmlFor="new-project-title-input"
+                    className="mb-2 block text-sm font-medium text-slate-300"
+                  >
+                    Project Name
+                  </label>
+
+                  <input
+                    id="new-project-title-input"
+                    type="text"
+                    value={newProjectTitle}
+                    onChange={(event) => {
+                      setNewProjectTitle(event.target.value);
+                      setCreateError("");
+                    }}
+                    maxLength={100}
+                    disabled={creating}
+                    autoFocus
+                    placeholder="e.g. Tanio AI"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/10 disabled:opacity-50"
+                    data-testid="new-project-title"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="new-project-description"
+                    className="mb-2 block text-sm font-medium text-slate-300"
+                  >
+                    Description
+                  </label>
+
+                  <textarea
+                    id="new-project-description"
+                    value={newProjectDescription}
+                    onChange={(event) => {
+                      setNewProjectDescription(
+                        event.target.value
+                      );
+                      setCreateError("");
+                    }}
+                    rows="4"
+                    maxLength={5000}
+                    disabled={creating}
+                    placeholder="Describe what you're building..."
+                    className="w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/10 disabled:opacity-50"
+                    data-testid="new-project-description"
+                  />
+
+                  <div className="mt-1 text-right text-xs text-slate-500">
+                    {newProjectDescription.length}/5000
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="new-project-workspace"
+                    className="mb-2 block text-sm font-medium text-slate-300"
+                  >
+                    Workspace
+                  </label>
+
+                  <select
+                    id="new-project-workspace"
+                    value={newProjectWorkspaceId}
+                    onChange={(event) => {
+                      setNewProjectWorkspaceId(
+                        event.target.value
+                      );
+                      setCreateError("");
+                    }}
+                    disabled={
+                      creating || Boolean(selectedWorkspaceId)
+                    }
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    data-testid="new-project-workspace"
+                  >
+                    {availableWorkspaces.map(
+                      (workspace) => (
+                        <option
+                          key={workspace.id}
+                          value={workspace.id}
+                        >
+                          {workspace.name}
+                        </option>
+                      )
+                    )}
+                  </select>
+
+                  {selectedWorkspaceId && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      This project will be created in{" "}
+                      {displayWorkspaceName}.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-300">
+                    Project Type
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewProjectType("product-architect");
+                        setCreateError("");
+                      }}
+                      disabled={creating}
+                      className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        newProjectType === "product-architect"
+                          ? "border-cyan-500 bg-cyan-950/40 shadow-lg shadow-cyan-950/20"
+                          : "border-slate-700 bg-slate-950/60 hover:border-cyan-800 hover:bg-slate-950"
+                      }`}
+                      aria-pressed={
+                        newProjectType === "product-architect"
+                      }
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-800 bg-cyan-950 text-xl">
+                          ⚡
+                        </div>
+
+                        <div>
+                          <p className="font-semibold text-white">
+                            Product Architect
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                            Plan products, generate documents, and build product
+                            strategy with AI.
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewProjectType("tabletop-creator");
+                        setCreateError("");
+                      }}
+                      disabled={creating}
+                      className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        newProjectType === "tabletop-creator"
+                          ? "border-purple-500 bg-purple-950/40 shadow-lg shadow-purple-950/20"
+                          : "border-slate-700 bg-slate-950/60 hover:border-purple-800 hover:bg-slate-950"
+                      }`}
+                      aria-pressed={
+                        newProjectType === "tabletop-creator"
+                      }
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-purple-800 bg-purple-950 text-xl">
+                          🎲
+                        </div>
+
+                        <div>
+                          <p className="font-semibold text-white">
+                            Tabletop Creator
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                            Build campaigns, NPCs, quests, encounters, and
+                            locations with AI.
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    Tanio will open the selected module automatically after the
+                    project is created.
+                  </p>
+                </div>
+
+                {createError && (
+                  <div
+                    className="rounded-xl border border-red-800 bg-red-950/40 p-4"
+                    role="alert"
+                  >
+                    <p className="text-sm text-red-300">
+                      {createError}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeCreateProject}
+                    disabled={creating}
+                    className="rounded-xl bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="rounded-xl bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    data-testid="create-project-submit"
+                  >
+                    {creating ? "Creating..." : "Create & Open"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Edit Project Modal */}
       {editingProject && (
