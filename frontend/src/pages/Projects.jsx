@@ -24,6 +24,24 @@ function createProjectSummaryFallback(project) {
   return "No AI summary has been created for this project yet.";
 }
 
+function sortProjectsNewestFirst(projectList) {
+  return [...projectList].sort((a, b) => {
+    const aCreatedAt = a.created_at
+      ? new Date(a.created_at).getTime()
+      : 0;
+
+    const bCreatedAt = b.created_at
+      ? new Date(b.created_at).getTime()
+      : 0;
+
+    if (aCreatedAt !== bCreatedAt) {
+      return bCreatedAt - aCreatedAt;
+    }
+
+    return Number(b.id || 0) - Number(a.id || 0);
+  });
+}
+
 function Projects() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,17 +53,32 @@ function Projects() {
 
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaces, setWorkspaces] = useState([]);
-  const [projectSearchTerm, setProjectSearchTerm] = useState("");
-  const [selectedWorkspaceFilter, setSelectedWorkspaceFilter] = useState("all");
 
-  const [editingProject, setEditingProject] = useState(null);
+  const [projectSearchTerm, setProjectSearchTerm] =
+    useState("");
+
+  const [
+    selectedWorkspaceFilter,
+    setSelectedWorkspaceFilter,
+  ] = useState("all");
+
+  const [editingProject, setEditingProject] =
+    useState(null);
+
   const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editWorkspaceId, setEditWorkspaceId] = useState("");
+
+  const [editDescription, setEditDescription] =
+    useState("");
+
+  const [editWorkspaceId, setEditWorkspaceId] =
+    useState("");
+
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  const [deletingProject, setDeletingProject] = useState(null);
+  const [deletingProject, setDeletingProject] =
+    useState(null);
+
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
@@ -67,13 +100,19 @@ function Projects() {
       if (!token) {
         initializeDemoData();
 
-        const demoProjects = getDemoProjects();
+        const demoProjects = sortProjectsNewestFirst(
+          getDemoProjects()
+        );
 
         setProjects(demoProjects);
 
         setWorkspaces(
           Array.from(
-            new Set(demoProjects.map((project) => project.workspace_id).filter(Boolean))
+            new Set(
+              demoProjects
+                .map((project) => project.workspace_id)
+                .filter(Boolean)
+            )
           ).map((workspaceId) => ({
             id: workspaceId,
             name: `Workspace ${workspaceId}`,
@@ -84,18 +123,19 @@ function Projects() {
         return;
       }
 
-      const [projectsResponse, workspacesResponse] = await Promise.all([
-        fetch("http://127.0.0.1:8000/projects/", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-        fetch("http://127.0.0.1:8000/workspaces/", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }),
-      ]);
+      const [projectsResponse, workspacesResponse] =
+        await Promise.all([
+          fetch("http://127.0.0.1:8000/projects/", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+          fetch("http://127.0.0.1:8000/workspaces/", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+        ]);
 
       if (!projectsResponse.ok) {
         throw new Error("Unable to load projects.");
@@ -105,13 +145,21 @@ function Projects() {
         throw new Error("Unable to load workspaces.");
       }
 
-      const [projectData, workspaceData] = await Promise.all([
-        projectsResponse.json(),
-        workspacesResponse.json(),
-      ]);
+      const [projectData, workspaceData] =
+        await Promise.all([
+          projectsResponse.json(),
+          workspacesResponse.json(),
+        ]);
 
-      setProjects(Array.isArray(projectData) ? projectData : []);
-      setWorkspaces(Array.isArray(workspaceData) ? workspaceData : []);
+      setProjects(
+        sortProjectsNewestFirst(
+          Array.isArray(projectData) ? projectData : []
+        )
+      );
+
+      setWorkspaces(
+        Array.isArray(workspaceData) ? workspaceData : []
+      );
     } catch {
       setError(
         "Unable to load projects. Make sure you are logged in and the backend is running."
@@ -136,7 +184,9 @@ function Projects() {
         const token = localStorage.getItem("token");
 
         if (!token) {
-          setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
+          setWorkspaceName(
+            `Workspace #${selectedWorkspaceId}`
+          );
           return;
         }
 
@@ -150,17 +200,22 @@ function Projects() {
         );
 
         if (!response.ok) {
-          setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
+          setWorkspaceName(
+            `Workspace #${selectedWorkspaceId}`
+          );
           return;
         }
 
         const workspace = await response.json();
 
         setWorkspaceName(
-          workspace.name || `Workspace #${selectedWorkspaceId}`
+          workspace.name ||
+            `Workspace #${selectedWorkspaceId}`
         );
       } catch {
-        setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
+        setWorkspaceName(
+          `Workspace #${selectedWorkspaceId}`
+        );
       }
     };
 
@@ -168,32 +223,48 @@ function Projects() {
   }, [selectedWorkspaceId]);
 
   const filteredProjects = useMemo(() => {
-    let workspaceFilteredProjects = selectedWorkspaceId
-      ? projects.filter(
-          (project) => Number(project.workspace_id) === selectedWorkspaceId
-        )
-      : projects;
+    let workspaceFilteredProjects =
+      selectedWorkspaceId
+        ? projects.filter(
+            (project) =>
+              Number(project.workspace_id) ===
+              selectedWorkspaceId
+          )
+        : projects;
 
     if (selectedWorkspaceFilter !== "all") {
-      workspaceFilteredProjects = workspaceFilteredProjects.filter(
-        (project) =>
-          Number(project.workspace_id) === Number(selectedWorkspaceFilter)
-      );
+      workspaceFilteredProjects =
+        workspaceFilteredProjects.filter(
+          (project) =>
+            Number(project.workspace_id) ===
+            Number(selectedWorkspaceFilter)
+        );
     }
 
-    const normalizedSearch = projectSearchTerm.trim().toLowerCase();
+    const normalizedSearch =
+      projectSearchTerm.trim().toLowerCase();
 
     if (!normalizedSearch) {
-      return workspaceFilteredProjects;
+      return sortProjectsNewestFirst(
+        workspaceFilteredProjects
+      );
     }
 
-    return workspaceFilteredProjects.filter((project) => {
-      return (
-        project.description?.toLowerCase().includes(normalizedSearch) ||
-        project.ai_summary?.toLowerCase().includes(normalizedSearch) ||
-        String(project.workspace_id).includes(normalizedSearch)
-      );
-    });
+    return sortProjectsNewestFirst(
+      workspaceFilteredProjects.filter((project) => {
+        return (
+          project.description
+            ?.toLowerCase()
+            .includes(normalizedSearch) ||
+          project.ai_summary
+            ?.toLowerCase()
+            .includes(normalizedSearch) ||
+          String(project.workspace_id).includes(
+            normalizedSearch
+          )
+        );
+      })
+    );
   }, [
     projects,
     selectedWorkspaceId,
@@ -221,7 +292,9 @@ function Projects() {
     if (workspaces.length > 0) {
       return workspaces.map((workspace) => ({
         id: workspace.id,
-        name: workspace.name || `Workspace ${workspace.id}`,
+        name:
+          workspace.name ||
+          `Workspace ${workspace.id}`,
       }));
     }
 
@@ -236,7 +309,9 @@ function Projects() {
       }
     });
 
-    return Array.from(workspaceMap.entries()).map(([id, name]) => ({
+    return Array.from(
+      workspaceMap.entries()
+    ).map(([id, name]) => ({
       id,
       name,
     }));
@@ -254,7 +329,9 @@ function Projects() {
     setEditingProject(project);
     setEditTitle(project.title);
     setEditDescription(project.description || "");
-    setEditWorkspaceId(String(project.workspace_id || ""));
+    setEditWorkspaceId(
+      String(project.workspace_id || "")
+    );
     setEditError("");
   };
 
@@ -271,7 +348,8 @@ function Projects() {
     setEditError("");
 
     const cleanedTitle = editTitle.trim();
-    const cleanedDescription = editDescription.trim();
+    const cleanedDescription =
+      editDescription.trim();
 
     if (!cleanedTitle) {
       setEditError("Project name is required.");
@@ -279,7 +357,9 @@ function Projects() {
     }
 
     if (cleanedTitle.length > 100) {
-      setEditError("Project name must be 100 characters or fewer.");
+      setEditError(
+        "Project name must be 100 characters or fewer."
+      );
       return;
     }
 
@@ -303,11 +383,14 @@ function Projects() {
       let updatedProject;
 
       if (!token) {
-        updatedProject = updateDemoProject(editingProject.id, {
-          title: cleanedTitle,
-          description: cleanedDescription,
-          workspace_id: Number(editWorkspaceId),
-        });
+        updatedProject = updateDemoProject(
+          editingProject.id,
+          {
+            title: cleanedTitle,
+            description: cleanedDescription,
+            workspace_id: Number(editWorkspaceId),
+          }
+        );
       } else {
         const response = await fetch(
           `http://127.0.0.1:8000/projects/${editingProject.id}`,
@@ -326,10 +409,13 @@ function Projects() {
         );
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
+          const errorData = await response
+            .json()
+            .catch(() => null);
 
           throw new Error(
-            errorData?.detail || "Unable to update project."
+            errorData?.detail ||
+              "Unable to update project."
           );
         }
 
@@ -337,14 +423,19 @@ function Projects() {
       }
 
       setProjects((currentProjects) =>
-        currentProjects.map((project) =>
-          project.id === updatedProject.id
-            ? updatedProject
-            : project
+        sortProjectsNewestFirst(
+          currentProjects.map((project) =>
+            project.id === updatedProject.id
+              ? updatedProject
+              : project
+          )
         )
       );
 
-      setSuccessMessage("Project updated successfully.");
+      setSuccessMessage(
+        "Project updated successfully."
+      );
+
       cancelEditing();
     } catch (error) {
       setEditError(error.message);
@@ -384,21 +475,28 @@ function Projects() {
         );
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
+          const errorData = await response
+            .json()
+            .catch(() => null);
 
           throw new Error(
-            errorData?.detail || "Unable to delete project."
+            errorData?.detail ||
+              "Unable to delete project."
           );
         }
       }
 
       setProjects((currentProjects) =>
         currentProjects.filter(
-          (project) => project.id !== deletingProject.id
+          (project) =>
+            project.id !== deletingProject.id
         )
       );
 
-      setSuccessMessage("Project deleted successfully.");
+      setSuccessMessage(
+        "Project deleted successfully."
+      );
+
       cancelDeleting();
     } catch (error) {
       setDeleteError(error.message);
@@ -473,7 +571,9 @@ function Projects() {
             disabled={loading}
             className="rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Refreshing..." : "Refresh"}
+            {loading
+              ? "Refreshing..."
+              : "Refresh"}
           </button>
         </div>
       </div>
@@ -481,28 +581,43 @@ function Projects() {
       {!loading && !error && (
         <section className="mb-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">Total Projects</p>
-            <p className="mt-2 text-3xl font-bold text-white">{projects.length}</p>
+            <p className="text-sm text-slate-500">
+              Total Projects
+            </p>
+
+            <p className="mt-2 text-3xl font-bold text-white">
+              {projects.length}
+            </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">Showing</p>
+            <p className="text-sm text-slate-500">
+              Showing
+            </p>
+
             <p className="mt-2 text-3xl font-bold text-cyan-400">
               {filteredProjects.length}
             </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">Workspace</p>
+            <p className="text-sm text-slate-500">
+              Workspace
+            </p>
+
             <p className="mt-2 truncate text-lg font-semibold text-white">
               {selectedWorkspaceId
                 ? displayWorkspaceName
-                : selectedWorkspaceFilter === "all"
-                ? "All"
-                : availableWorkspaces.find(
-                    (workspace) =>
-                      String(workspace.id) === String(selectedWorkspaceFilter)
-                  )?.name || "Selected"}
+                : selectedWorkspaceFilter ===
+                    "all"
+                  ? "All"
+                  : availableWorkspaces.find(
+                      (workspace) =>
+                        String(workspace.id) ===
+                        String(
+                          selectedWorkspaceFilter
+                        )
+                    )?.name || "Selected"}
             </p>
           </div>
         </section>
@@ -523,7 +638,11 @@ function Projects() {
                 id="project-search"
                 type="search"
                 value={projectSearchTerm}
-                onChange={(event) => setProjectSearchTerm(event.target.value)}
+                onChange={(event) =>
+                  setProjectSearchTerm(
+                    event.target.value
+                  )
+                }
                 placeholder="Search by project name, description, or workspace..."
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500"
               />
@@ -540,22 +659,37 @@ function Projects() {
               <select
                 id="workspace-filter"
                 value={selectedWorkspaceFilter}
-                onChange={(event) => setSelectedWorkspaceFilter(event.target.value)}
-                disabled={Boolean(selectedWorkspaceId)}
+                onChange={(event) =>
+                  setSelectedWorkspaceFilter(
+                    event.target.value
+                  )
+                }
+                disabled={Boolean(
+                  selectedWorkspaceId
+                )}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="all">All Workspaces</option>
+                <option value="all">
+                  All Workspaces
+                </option>
 
-                {availableWorkspaces.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {workspace.name}
-                  </option>
-                ))}
+                {availableWorkspaces.map(
+                  (workspace) => (
+                    <option
+                      key={workspace.id}
+                      value={workspace.id}
+                    >
+                      {workspace.name}
+                    </option>
+                  )
+                )}
               </select>
 
               {selectedWorkspaceId && (
                 <p className="mt-2 text-xs text-slate-500">
-                  Workspace filter is locked because you opened this page from a specific workspace.
+                  Workspace filter is locked because
+                  you opened this page from a specific
+                  workspace.
                 </p>
               )}
             </div>
@@ -605,7 +739,8 @@ function Projects() {
             </h3>
 
             <p className="mt-2 text-slate-400">
-              Projects will appear here after they are created.
+              Projects will appear here after they are
+              created.
             </p>
           </div>
         )}
@@ -622,7 +757,8 @@ function Projects() {
               </h3>
 
               <p className="mt-2 text-slate-400">
-                {displayWorkspaceName} does not have any projects yet.
+                {displayWorkspaceName} does not have any
+                projects yet.
               </p>
 
               <button
@@ -646,7 +782,8 @@ function Projects() {
             </h3>
 
             <p className="mt-2 text-slate-400">
-              Try another search term or clear the workspace filter.
+              Try another search term or clear the
+              workspace filter.
             </p>
 
             <button
@@ -693,7 +830,8 @@ function Projects() {
                       </p>
 
                       <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
-                        {project.description || "No project description provided."}
+                        {project.description ||
+                          "No project description provided."}
                       </p>
                     </div>
 
@@ -703,7 +841,9 @@ function Projects() {
                       </p>
 
                       <p className="mt-2 line-clamp-3 text-sm leading-6 text-cyan-100">
-                        {createProjectSummaryFallback(project)}
+                        {createProjectSummaryFallback(
+                          project
+                        )}
                       </p>
                     </div>
                   </div>
@@ -714,7 +854,8 @@ function Projects() {
                   {!selectedWorkspaceId && (
                     <div className="mb-4">
                       <span className="text-sm text-slate-500">
-                        Workspace {project.workspace_id}
+                        Workspace{" "}
+                        {project.workspace_id}
                       </span>
                     </div>
                   )}
@@ -722,7 +863,9 @@ function Projects() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <button
                       type="button"
-                      onClick={() => openProject(project)}
+                      onClick={() =>
+                        openProject(project)
+                      }
                       className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                     >
                       Open Project
@@ -732,7 +875,9 @@ function Projects() {
                     <div className="flex items-center justify-center gap-4">
                       <button
                         type="button"
-                        onClick={() => startEditing(project)}
+                        onClick={() =>
+                          startEditing(project)
+                        }
                         className="text-sm font-medium text-slate-300 transition hover:text-white"
                         data-testid={`edit-project-${project.id}`}
                       >
@@ -741,7 +886,9 @@ function Projects() {
 
                       <button
                         type="button"
-                        onClick={() => startDeleting(project)}
+                        onClick={() =>
+                          startDeleting(project)
+                        }
                         className="text-sm font-medium text-red-400 transition hover:text-red-300"
                         data-testid={`delete-project-${project.id}`}
                       >
@@ -801,7 +948,9 @@ function Projects() {
                 id="edit-project-description"
                 value={editDescription}
                 onChange={(event) =>
-                  setEditDescription(event.target.value)
+                  setEditDescription(
+                    event.target.value
+                  )
                 }
                 rows="5"
                 maxLength={5000}
@@ -821,21 +970,33 @@ function Projects() {
               <select
                 id="edit-project-workspace"
                 value={editWorkspaceId}
-                onChange={(event) => setEditWorkspaceId(event.target.value)}
+                onChange={(event) =>
+                  setEditWorkspaceId(
+                    event.target.value
+                  )
+                }
                 disabled={saving}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none disabled:opacity-50"
               >
-                <option value="">Choose a workspace</option>
+                <option value="">
+                  Choose a workspace
+                </option>
 
-                {availableWorkspaces.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {workspace.name}
-                  </option>
-                ))}
+                {availableWorkspaces.map(
+                  (workspace) => (
+                    <option
+                      key={workspace.id}
+                      value={workspace.id}
+                    >
+                      {workspace.name}
+                    </option>
+                  )
+                )}
               </select>
 
               <p className="mt-2 text-xs text-slate-500">
-                Moving this project will place it under the selected workspace.
+                Moving this project will place it under
+                the selected workspace.
               </p>
             </div>
 
@@ -864,7 +1025,9 @@ function Projects() {
                 className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50"
                 data-testid="save-project-changes"
               >
-                {saving ? "Saving..." : "Save Changes"}
+                {saving
+                  ? "Saving..."
+                  : "Save Changes"}
               </button>
             </div>
           </form>
@@ -883,7 +1046,8 @@ function Projects() {
             </h3>
 
             <p className="mt-4 text-slate-300">
-              Are you sure you want to permanently delete{" "}
+              Are you sure you want to permanently
+              delete{" "}
               <span className="font-semibold text-white">
                 {deletingProject.title}
               </span>
@@ -891,8 +1055,9 @@ function Projects() {
             </p>
 
             <p className="mt-3 text-sm text-red-400">
-              This action cannot be undone. All associated project
-              content will also be deleted.
+              This action cannot be undone. All
+              associated project content will also be
+              deleted.
             </p>
 
             {deleteError && (
@@ -921,7 +1086,9 @@ function Projects() {
                 className="rounded-lg bg-red-600 px-5 py-2 font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
                 data-testid="confirm-delete-project"
               >
-                {deleting ? "Deleting..." : "Delete Project"}
+                {deleting
+                  ? "Deleting..."
+                  : "Delete Project"}
               </button>
             </div>
           </div>

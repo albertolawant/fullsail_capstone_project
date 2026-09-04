@@ -523,10 +523,10 @@ function ProjectDetail() {
 
                   <button
                     type="button"
-                    onClick={() => navigate(`/projects?workspace=${workspace.id}`)}
+                    onClick={() => navigate("/projects")}
                     className="text-slate-300 transition hover:text-cyan-300"
                   >
-                    {workspace?.name || `Workspace ${project.workspace_id}`}
+                    Projects
                   </button>
 
                   <span className="text-slate-600">&gt;</span>

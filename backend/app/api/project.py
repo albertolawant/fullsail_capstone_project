@@ -26,6 +26,7 @@ router = APIRouter(
     tags=["Projects"]
 )
 
+
 def create_activity_log(
     db: Session,
     current_user: User,
@@ -57,6 +58,7 @@ def create_activity_log(
     )
 
     db.add(activity)
+
 
 def generate_project_summary(title: str, description: str | None) -> str:
     clean_title = title.strip()
@@ -105,6 +107,7 @@ def generate_project_summary(title: str, description: str | None) -> str:
         f"{clean_title} is a Tanio AI project focused on organizing and developing "
         "the ideas described by the user."
     )
+
 
 @router.post("/", response_model=ProjectResponse)
 def create_project(
@@ -157,6 +160,7 @@ def create_project(
 
     return new_project
 
+
 @router.get("/", response_model=List[ProjectResponse])
 def get_projects(
     db: Session = Depends(get_db),
@@ -165,8 +169,10 @@ def get_projects(
     return (
         db.query(Project)
         .filter(Project.owner_id == current_user.id)
+        .order_by(Project.created_at.desc(), Project.id.desc())
         .all()
     )
+
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(
@@ -187,6 +193,7 @@ def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     return project
+
 
 @router.put("/{project_id}", response_model=ProjectResponse)
 def update_project(
@@ -236,7 +243,10 @@ def update_project(
         )
 
         if not workspace:
-            raise HTTPException(status_code=404, detail="Workspace not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Workspace not found"
+            )
 
         project.workspace_id = project_data.workspace_id
 
@@ -292,6 +302,7 @@ def update_project(
 
     return project
 
+
 @router.delete("/{project_id}")
 def delete_project(
     project_id: int,
@@ -308,7 +319,10 @@ def delete_project(
     )
 
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
 
     project_content = (
         db.query(GeneratedContent)
@@ -319,7 +333,10 @@ def delete_project(
         .all()
     )
 
-    content_ids = [content.id for content in project_content]
+    content_ids = [
+        content.id
+        for content in project_content
+    ]
 
     if content_ids:
         (
