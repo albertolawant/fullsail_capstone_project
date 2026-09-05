@@ -146,11 +146,23 @@ function Content() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+
+  // Edit content state
+  const [editingContent, setEditingContent] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editSuccess, setEditSuccess] = useState("");
+
+  // Delete state
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+
+  // Move state
   const [moveTarget, setMoveTarget] = useState(null);
   const [moveProjectId, setMoveProjectId] = useState("");
   const [moveLoading, setMoveLoading] = useState(false);
@@ -352,9 +364,7 @@ function Content() {
   }, [contentItems, projectNames]);
 
   const availableCategories = useMemo(() => {
-    const categories = new Set(
-      preparedContent.map((item) => item.category)
-    );
+    const categories = new Set(preparedContent.map((item) => item.category));
 
     return [
       CATEGORY_ALL,
@@ -407,13 +417,169 @@ function Content() {
 
   const visibleCategoryOrder =
     selectedCategory === CATEGORY_ALL
-      ? [CATEGORY_PRODUCT, CATEGORY_TABLETOP, CATEGORY_LOGOS, CATEGORY_OTHER]
+      ? [
+          CATEGORY_PRODUCT,
+          CATEGORY_TABLETOP,
+          CATEGORY_LOGOS,
+          CATEGORY_OTHER,
+        ]
       : [selectedCategory];
 
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedCategory(CATEGORY_ALL);
   };
+
+  // -------------------------------------------------------
+  // EDIT SAVED CONTENT
+  // -------------------------------------------------------
+
+  const openEditContent = (item) => {
+    if (item.isLogo) {
+      return;
+    }
+
+    setEditingContent(item);
+    setEditTitle(item.title || "");
+    setEditBody(item.body || "");
+    setEditError("");
+    setEditSuccess("");
+  };
+
+  const closeEditContent = () => {
+    if (editLoading) {
+      return;
+    }
+
+    setEditingContent(null);
+    setEditTitle("");
+    setEditBody("");
+    setEditError("");
+    setEditSuccess("");
+  };
+
+  const saveContentEdits = async (event) => {
+    event.preventDefault();
+
+    if (!editingContent) {
+      return;
+    }
+
+    const cleanedTitle = editTitle.trim();
+    const cleanedBody = editBody.trim();
+
+    if (!cleanedTitle) {
+      setEditError("Content title is required.");
+      return;
+    }
+
+    if (!cleanedBody) {
+      setEditError("Content body is required.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setEditError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setEditLoading(true);
+    setEditError("");
+    setEditSuccess("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/content/${editingContent.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            title: cleanedTitle,
+            body: cleanedBody,
+            project_id: editingContent.project_id,
+          }),
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail ||
+            "This content could not be updated. Please try again."
+        );
+      }
+
+      const updatedContent = await response.json();
+
+      setContentItems((currentItems) =>
+        currentItems.map((item) =>
+          String(item.id) === String(updatedContent.id)
+            ? updatedContent
+            : item
+        )
+      );
+
+      setSelectedContent((currentSelected) => {
+        if (
+          !currentSelected ||
+          String(currentSelected.id) !== String(updatedContent.id)
+        ) {
+          return currentSelected;
+        }
+
+        return {
+          ...currentSelected,
+          ...updatedContent,
+        };
+      });
+
+      setEditingContent((currentEditing) => ({
+        ...currentEditing,
+        ...updatedContent,
+      }));
+
+      setEditTitle(updatedContent.title || cleanedTitle);
+      setEditBody(updatedContent.body || cleanedBody);
+      setEditSuccess("Content updated successfully.");
+
+      setTimeout(() => {
+        setEditingContent(null);
+        setEditTitle("");
+        setEditBody("");
+        setEditError("");
+        setEditSuccess("");
+      }, 600);
+    } catch (requestError) {
+      console.error("Content edit failed:", requestError);
+
+      setEditError(
+        requestError instanceof Error
+          ? requestError.message
+          : "This content could not be updated. Please try again."
+      );
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // -------------------------------------------------------
+  // MOVE CONTENT
+  // -------------------------------------------------------
 
   const openMoveContent = (item) => {
     setMoveTarget(item);
@@ -449,7 +615,9 @@ function Content() {
 
     try {
       const endpoint = moveTarget.isLogo
-        ? `${API_BASE_URL}/product-architect/logos/${String(moveTarget.id).replace("logo-", "")}`
+        ? `${API_BASE_URL}/product-architect/logos/${String(
+            moveTarget.id
+          ).replace("logo-", "")}`
         : `${API_BASE_URL}/content/${moveTarget.id}`;
 
       const response = await fetch(endpoint, {
@@ -476,7 +644,8 @@ function Content() {
         const errorData = await response.json().catch(() => null);
 
         throw new Error(
-          errorData?.detail || "This item could not be moved. Please try again."
+          errorData?.detail ||
+            "This item could not be moved. Please try again."
         );
       }
 
@@ -490,7 +659,8 @@ function Content() {
 
           if (moveTarget.isLogo) {
             const newProject = projects.find(
-              (project) => Number(project.id) === Number(updatedItem.project_id)
+              (project) =>
+                Number(project.id) === Number(updatedItem.project_id)
             );
 
             return {
@@ -519,13 +689,15 @@ function Content() {
 
           if (moveTarget.isLogo) {
             const newProject = projects.find(
-              (project) => Number(project.id) === Number(updatedItem.project_id)
+              (project) =>
+                Number(project.id) === Number(updatedItem.project_id)
             );
 
             return {
               ...previousContent,
               project_id: updatedItem.project_id,
-              projectName: newProject?.title || `Project #${updatedItem.project_id}`,
+              projectName:
+                newProject?.title || `Project #${updatedItem.project_id}`,
               title: `${newProject?.title || "Project"} Logo`,
               image_base64: updatedItem.image_base64,
               style: updatedItem.style,
@@ -555,6 +727,10 @@ function Content() {
     }
   };
 
+  // -------------------------------------------------------
+  // DELETE CONTENT
+  // -------------------------------------------------------
+
   const openDeleteConfirmation = (item) => {
     setDeleteTarget(item);
     setDeleteConfirmationText("");
@@ -574,7 +750,11 @@ function Content() {
   };
 
   const handleDeleteContentItem = async () => {
-    if (!deleteTarget || deleteConfirmationText !== "DELETE" || !deleteFinalConfirmed) {
+    if (
+      !deleteTarget ||
+      deleteConfirmationText !== "DELETE" ||
+      !deleteFinalConfirmed
+    ) {
       return;
     }
 
@@ -590,7 +770,9 @@ function Content() {
 
     try {
       const endpoint = deleteTarget.isLogo
-        ? `${API_BASE_URL}/product-architect/logos/${String(deleteTarget.id).replace("logo-", "")}`
+        ? `${API_BASE_URL}/product-architect/logos/${String(
+            deleteTarget.id
+          ).replace("logo-", "")}`
         : `${API_BASE_URL}/content/${deleteTarget.id}`;
 
       const response = await fetch(endpoint, {
@@ -613,7 +795,8 @@ function Content() {
         const errorData = await response.json().catch(() => null);
 
         throw new Error(
-          errorData?.detail || "This item could not be deleted. Please try again."
+          errorData?.detail ||
+            "This item could not be deleted. Please try again."
         );
       }
 
@@ -646,7 +829,6 @@ function Content() {
       <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <h2 className="text-4xl font-bold">Content Library</h2>
-
           <p className="mt-2 text-slate-400">
             View all AI-generated content saved across your Tanio AI projects.
           </p>
@@ -695,7 +877,8 @@ function Content() {
               </p>
 
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Choose a module to show only that type of saved content. Select All to view everything in your Content Library.
+                Choose a module to show only that type of saved content. Select
+                All to view everything in your Content Library.
               </p>
             </div>
           </div>
@@ -727,7 +910,6 @@ function Content() {
         <section className="flex min-h-80 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900">
           <div className="text-center">
             <FaSyncAlt className="mx-auto mb-4 animate-spin text-3xl text-cyan-400" />
-
             <p className="font-semibold text-white">
               Loading your Content Library...
             </p>
@@ -898,7 +1080,7 @@ function Content() {
                         </p>
                       )}
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => setSelectedContent(item)}
@@ -907,6 +1089,16 @@ function Content() {
                           <FaEye />
                           View
                         </button>
+
+                        {!item.isLogo && (
+                          <button
+                            type="button"
+                            onClick={() => openEditContent(item)}
+                            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                          >
+                            Edit
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -933,6 +1125,7 @@ function Content() {
         </div>
       )}
 
+      {/* VIEW CONTENT MODAL */}
       {selectedContent && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
@@ -1015,14 +1208,18 @@ function Content() {
                       </div>
 
                       <div>
-                        <dt className="text-slate-500">Logo Ideas / Symbols</dt>
+                        <dt className="text-slate-500">
+                          Logo Ideas / Symbols
+                        </dt>
                         <dd className="mt-1 text-slate-200">
                           {selectedContent.logo_ideas || "None"}
                         </dd>
                       </div>
 
                       <div>
-                        <dt className="text-slate-500">Branding Direction</dt>
+                        <dt className="text-slate-500">
+                          Branding Direction
+                        </dt>
                         <dd className="mt-1 text-slate-200">
                           {selectedContent.branding_direction || "Default"}
                         </dd>
@@ -1052,6 +1249,140 @@ function Content() {
         </div>
       )}
 
+      {/* EDIT SAVED CONTENT MODAL */}
+      {editingContent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeEditContent();
+            }
+          }}
+        >
+          <form
+            onSubmit={saveContentEdits}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-content-title"
+            className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+          >
+            <header className="flex items-start justify-between gap-5 border-b border-slate-800 p-6">
+              <div>
+                <h3
+                  id="edit-content-title"
+                  className="text-2xl font-bold text-white"
+                >
+                  Edit Saved Content
+                </h3>
+
+                <p className="mt-2 text-slate-400">
+                  Update the saved title or content body.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeEditContent}
+                disabled={editLoading}
+                aria-label="Close edit content"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300 transition hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FaTimes />
+              </button>
+            </header>
+
+            <div className="space-y-5 overflow-y-auto p-6">
+              <div>
+                <label
+                  htmlFor="edit-content-name"
+                  className="block text-sm font-semibold text-slate-300"
+                >
+                  Title
+                </label>
+
+                <input
+                  id="edit-content-name"
+                  type="text"
+                  value={editTitle}
+                  onChange={(event) => {
+                    setEditTitle(event.target.value);
+                    setEditError("");
+                    setEditSuccess("");
+                  }}
+                  disabled={editLoading}
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 disabled:opacity-50"
+                  placeholder="Saved content title"
+                />
+              </div>
+
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="edit-content-body"
+                    className="block text-sm font-semibold text-slate-300"
+                  >
+                    Content Body
+                  </label>
+
+                  <span className="text-xs text-slate-500">
+                    Markdown formatting is supported.
+                  </span>
+                </div>
+
+                <textarea
+                  id="edit-content-body"
+                  value={editBody}
+                  onChange={(event) => {
+                    setEditBody(event.target.value);
+                    setEditError("");
+                    setEditSuccess("");
+                  }}
+                  disabled={editLoading}
+                  rows={18}
+                  className="mt-2 min-h-80 w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-4 font-mono text-sm leading-6 text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-cyan-500 disabled:opacity-50"
+                  placeholder="Edit your saved content..."
+                />
+              </div>
+
+              {editError && (
+                <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-red-300">
+                  {editError}
+                </div>
+              )}
+
+              {editSuccess && (
+                <div className="rounded-lg border border-emerald-800 bg-emerald-950/40 p-4 text-emerald-300">
+                  {editSuccess}
+                </div>
+              )}
+            </div>
+
+            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
+              <button
+                type="button"
+                onClick={closeEditContent}
+                disabled={editLoading}
+                className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={
+                  editLoading || !editTitle.trim() || !editBody.trim()
+                }
+                className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {editLoading ? "Saving..." : "Save Changes"}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
+
+      {/* MOVE CONTENT MODAL */}
       {moveTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
@@ -1069,22 +1400,30 @@ function Content() {
             className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
           >
             <header className="border-b border-slate-800 p-6">
-              <h3 id="move-dialog-title" className="text-2xl font-bold text-white">
+              <h3
+                id="move-dialog-title"
+                className="text-2xl font-bold text-white"
+              >
                 Move content
               </h3>
 
               <p className="mt-2 text-slate-400">
-                Choose the project this content should belong to. The workspace will update based on that project.
+                Choose the project this content should belong to. The workspace
+                will update based on that project.
               </p>
             </header>
 
             <div className="space-y-5 p-6">
               <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
                 <p className="text-sm text-slate-500">Item</p>
-                <p className="mt-1 font-semibold text-white">{moveTarget.title}</p>
+                <p className="mt-1 font-semibold text-white">
+                  {moveTarget.title}
+                </p>
 
                 <p className="mt-3 text-sm text-slate-500">Current Project</p>
-                <p className="mt-1 text-slate-300">{moveTarget.projectName}</p>
+                <p className="mt-1 text-slate-300">
+                  {moveTarget.projectName}
+                </p>
               </div>
 
               <div>
@@ -1143,8 +1482,9 @@ function Content() {
             </footer>
           </section>
         </div>
-      )}      
-      
+      )}
+
+      {/* DELETE CONTENT MODAL */}
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
@@ -1162,26 +1502,35 @@ function Content() {
             className="w-full max-w-xl rounded-2xl border border-red-900 bg-slate-900 shadow-2xl"
           >
             <header className="border-b border-red-900/60 p-6">
-              <h3 id="delete-dialog-title" className="text-2xl font-bold text-white">
+              <h3
+                id="delete-dialog-title"
+                className="text-2xl font-bold text-white"
+              >
                 Delete this item?
               </h3>
 
               <p className="mt-2 text-red-300">
-                This action is permanent. This item will be removed from your Content
-                Vault and cannot be restored.
+                This action is permanent. This item will be removed from your
+                Content Vault and cannot be restored.
               </p>
             </header>
 
             <div className="space-y-5 p-6">
               <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
                 <p className="text-sm text-slate-500">Item</p>
-                <p className="mt-1 font-semibold text-white">{deleteTarget.title}</p>
+                <p className="mt-1 font-semibold text-white">
+                  {deleteTarget.title}
+                </p>
 
                 <p className="mt-3 text-sm text-slate-500">Type</p>
-                <p className="mt-1 text-slate-300">{deleteTarget.content_type}</p>
+                <p className="mt-1 text-slate-300">
+                  {deleteTarget.content_type}
+                </p>
 
                 <p className="mt-3 text-sm text-slate-500">Project</p>
-                <p className="mt-1 text-slate-300">{deleteTarget.projectName}</p>
+                <p className="mt-1 text-slate-300">
+                  {deleteTarget.projectName}
+                </p>
               </div>
 
               {deleteError && (
@@ -1202,7 +1551,9 @@ function Content() {
                   id="delete-confirmation-text"
                   type="text"
                   value={deleteConfirmationText}
-                  onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                  onChange={(event) =>
+                    setDeleteConfirmationText(event.target.value)
+                  }
                   disabled={deleteLoading}
                   className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-red-500 disabled:opacity-50"
                   placeholder="DELETE"
@@ -1213,14 +1564,16 @@ function Content() {
                 <input
                   type="checkbox"
                   checked={deleteFinalConfirmed}
-                  onChange={(event) => setDeleteFinalConfirmed(event.target.checked)}
+                  onChange={(event) =>
+                    setDeleteFinalConfirmed(event.target.checked)
+                  }
                   disabled={deleteLoading}
                   className="mt-1"
                 />
 
                 <span>
-                  I understand I am about to permanently delete this item from the
-                  Content Vault.
+                  I understand I am about to permanently delete this item from
+                  the Content Vault.
                 </span>
               </label>
             </div>
