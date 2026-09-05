@@ -18,7 +18,7 @@ class ContentUpdate(BaseModel):
 
 class ContentResponse(BaseModel):
     id: int
-    project_id: int
+    project_id: Optional[int] = None
     title: str
     content_type: str
     body: str

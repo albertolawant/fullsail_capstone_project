@@ -89,6 +89,8 @@ function Projects() {
 
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [deleteContentChoice, setDeleteContentChoice] =
+    useState("");
 
   const workspaceParam = searchParams.get("workspace");
 
@@ -626,15 +628,38 @@ function Projects() {
 
   const startDeleting = (project) => {
     setDeletingProject(project);
+    setDeleteContentChoice("");
     setDeleteError("");
   };
 
   const cancelDeleting = () => {
+    if (deleting) {
+      return;
+    }
+
     setDeletingProject(null);
+    setDeleteContentChoice("");
     setDeleteError("");
   };
 
   const confirmDeleteProject = async () => {
+    if (!deletingProject) {
+      return;
+    }
+
+    if (
+      deleteContentChoice !== "keep" &&
+      deleteContentChoice !== "delete"
+    ) {
+      setDeleteError(
+        "Choose what should happen to the attached content before deleting the project."
+      );
+      return;
+    }
+
+    const deleteAttachedContent =
+      deleteContentChoice === "delete";
+
     setDeleting(true);
     setDeleteError("");
 
@@ -645,7 +670,7 @@ function Projects() {
         deleteDemoProject(deletingProject.id);
       } else {
         const response = await fetch(
-          `http://127.0.0.1:8000/projects/${deletingProject.id}`,
+          `http://127.0.0.1:8000/projects/${deletingProject.id}?delete_attached_content=${deleteAttachedContent}`,
           {
             method: "DELETE",
             headers: {
@@ -674,10 +699,14 @@ function Projects() {
       );
 
       setSuccessMessage(
-        "Project deleted successfully."
+        deleteAttachedContent
+          ? "Project and attached content deleted successfully."
+          : "Project deleted successfully. Attached content was kept in the Content Library."
       );
 
-      cancelDeleting();
+      setDeletingProject(null);
+      setDeleteContentChoice("");
+      setDeleteError("");
     } catch (error) {
       setDeleteError(error.message);
     } finally {
@@ -1512,28 +1541,130 @@ function Projects() {
       {/* Delete Project Modal */}
       {deletingProject && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-project-title"
           data-testid="delete-project-panel"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !deleting
+            ) {
+              cancelDeleting();
+            }
+          }}
         >
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6">
-            <h3 className="text-2xl font-bold">
-              Delete Project
-            </h3>
+          <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl shadow-black/50">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-400">
+                  Delete Project
+                </p>
+                <h3
+                  id="delete-project-title"
+                  className="mt-1 text-2xl font-bold text-white"
+                >
+                  What should happen to the attached content?
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={cancelDeleting}
+                disabled={deleting}
+                className="rounded-lg px-3 py-1 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close delete project modal"
+              >
+                ×
+              </button>
+            </div>
 
             <p className="mt-4 text-slate-300">
-              Are you sure you want to permanently
-              delete{" "}
+              You are deleting{" "}
               <span className="font-semibold text-white">
                 {deletingProject.title}
               </span>
-              ?
+              . Choose whether its saved content and documents
+              should be kept or permanently deleted.
             </p>
 
-            <p className="mt-3 text-sm text-red-400">
-              This action cannot be undone. All
-              associated project content will also be
-              deleted.
-            </p>
+            <div className="mt-6 space-y-3">
+              <label
+                className={`block cursor-pointer rounded-xl border p-4 transition ${
+                  deleteContentChoice === "keep"
+                    ? "border-cyan-500 bg-cyan-950/30"
+                    : "border-slate-700 bg-slate-950/40 hover:border-slate-600"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="delete-content-choice"
+                    value="keep"
+                    checked={deleteContentChoice === "keep"}
+                    onChange={() => {
+                      setDeleteContentChoice("keep");
+                      setDeleteError("");
+                    }}
+                    disabled={deleting}
+                    className="mt-1 h-4 w-4 accent-cyan-500"
+                    data-testid="keep-attached-content"
+                  />
+
+                  <div>
+                    <p className="font-semibold text-white">
+                      Keep Attached Content
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                      Delete the project, but keep its saved
+                      content and documents in the Content Library.
+                      They will no longer be attached to a project.
+                    </p>
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`block cursor-pointer rounded-xl border p-4 transition ${
+                  deleteContentChoice === "delete"
+                    ? "border-red-500 bg-red-950/30"
+                    : "border-slate-700 bg-slate-950/40 hover:border-slate-600"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="delete-content-choice"
+                    value="delete"
+                    checked={deleteContentChoice === "delete"}
+                    onChange={() => {
+                      setDeleteContentChoice("delete");
+                      setDeleteError("");
+                    }}
+                    disabled={deleting}
+                    className="mt-1 h-4 w-4 accent-red-500"
+                    data-testid="delete-attached-content"
+                  />
+
+                  <div>
+                    <p className="font-semibold text-red-300">
+                      Delete Attached Content
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                      Permanently delete the project, its saved
+                      content, documents, and saved content versions.
+                    </p>
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-5 rounded-lg border border-amber-800/70 bg-amber-950/30 p-3 text-sm text-amber-200">
+              Deleting the project cannot be undone. If you choose
+              to delete attached content, that content cannot be
+              recovered either.
+            </div>
 
             {deleteError && (
               <p
@@ -1544,12 +1675,12 @@ function Projects() {
               </p>
             )}
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={cancelDeleting}
                 disabled={deleting}
-                className="rounded-lg bg-slate-800 px-5 py-2 transition hover:bg-slate-700 disabled:opacity-50"
+                className="rounded-lg bg-slate-800 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -1557,13 +1688,17 @@ function Projects() {
               <button
                 type="button"
                 onClick={confirmDeleteProject}
-                disabled={deleting}
-                className="rounded-lg bg-red-600 px-5 py-2 font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
+                disabled={deleting || !deleteContentChoice}
+                className="rounded-lg bg-red-600 px-5 py-2.5 font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40"
                 data-testid="confirm-delete-project"
               >
                 {deleting
                   ? "Deleting..."
-                  : "Delete Project"}
+                  : deleteContentChoice === "delete"
+                    ? "Delete Project & Content"
+                    : deleteContentChoice === "keep"
+                      ? "Delete Project, Keep Content"
+                      : "Choose an Option"}
               </button>
             </div>
           </div>

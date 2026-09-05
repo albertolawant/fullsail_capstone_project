@@ -13,7 +13,7 @@ class ProductLogo(Base):
     project_id = Column(
         Integer,
         ForeignKey("projects.id"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 

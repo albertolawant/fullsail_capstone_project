@@ -10,5 +10,13 @@ class GeneratedContent(Base):
     title = Column(String, nullable=False)
     content_type = Column(String, nullable=False)
     body = Column(Text, nullable=False)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id"),
+        nullable=True,
+    )
+    owner_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+    )

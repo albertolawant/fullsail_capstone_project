@@ -17,6 +17,7 @@ from app.schemas.project import (
 from app.api.auth import get_current_user
 from app.models.content import GeneratedContent
 from app.models.content_version import ContentVersion
+from app.models.product_logo import ProductLogo
 from app.models.activity_log import ActivityLog
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -25,7 +26,6 @@ router = APIRouter(
     prefix="/projects",
     tags=["Projects"]
 )
-
 
 def create_activity_log(
     db: Session,
@@ -58,7 +58,6 @@ def create_activity_log(
     )
 
     db.add(activity)
-
 
 def generate_project_summary(title: str, description: str | None) -> str:
     clean_title = title.strip()
@@ -107,7 +106,6 @@ def generate_project_summary(title: str, description: str | None) -> str:
         f"{clean_title} is a Tanio AI project focused on organizing and developing "
         "the ideas described by the user."
     )
-
 
 @router.post("/", response_model=ProjectResponse)
 def create_project(
@@ -160,7 +158,6 @@ def create_project(
 
     return new_project
 
-
 @router.get("/", response_model=List[ProjectResponse])
 def get_projects(
     db: Session = Depends(get_db),
@@ -172,6 +169,38 @@ def get_projects(
         .order_by(Project.created_at.desc(), Project.id.desc())
         .all()
     )
+
+
+@router.get("/preserved-logos")
+def get_preserved_logos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    logos = (
+        db.query(ProductLogo)
+        .filter(
+            ProductLogo.owner_id == current_user.id,
+            ProductLogo.project_id.is_(None)
+        )
+        .order_by(ProductLogo.created_at.desc(), ProductLogo.id.desc())
+        .all()
+    )
+
+    return {
+        "logos": [
+            {
+                "id": logo.id,
+                "project_id": logo.project_id,
+                "image_base64": logo.image_base64,
+                "style": logo.style,
+                "preferred_colors": logo.preferred_colors,
+                "logo_ideas": logo.logo_ideas,
+                "branding_direction": logo.branding_direction,
+                "created_at": logo.created_at,
+            }
+            for logo in logos
+        ]
+    }
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -193,7 +222,6 @@ def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     return project
-
 
 @router.put("/{project_id}", response_model=ProjectResponse)
 def update_project(
@@ -243,10 +271,7 @@ def update_project(
         )
 
         if not workspace:
-            raise HTTPException(
-                status_code=404,
-                detail="Workspace not found"
-            )
+            raise HTTPException(status_code=404, detail="Workspace not found")
 
         project.workspace_id = project_data.workspace_id
 
@@ -302,10 +327,10 @@ def update_project(
 
     return project
 
-
 @router.delete("/{project_id}")
 def delete_project(
     project_id: int,
+    delete_attached_content: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -333,28 +358,65 @@ def delete_project(
         .all()
     )
 
-    content_ids = [
-        content.id
-        for content in project_content
-    ]
+    project_logos = (
+        db.query(ProductLogo)
+        .filter(
+            ProductLogo.project_id == project.id,
+            ProductLogo.owner_id == current_user.id
+        )
+        .all()
+    )
 
-    if content_ids:
+    content_ids = [content.id for content in project_content]
+
+    if delete_attached_content:
+        if content_ids:
+            (
+                db.query(ContentVersion)
+                .filter(
+                    ContentVersion.content_id.in_(content_ids),
+                    ContentVersion.owner_id == current_user.id
+                )
+                .delete(synchronize_session=False)
+            )
+
+            (
+                db.query(GeneratedContent)
+                .filter(
+                    GeneratedContent.project_id == project.id,
+                    GeneratedContent.owner_id == current_user.id
+                )
+                .delete(synchronize_session=False)
+            )
+
         (
-            db.query(ContentVersion)
+            db.query(ProductLogo)
             .filter(
-                ContentVersion.content_id.in_(content_ids),
-                ContentVersion.owner_id == current_user.id
+                ProductLogo.project_id == project.id,
+                ProductLogo.owner_id == current_user.id
             )
             .delete(synchronize_session=False)
         )
 
-        (
-            db.query(GeneratedContent)
-            .filter(
-                GeneratedContent.project_id == project.id,
-                GeneratedContent.owner_id == current_user.id
-            )
-            .delete(synchronize_session=False)
+        activity_description = (
+            "Project, associated content, and saved logos were permanently deleted."
+        )
+        response_message = (
+            "Project and attached content deleted successfully"
+        )
+    else:
+        for content in project_content:
+            content.project_id = None
+
+        for logo in project_logos:
+            logo.project_id = None
+
+        activity_description = (
+            "Project was deleted and associated content and saved logos were "
+            "preserved in the Content Library."
+        )
+        response_message = (
+            "Project deleted successfully. Attached content was preserved."
         )
 
     create_activity_log(
@@ -364,7 +426,7 @@ def delete_project(
         item_type="Project",
         item_id=project.id,
         title=f"{project.title} deleted",
-        description="Project and associated content were permanently deleted.",
+        description=activity_description,
         project_id=project.id,
         project_name=project.title,
     )
@@ -372,4 +434,13 @@ def delete_project(
     db.delete(project)
     db.commit()
 
-    return {"message": "Project deleted successfully"}
+    return {
+        "message": response_message,
+        "attached_content_deleted": delete_attached_content,
+        "preserved_content_count": (
+            0 if delete_attached_content else len(project_content)
+        ),
+        "preserved_logo_count": (
+            0 if delete_attached_content else len(project_logos)
+        ),
+    }

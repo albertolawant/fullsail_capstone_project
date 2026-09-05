@@ -182,12 +182,18 @@ function Content() {
         },
       };
 
-      const [contentResponse, projectsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/content/`, requestOptions),
-        fetch(`${API_BASE_URL}/projects/`, requestOptions),
-      ]);
+      const [contentResponse, projectsResponse, preservedLogosResponse] =
+        await Promise.all([
+          fetch(`${API_BASE_URL}/content/`, requestOptions),
+          fetch(`${API_BASE_URL}/projects/`, requestOptions),
+          fetch(`${API_BASE_URL}/projects/preserved-logos`, requestOptions),
+        ]);
 
-      if (contentResponse.status === 401 || projectsResponse.status === 401) {
+      if (
+        contentResponse.status === 401 ||
+        projectsResponse.status === 401 ||
+        preservedLogosResponse.status === 401
+      ) {
         localStorage.removeItem("token");
         localStorage.removeItem("tanioSession");
         localStorage.removeItem("tanioUser");
@@ -211,9 +217,18 @@ function Content() {
         );
       }
 
-      const [contentData, projectData] = await Promise.all([
+      if (!preservedLogosResponse.ok) {
+        const errorData = await preservedLogosResponse.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Unable to load preserved logos."
+        );
+      }
+
+      const [contentData, projectData, preservedLogosData] = await Promise.all([
         contentResponse.json(),
         projectsResponse.json(),
+        preservedLogosResponse.json(),
       ]);
 
       const safeProjects = Array.isArray(projectData) ? projectData : [];
@@ -256,9 +271,27 @@ function Content() {
 
       const logoItems = logoRequests.flat();
 
+      const preservedLogoItems = Array.isArray(preservedLogosData?.logos)
+        ? preservedLogosData.logos.map((logo) => ({
+            id: `logo-${logo.id}`,
+            project_id: null,
+            title: "Saved Logo",
+            content_type: "Saved Logo",
+            body: "",
+            image_base64: logo.image_base64,
+            style: logo.style,
+            preferred_colors: logo.preferred_colors,
+            logo_ideas: logo.logo_ideas,
+            branding_direction: logo.branding_direction,
+            created_at: logo.created_at,
+            isLogo: true,
+          }))
+        : [];
+
       setContentItems([
         ...(Array.isArray(contentData) ? contentData : []),
         ...logoItems,
+        ...preservedLogoItems,
       ]);
 
       setProjects(safeProjects);
@@ -312,7 +345,9 @@ function Content() {
         ? CATEGORY_LOGOS
         : determineCategory(item.content_type),
       projectName:
-        projectNames[item.project_id] || `Project #${item.project_id}`,
+        item.project_id == null
+          ? "No Project"
+          : projectNames[item.project_id] || `Project #${item.project_id}`,
     }));
   }, [contentItems, projectNames]);
 
@@ -801,9 +836,15 @@ function Content() {
                             {item.title}
                           </h4>
 
-                          <p className="mt-1 text-sm text-slate-500">
-                            {item.projectName}
-                          </p>
+                          {item.project_id == null ? (
+                            <span className="mt-2 inline-flex items-center rounded-md border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs font-semibold text-slate-300">
+                              No Project
+                            </span>
+                          ) : (
+                            <p className="mt-1 text-sm text-slate-500">
+                              {item.projectName}
+                            </p>
+                          )}
                         </div>
 
                         <span
@@ -919,9 +960,15 @@ function Content() {
                     {selectedContent.content_type}
                   </span>
 
-                  <span className="text-sm text-slate-500">
-                    {selectedContent.projectName}
-                  </span>
+                  {selectedContent.project_id == null ? (
+                    <span className="inline-flex items-center rounded-md border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs font-semibold text-slate-300">
+                      No Project
+                    </span>
+                  ) : (
+                    <span className="text-sm text-slate-500">
+                      {selectedContent.projectName}
+                    </span>
+                  )}
                 </div>
 
                 <h3
