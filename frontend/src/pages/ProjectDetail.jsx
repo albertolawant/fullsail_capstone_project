@@ -4,12 +4,15 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   FaArrowLeft,
+  FaArrowRight,
   FaBrain,
+  FaBolt,
   FaDiceD20,
   FaExclamationTriangle,
   FaFileAlt,
   FaFolderOpen,
   FaImage,
+  FaLayerGroup,
   FaSyncAlt,
   FaTimes,
   FaTrash,
@@ -456,323 +459,540 @@ function ProjectDetail() {
   };  
 
   return (
-    <main className="flex-1 p-6 md:p-10">
-      <div className="mb-6">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400 transition hover:text-cyan-300"
-        >
-          <FaArrowLeft />
-          Back
-        </button>
-      </div>
+    <main className="min-w-0 flex-1 px-4 py-5 sm:px-5 lg:px-6 xl:px-8">
+      <div className="w-full max-w-none">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-slate-400 transition hover:bg-slate-900 hover:text-white"
+          >
+            <FaArrowLeft className="text-xs" />
+            Back to Projects
+          </button>
 
-      {loading && (
-        <section className="flex min-h-80 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900">
-          <div className="text-center">
-            <FaSyncAlt className="mx-auto mb-4 animate-spin text-3xl text-cyan-400" />
-
-            <p className="font-semibold text-white">
-              Loading project file...
-            </p>
-          </div>
-        </section>
-      )}
-
-      {!loading && error && (
-        <section className="flex min-h-80 items-center justify-center rounded-2xl border border-red-900 bg-red-950/20 p-8">
-          <div className="max-w-lg text-center">
-            <FaExclamationTriangle className="mx-auto mb-4 text-4xl text-red-400" />
-
-            <h2 className="text-2xl font-bold text-white">
-              Project could not be loaded
-            </h2>
-
-            <p className="mt-2 text-red-300">{error}</p>
-
+          {!loading && !error && project && (
             <button
               type="button"
-              onClick={() => loadProjectDetail()}
-              className="mt-6 rounded-lg bg-red-500 px-5 py-2 font-semibold text-white transition hover:bg-red-400"
+              onClick={() => loadProjectDetail(true)}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2 text-sm font-semibold text-slate-300 shadow-sm transition hover:border-slate-700 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Try Again
+              <FaSyncAlt className={refreshing ? "animate-spin" : ""} />
+              {refreshing ? "Refreshing..." : "Refresh"}
             </button>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
 
-      {!loading && !error && project && (
-        <>
-          <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-              <div>
-                <nav
-                  className="mb-3 flex flex-wrap items-center gap-2 text-sm text-slate-500"
-                  aria-label="Breadcrumb"
-                >
-                  <button
-                    type="button"
-                    onClick={() => navigate("/workspaces")}
-                    className="transition hover:text-cyan-300"
-                  >
-                    Workspaces
-                  </button>
+        {loading && (
+          <section className="flex min-h-80 items-center justify-center rounded-3xl border border-slate-800 bg-slate-900">
+            <div className="text-center">
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-900/60 bg-cyan-950/40">
+                <FaSyncAlt className="animate-spin text-2xl text-cyan-400" />
+              </div>
+              <p className="font-semibold text-white">Loading project...</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Getting your project details and saved content.
+              </p>
+            </div>
+          </section>
+        )}
 
-                  <span className="text-slate-600">&gt;</span>
+        {!loading && error && (
+          <section className="flex min-h-80 items-center justify-center rounded-3xl border border-red-900 bg-red-950/20 p-8">
+            <div className="max-w-lg text-center">
+              <FaExclamationTriangle className="mx-auto mb-4 text-4xl text-red-400" />
 
-                  <button
-                    type="button"
-                    onClick={() => navigate("/projects")}
-                    className="text-slate-300 transition hover:text-cyan-300"
-                  >
-                    Projects
-                  </button>
+              <h2 className="text-2xl font-bold text-white">
+                Project could not be loaded
+              </h2>
 
-                  <span className="text-slate-600">&gt;</span>
+              <p className="mt-2 text-red-300">{error}</p>
 
-                  <span className="font-semibold text-cyan-300">
-                    {project.title}
-                  </span>
-                </nav>
+              <button
+                type="button"
+                onClick={() => loadProjectDetail()}
+                className="mt-6 rounded-xl bg-red-500 px-5 py-2.5 font-semibold text-white transition hover:bg-red-400"
+              >
+                Try Again
+              </button>
+            </div>
+          </section>
+        )}
 
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
-                  Project File
-                </p>
+        {!loading && !error && project && (
+          <>
+            <section className="relative overflow-hidden rounded-[30px] border border-cyan-900/60 bg-[#071222] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(14,165,233,0.22),transparent_22%),radial-gradient(circle_at_58%_75%,rgba(139,92,246,0.16),transparent_24%),linear-gradient(135deg,rgba(6,182,212,0.06),transparent_35%,rgba(2,6,23,0.15))]" />
+              <div className="pointer-events-none absolute -right-24 -top-28 h-[420px] w-[420px] rounded-full border border-cyan-400/10 shadow-[0_0_120px_rgba(6,182,212,0.08)]" />
+              <div className="pointer-events-none absolute right-[16%] top-16 h-48 w-48 rounded-full border-[28px] border-cyan-400/10" />
+              <div className="pointer-events-none absolute right-[16%] top-[9.1rem] h-9 w-48 border-y-[18px] border-cyan-400/10" />
+              <div className="pointer-events-none absolute right-[20.55%] top-[8.3rem] h-20 w-20 rounded-full border-[16px] border-cyan-300/10" />
 
-                <h1 className="mt-2 text-4xl font-bold text-white">
-                  {project.title}
-                </h1>
+              <div className="relative grid xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
+                <div className="min-w-0">
+                  <div className="border-b border-slate-800/80 px-6 py-5 sm:px-8 xl:px-10">
+                    <nav
+                      className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500"
+                      aria-label="Breadcrumb"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => navigate("/workspaces")}
+                        className="transition hover:text-cyan-300"
+                      >
+                        Workspaces
+                      </button>
 
-                <div className="mt-6 grid max-w-5xl gap-4 lg:grid-cols-2">
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Original Description
-                    </p>
+                      <span className="text-slate-700">/</span>
 
-                    <p className="mt-3 leading-7 text-slate-300">
-                      {project.description || "No project description provided."}
-                    </p>
+                      <button
+                        type="button"
+                        onClick={() => navigate("/projects")}
+                        className="transition hover:text-cyan-300"
+                      >
+                        Projects
+                      </button>
+
+                      <span className="text-slate-700">/</span>
+
+                      <span className="font-semibold text-white">
+                        {project.title}
+                      </span>
+                    </nav>
                   </div>
 
-                  <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
-                      AI Summary
+                  <div className="px-6 py-8 sm:px-8 xl:px-10 xl:py-10 2xl:px-12">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]" />
+                        Active Project
+                      </span>
+
+                      <span className="inline-flex items-center gap-2 rounded-full border border-cyan-900/70 bg-slate-950/55 px-3 py-1.5 text-xs font-medium text-slate-200">
+                        <FaFolderOpen className="text-cyan-400" />
+                        {workspace?.name || "Unknown Workspace"}
+                      </span>
+
+                      <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-950/55 px-3 py-1.5 text-xs font-medium text-slate-400">
+                        Project #{project.id}
+                      </span>
+                    </div>
+
+                    <h1 className="mt-7 max-w-5xl text-4xl font-black tracking-[-0.035em] text-white sm:text-5xl xl:text-6xl">
+                      {project.title}
+                    </h1>
+
+                    <p className="mt-5 max-w-5xl text-base leading-7 text-slate-300 sm:text-lg">
+                      {createPreview(
+                        project.description ||
+                          "No project description provided.",
+                        420
+                      )}
                     </p>
 
-                    <p className="mt-3 leading-7 text-cyan-100">
-                      {createProjectSummaryFallback(project)}
-                    </p>
+                    <div className="mt-8 grid overflow-hidden rounded-2xl border border-slate-800/90 bg-slate-950/45 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="flex items-center gap-4 border-b border-slate-800/90 p-5 sm:border-r xl:border-b-0">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-900/60 bg-cyan-950/40 text-cyan-400">
+                          <FaFileAlt />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-slate-400">Saved Content</p>
+                          <p className="mt-1 text-2xl font-black text-white">
+                            {contentItems.length}
+                          </p>
+                          <p className="text-[11px] text-slate-500">documents</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 border-b border-slate-800/90 p-5 xl:border-b-0 xl:border-r">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-purple-900/60 bg-purple-950/30 text-purple-400">
+                          <FaImage />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-slate-400">Saved Images</p>
+                          <p className="mt-1 text-2xl font-black text-white">
+                            {logos.length}
+                          </p>
+                          <p className="text-[11px] text-slate-500">images</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 border-b border-slate-800/90 p-5 sm:border-r xl:border-b-0">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-900/60 bg-blue-950/30 text-blue-400">
+                          <FaLayerGroup />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-slate-400">Total Items</p>
+                          <p className="mt-1 text-2xl font-black text-white">
+                            {totalSavedItems}
+                          </p>
+                          <p className="text-[11px] text-slate-500">total saved</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 p-5">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-900/60 bg-emerald-950/30 text-emerald-400">
+                          <FaFolderOpen />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-slate-400">Workspace</p>
+                          <p className="mt-1 truncate text-base font-bold text-white">
+                            {workspace?.name || "Unknown Workspace"}
+                          </p>
+                          <p className="text-[11px] text-slate-500">project location</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-3 text-sm">
-                  <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-slate-300">
-                    Workspace:{" "}
-                    <span className="text-white">
-                      {workspace?.name || "Unknown Workspace"}
-                    </span>
-                  </span>
+                <aside className="border-t border-slate-800/80 bg-[#06111f]/90 p-6 sm:p-7 xl:border-l xl:border-t-0 xl:p-7 2xl:p-8">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-900/70 bg-cyan-950/45 text-cyan-400">
+                      <FaBolt />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-400">
+                        Quick Launch
+                      </p>
+                      <h2 className="mt-1 text-xl font-bold text-white">
+                        Continue building
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        Jump directly into the Tanio tools connected to this project.
+                      </p>
+                    </div>
+                  </div>
 
-                  <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-slate-300">
-                    Saved Items:{" "}
-                    <span className="text-white">{totalSavedItems}</span>
-                  </span>
+                  <div className="mt-6 space-y-3">
+                    <button
+                      type="button"
+                      onClick={openProductArchitect}
+                      className="group flex w-full items-center gap-4 rounded-2xl border border-cyan-700/50 bg-cyan-950/35 p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-cyan-950/55 hover:shadow-[0_12px_35px_rgba(6,182,212,0.12)]"
+                    >
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-500 text-lg text-slate-950 shadow-lg shadow-cyan-950/40">
+                        <FaBrain />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-white">
+                          Product Architect
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-cyan-100/60">
+                          Product strategy, requirements, branding, and planning.
+                        </p>
+                      </div>
+
+                      <FaArrowRight className="text-cyan-400 transition group-hover:translate-x-1" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={openTabletopCreator}
+                      className="group flex w-full items-center gap-4 rounded-2xl border border-purple-700/50 bg-purple-950/30 p-4 text-left transition hover:-translate-y-0.5 hover:border-purple-400 hover:bg-purple-950/50 hover:shadow-[0_12px_35px_rgba(168,85,247,0.12)]"
+                    >
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-500 text-lg text-white shadow-lg shadow-purple-950/40">
+                        <FaDiceD20 />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-white">
+                          Tabletop Creator
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-purple-100/60">
+                          Campaigns, worlds, encounters, characters, and stories.
+                        </p>
+                      </div>
+
+                      <FaArrowRight className="text-purple-400 transition group-hover:translate-x-1" />
+                    </button>
+                  </div>
+
+                  <div className="my-6 h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent" />
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Project Actions
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => loadProjectDetail(true)}
+                      disabled={refreshing}
+                      className="mt-3 flex w-full items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950/55 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <FaSyncAlt className={refreshing ? "animate-spin" : ""} />
+                        {refreshing ? "Refreshing..." : "Refresh Project"}
+                      </span>
+                      <FaSyncAlt className={refreshing ? "animate-spin" : "text-slate-600"} />
+                    </button>
+                  </div>
+                </aside>
+              </div>
+            </section>
+
+            <section className="mt-8 w-full">
+              <div className="mb-5 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                    Project Context
+                  </p>
+                  <h2 className="mt-1 text-2xl font-bold text-white">
+                    Brief & AI Insight
+                  </h2>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => loadProjectDetail(true)}
-                  disabled={refreshing}
-                  className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <FaSyncAlt className={refreshing ? "animate-spin" : ""} />
-                  {refreshing ? "Refreshing..." : "Refresh"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={openProductArchitect}
-                  className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400"
-                >
-                  <FaBrain />
-                  Product Architect
-                </button>
-
-                <button
-                  type="button"
-                  onClick={openTabletopCreator}
-                  className="inline-flex items-center gap-2 rounded-lg bg-purple-500 px-4 py-2 font-semibold text-white transition hover:bg-purple-400"
-                >
-                  <FaDiceD20 />
-                  Tabletop Creator
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="mb-8 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-              <p className="text-sm text-slate-500">Project ID</p>
-              <p className="mt-2 text-2xl font-bold text-white">
-                #{project.id}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-              <p className="text-sm text-slate-500">Saved Content</p>
-              <p className="mt-2 text-2xl font-bold text-cyan-400">
-                {contentItems.length}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-              <p className="text-sm text-slate-500">Saved Images</p>
-              <p className="mt-2 text-2xl font-bold text-emerald-400">
-                {logos.length}
-              </p>
-            </div>
-          </section>
-
-          <section className="mb-10">
-            <div className="mb-4 flex items-center gap-3">
-              <FaFileAlt className="text-cyan-400" />
-
-              <h2 className="text-2xl font-bold text-white">
-                Saved Content
-              </h2>
-            </div>
-
-            {contentItems.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
-                <FaFolderOpen className="mx-auto mb-4 text-5xl text-slate-500" />
-
-                <h3 className="text-xl font-bold text-white">
-                  No content saved to this project yet
-                </h3>
-
-                <p className="mt-2 text-slate-400">
-                  Open a module to generate content for this project.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {contentItems.map((item) => (
-                  <article
-                    key={item.id}
-                    className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
-                  >
-                    <h3 className="text-xl font-bold text-white">
-                      {item.title}
-                    </h3>
-
-                    <span className="mt-3 inline-flex rounded-full border border-cyan-800 bg-cyan-950/50 px-3 py-1 text-xs font-semibold text-cyan-300">
-                      {item.content_type}
-                    </span>
-
-                    <p className="mt-4 text-sm leading-6 text-slate-400">
-                      {createPreview(item.body)}
-                    </p>
-
-                    <div className="mt-5 flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openViewItem(item, "content")}
-                        className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-                      >
-                        <FaEye />
-                        View
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => openEditContent(item)}
-                        className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => openDeleteItem(item, "content")}
-                        className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
-                      >
-                        <FaTrash />
-                        Delete
-                      </button>
+              <div className="grid gap-6 xl:grid-cols-2">
+                <article className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/10">
+                  <header className="flex items-center justify-between gap-4 border-b border-slate-800 px-6 py-5">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        Original Input
+                      </p>
+                      <h3 className="mt-1 text-lg font-bold text-white">
+                        Project Brief
+                      </h3>
                     </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
 
-          <section>
-            <div className="mb-4 flex items-center gap-3">
-              <FaImage className="text-emerald-400" />
-
-              <h2 className="text-2xl font-bold text-white">
-                Saved Images
-              </h2>
-            </div>
-
-            {logos.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
-                <FaImage className="mx-auto mb-4 text-5xl text-slate-500" />
-
-                <h3 className="text-xl font-bold text-white">
-                  No images saved to this project yet
-                </h3>
-
-                <p className="mt-2 text-slate-400">
-                  Generate or save images from Product Architect to view them here.
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {logos.map((logo) => (
-                  <article
-                    key={logo.id}
-                    className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
-                  >
-                    <img
-                      src={`data:image/png;base64,${logo.image_base64}`}
-                      alt={`${project.title} saved logo`}
-                      className="h-44 w-full rounded-xl border border-slate-700 bg-white object-contain"
-                    />
-
-                    <p className="mt-4 text-sm text-slate-400">
-                      Style: {logo.style || "default"}
-                    </p>
-
-                    <div className="mt-5 flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openViewItem(logo, "image")}
-                        className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-                      >
-                        <FaEye />
-                        View
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => openDeleteItem(logo, "image")}
-                        className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
-                      >
-                        <FaTrash />
-                        Delete
-                      </button>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-950 text-slate-400">
+                      <FaFileAlt />
                     </div>
-                  </article>
-                ))}
+                  </header>
+
+                  <div className="p-6">
+                    <div className="min-h-[180px] rounded-xl border border-slate-800 bg-slate-950/55 p-5">
+                      <p className="whitespace-pre-wrap text-sm leading-7 text-slate-300 sm:text-base">
+                        {project.description || "No project description provided."}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="overflow-hidden rounded-2xl border border-cyan-900/50 bg-slate-900 shadow-lg shadow-black/10">
+                  <header className="flex items-center justify-between gap-4 border-b border-cyan-900/30 px-6 py-5">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-500">
+                        AI Generated
+                      </p>
+                      <h3 className="mt-1 text-lg font-bold text-white">
+                        AI Summary
+                      </h3>
+                    </div>
+
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-900/60 bg-cyan-950/45 text-cyan-400">
+                      <FaBrain />
+                    </div>
+                  </header>
+
+                  <div className="p-6">
+                    <div className="min-h-[180px] rounded-xl border border-cyan-900/40 bg-cyan-950/20 p-5">
+                      <p className="whitespace-pre-wrap text-sm leading-7 text-cyan-50/90 sm:text-base">
+                        {createProjectSummaryFallback(project)}
+                      </p>
+                    </div>
+                  </div>
+                </article>
               </div>
-            )}
-          </section>
-        </>
-      )}
+            </section>
+
+            <section className="mt-10">
+              <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-900/60 bg-cyan-950/40 text-cyan-400">
+                    <FaFileAlt />
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Project Library
+                    </p>
+                    <h2 className="text-2xl font-bold text-white">
+                      Saved Content
+                    </h2>
+                  </div>
+                </div>
+
+                <span className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
+                  {contentItems.length}{" "}
+                  {contentItems.length === 1 ? "item" : "items"}
+                </span>
+              </div>
+
+              {contentItems.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 text-2xl text-slate-500">
+                    <FaFolderOpen />
+                  </div>
+
+                  <h3 className="mt-5 text-xl font-bold text-white">
+                    No saved content yet
+                  </h3>
+
+                  <p className="mx-auto mt-2 max-w-lg text-slate-400">
+                    Open Product Architect or Tabletop Creator to generate and save content to this project.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {contentItems.map((item) => (
+                    <article
+                      key={item.id}
+                      className="group flex min-h-[270px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-xl hover:shadow-black/20"
+                    >
+                      <div className="flex flex-1 flex-col p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <span className="inline-flex rounded-full border border-cyan-800/70 bg-cyan-950/45 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-300">
+                              {item.content_type}
+                            </span>
+
+                            <h3 className="mt-3 line-clamp-2 text-lg font-bold text-white">
+                              {item.title}
+                            </h3>
+                          </div>
+
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-950 text-slate-500 transition group-hover:text-cyan-400">
+                            <FaFileAlt />
+                          </div>
+                        </div>
+
+                        <p className="mt-4 line-clamp-4 flex-1 text-sm leading-6 text-slate-400">
+                          {createPreview(item.body)}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 border-t border-slate-800 bg-slate-950/35 px-5 py-4">
+                        <button
+                          type="button"
+                          onClick={() => openViewItem(item, "content")}
+                          className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-3.5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                        >
+                          <FaEye />
+                          View
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openEditContent(item)}
+                          className="rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openDeleteItem(item, "content")}
+                          className="ml-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/40 hover:text-red-300"
+                        >
+                          <FaTrash />
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="mt-10 pb-2">
+              <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-900/60 bg-emerald-950/30 text-emerald-400">
+                    <FaImage />
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Visual Assets
+                    </p>
+                    <h2 className="text-2xl font-bold text-white">
+                      Saved Images
+                    </h2>
+                  </div>
+                </div>
+
+                <span className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
+                  {logos.length} {logos.length === 1 ? "image" : "images"}
+                </span>
+              </div>
+
+              {logos.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 text-2xl text-slate-500">
+                    <FaImage />
+                  </div>
+
+                  <h3 className="mt-5 text-xl font-bold text-white">
+                    No saved images yet
+                  </h3>
+
+                  <p className="mx-auto mt-2 max-w-lg text-slate-400">
+                    Generate or save images from Product Architect and they will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+                  {logos.map((logo) => (
+                    <article
+                      key={logo.id}
+                      className="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-xl hover:shadow-black/20"
+                    >
+                      <div className="bg-slate-950 p-4">
+                        <img
+                          src={`data:image/png;base64,${logo.image_base64}`}
+                          alt={`${project.title} saved logo`}
+                          className="h-52 w-full rounded-xl border border-slate-800 bg-white object-contain"
+                        />
+                      </div>
+
+                      <div className="p-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Saved Image
+                            </p>
+                            <p className="mt-1 font-semibold text-white">
+                              {logo.style || "Default"} style
+                            </p>
+                          </div>
+
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-800 bg-slate-950 text-emerald-400">
+                            <FaImage />
+                          </div>
+                        </div>
+
+                        <div className="mt-5 flex items-center gap-2 border-t border-slate-800 pt-4">
+                          <button
+                            type="button"
+                            onClick={() => openViewItem(logo, "image")}
+                            className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-3.5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                          >
+                            <FaEye />
+                            View
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openDeleteItem(logo, "image")}
+                            className="ml-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/40 hover:text-red-300"
+                          >
+                            <FaTrash />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+      </div>
 
       {viewingItem && (
         <div
