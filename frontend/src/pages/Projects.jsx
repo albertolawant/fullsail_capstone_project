@@ -262,21 +262,32 @@ function Projects() {
 
     return sortProjectsNewestFirst(
       workspaceFilteredProjects.filter((project) => {
+        const matchingWorkspace = workspaces.find(
+          (workspace) =>
+            Number(workspace.id) ===
+            Number(project.workspace_id)
+        );
+
+        const resolvedWorkspaceName =
+          matchingWorkspace?.name?.toLowerCase() || "";
+
         return (
+          project.title
+            ?.toLowerCase()
+            .includes(normalizedSearch) ||
           project.description
             ?.toLowerCase()
             .includes(normalizedSearch) ||
           project.ai_summary
             ?.toLowerCase()
             .includes(normalizedSearch) ||
-          String(project.workspace_id).includes(
-            normalizedSearch
-          )
+          resolvedWorkspaceName.includes(normalizedSearch)
         );
       })
     );
   }, [
     projects,
+    workspaces,
     selectedWorkspaceId,
     selectedWorkspaceFilter,
     projectSearchTerm,
@@ -326,6 +337,25 @@ function Projects() {
       name,
     }));
   }, [workspaces, projects]);
+
+  const getWorkspaceName = useCallback(
+    (workspaceId) => {
+      if (!workspaceId) {
+        return "No Workspace";
+      }
+
+      const matchingWorkspace = workspaces.find(
+        (workspace) =>
+          Number(workspace.id) === Number(workspaceId)
+      );
+
+      return (
+        matchingWorkspace?.name ||
+        `Workspace #${workspaceId}`
+      );
+    },
+    [workspaces]
+  );
 
   const openProject = (project) => {
     navigate(`/projects/${project.id}`, {
@@ -1073,8 +1103,10 @@ function Projects() {
                   {!selectedWorkspaceId && (
                     <div className="mb-4">
                       <span className="text-sm text-slate-500">
-                        Workspace{" "}
-                        {project.workspace_id}
+                        Workspace:{" "}
+                        <span className="font-medium text-slate-300">
+                          {getWorkspaceName(project.workspace_id)}
+                        </span>
                       </span>
                     </div>
                   )}

@@ -570,7 +570,7 @@ function ProjectDetail() {
                   <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-slate-300">
                     Workspace:{" "}
                     <span className="text-white">
-                      {workspace?.name || `Workspace ${project.workspace_id}`}
+                      {workspace?.name || "Unknown Workspace"}
                     </span>
                   </span>
 
