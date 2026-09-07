@@ -34,6 +34,9 @@ function Workspaces() {
   // Workspace deletion confirmation
   const [workspaceToDelete, setWorkspaceToDelete] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteTextConfirmation, setDeleteTextConfirmation] = useState("");
+  const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
+  const [deleteContentChoice, setDeleteContentChoice] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
@@ -202,6 +205,9 @@ function Workspaces() {
   const openDeleteModal = (workspace) => {
     setWorkspaceToDelete(workspace);
     setDeleteConfirmation("");
+    setDeleteTextConfirmation("");
+    setDeleteFinalConfirmed(false);
+    setDeleteContentChoice("");
     setDeleteError("");
     setError("");
   };
@@ -213,6 +219,9 @@ function Workspaces() {
 
     setWorkspaceToDelete(null);
     setDeleteConfirmation("");
+    setDeleteTextConfirmation("");
+    setDeleteFinalConfirmed(false);
+    setDeleteContentChoice("");
     setDeleteError("");
   };
 
@@ -221,7 +230,10 @@ function Workspaces() {
       return;
     }
 
-    if (deleteConfirmation.trim() !== workspaceToDelete.name) {
+    if (!deleteConfirmationMatches) {
+      setDeleteError(
+        "Choose a delete option, type the workspace name, type DELETE, and check the final confirmation."
+      );
       return;
     }
 
@@ -238,7 +250,7 @@ function Workspaces() {
       }
 
       const response = await fetch(
-        `${API_BASE_URL}/workspaces/${workspace.id}`,
+        `${API_BASE_URL}/workspaces/${workspace.id}?delete_content_choice=${deleteContentChoice}`,
         {
           method: "DELETE",
           headers: {
@@ -272,6 +284,9 @@ function Workspaces() {
 
       setWorkspaceToDelete(null);
       setDeleteConfirmation("");
+      setDeleteTextConfirmation("");
+      setDeleteFinalConfirmed(false);
+      setDeleteContentChoice("");
       setDeleteError("");
     } catch (err) {
       setDeleteError(
@@ -284,8 +299,10 @@ function Workspaces() {
 
   const deleteConfirmationMatches =
     workspaceToDelete &&
-    deleteConfirmation.trim() === workspaceToDelete.name;
-
+    deleteConfirmation.trim() === workspaceToDelete.name &&
+    deleteTextConfirmation.trim() === "DELETE" &&
+    deleteFinalConfirmed &&
+    deleteContentChoice;
   return (
     <main className="flex-1 px-10 py-10">
       {/* Page Header */}
@@ -586,9 +603,106 @@ function Workspaces() {
                   <span className="font-bold text-white">
                     {workspaceToDelete.name}
                   </span>{" "}
-                  will permanently delete the workspace, all projects
-                  inside it, and their generated content.
+                  will delete this workspace and the projects inside it. Choose what should happen to the saved content.
                 </p>
+              </div>
+
+              <div className="space-y-3">
+                <label
+                  className={`block cursor-pointer rounded-xl border p-4 transition ${
+                    deleteContentChoice === "delete-all"
+                      ? "border-red-500 bg-red-950/30"
+                      : "border-slate-700 bg-slate-950/40 hover:border-slate-600"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="workspace-delete-content-choice"
+                      value="delete-all"
+                      checked={deleteContentChoice === "delete-all"}
+                      onChange={() => {
+                        setDeleteContentChoice("delete-all");
+                        setDeleteError("");
+                      }}
+                      disabled={deleting}
+                      className="mt-1 h-4 w-4 accent-red-500"
+                    />
+
+                    <div>
+                      <p className="font-semibold text-red-300">
+                        Delete Everything
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                        Delete the workspace, projects, saved content, saved images, and saved versions.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className={`block cursor-pointer rounded-xl border p-4 transition ${
+                    deleteContentChoice === "workspace-only"
+                      ? "border-cyan-500 bg-cyan-950/30"
+                      : "border-slate-700 bg-slate-950/40 hover:border-slate-600"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="workspace-delete-content-choice"
+                      value="workspace-only"
+                      checked={deleteContentChoice === "workspace-only"}
+                      onChange={() => {
+                        setDeleteContentChoice("workspace-only");
+                        setDeleteError("");
+                      }}
+                      disabled={deleting}
+                      className="mt-1 h-4 w-4 accent-cyan-500"
+                    />
+
+                    <div>
+                      <p className="font-semibold text-white">
+                        Delete Workspace Only
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                        Delete just the workspace, but keep the projects and saved content.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className={`block cursor-pointer rounded-xl border p-4 transition ${
+                    deleteContentChoice === "delete-projects-keep-content"
+                      ? "border-amber-500 bg-amber-950/30"
+                      : "border-slate-700 bg-slate-950/40 hover:border-slate-600"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="workspace-delete-content-choice"
+                      value="delete-projects-keep-content"
+                      checked={deleteContentChoice === "delete-projects-keep-content"}
+                      onChange={() => {
+                        setDeleteContentChoice("delete-projects-keep-content");
+                        setDeleteError("");
+                      }}
+                      disabled={deleting}
+                      className="mt-1 h-4 w-4 accent-amber-500"
+                    />
+
+                    <div>
+                      <p className="font-semibold text-amber-200">
+                        Delete Workspace and Projects
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                        Delete the workspace and projects, but keep saved content in the Content Library.
+                      </p>
+                    </div>
+                  </div>
+                </label>
               </div>
 
               <div>
@@ -620,6 +734,52 @@ function Workspaces() {
                   autoFocus
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-red-500 disabled:cursor-not-allowed disabled:opacity-60"
                 />
+
+                <div>
+                  <p className="mb-3 text-sm leading-6 text-slate-300">
+                    Then type{" "}
+                    <span className="font-bold text-white">
+                      DELETE
+                    </span>{" "}
+                    to confirm this destructive action.
+                  </p>
+
+                  <label
+                    htmlFor="delete-workspace-text-confirmation"
+                    className="mb-2 block text-sm font-medium text-slate-300"
+                  >
+                    Delete Confirmation
+                  </label>
+
+                  <input
+                    id="delete-workspace-text-confirmation"
+                    type="text"
+                    value={deleteTextConfirmation}
+                    onChange={(event) =>
+                      setDeleteTextConfirmation(event.target.value)
+                    }
+                    disabled={deleting}
+                    placeholder="DELETE"
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+
+                <label className="flex items-start gap-3 rounded-xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-200">
+                  <input
+                    type="checkbox"
+                    checked={deleteFinalConfirmed}
+                    onChange={(event) =>
+                      setDeleteFinalConfirmed(event.target.checked)
+                    }
+                    disabled={deleting}
+                    className="mt-1"
+                  />
+
+                  <span>
+                    I understand this will delete the workspace and affect the projects inside it based on the option I selected.
+                  </span>
+                </label>
               </div>
 
               {deleteError && (

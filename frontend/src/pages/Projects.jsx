@@ -91,6 +91,10 @@ function Projects() {
   const [deleteError, setDeleteError] = useState("");
   const [deleteContentChoice, setDeleteContentChoice] =
     useState("");
+  const [deleteTextConfirmation, setDeleteTextConfirmation] =
+    useState("");
+  const [deleteFinalConfirmed, setDeleteFinalConfirmed] =
+    useState(false);    
 
   const workspaceParam = searchParams.get("workspace");
 
@@ -659,6 +663,8 @@ function Projects() {
   const startDeleting = (project) => {
     setDeletingProject(project);
     setDeleteContentChoice("");
+    setDeleteTextConfirmation("");
+    setDeleteFinalConfirmed(false);
     setDeleteError("");
   };
 
@@ -669,6 +675,8 @@ function Projects() {
 
     setDeletingProject(null);
     setDeleteContentChoice("");
+    setDeleteTextConfirmation("");
+    setDeleteFinalConfirmed(false);
     setDeleteError("");
   };
 
@@ -683,6 +691,16 @@ function Projects() {
     ) {
       setDeleteError(
         "Choose what should happen to the attached content before deleting the project."
+      );
+      return;
+    }
+
+    if (
+      deleteTextConfirmation.trim() !== "DELETE" ||
+      !deleteFinalConfirmed
+    ) {
+      setDeleteError(
+        "Type DELETE and check the final confirmation before deleting the project."
       );
       return;
     }
@@ -736,6 +754,8 @@ function Projects() {
 
       setDeletingProject(null);
       setDeleteContentChoice("");
+      setDeleteTextConfirmation("");
+      setDeleteFinalConfirmed(false);
       setDeleteError("");
     } catch (error) {
       setDeleteError(error.message);
@@ -755,14 +775,14 @@ function Projects() {
           <button
             type="button"
             onClick={() => navigate("/workspaces")}
-            className="font-medium text-slate-400 transition hover:text-cyan-400"
+            className="text-slate-300 transition hover:text-cyan-300"
           >
             Workspaces
           </button>
 
-          <FaChevronRight className="text-xs text-slate-600" />
+          <span className="text-cyan-500">&gt;</span>
 
-          <span className="font-medium text-cyan-400">
+          <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 font-bold text-cyan-200 shadow-sm shadow-cyan-950/40">
             {displayWorkspaceName}
           </span>
         </div>
@@ -1698,6 +1718,50 @@ function Projects() {
               recovered either.
             </div>
 
+            <div className="mt-5">
+              <p className="mb-3 text-sm leading-6 text-slate-300">
+                To confirm this delete action, type{" "}
+                <span className="font-bold text-white">DELETE</span>{" "}
+                below.
+              </p>
+
+              <label
+                htmlFor="delete-project-text-confirmation"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Delete Confirmation
+              </label>
+
+              <input
+                id="delete-project-text-confirmation"
+                type="text"
+                value={deleteTextConfirmation}
+                onChange={(event) =>
+                  setDeleteTextConfirmation(event.target.value)
+                }
+                disabled={deleting}
+                placeholder="DELETE"
+                autoComplete="off"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+
+            <label className="mt-4 flex items-start gap-3 rounded-xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-200">
+              <input
+                type="checkbox"
+                checked={deleteFinalConfirmed}
+                onChange={(event) =>
+                  setDeleteFinalConfirmed(event.target.checked)
+                }
+                disabled={deleting}
+                className="mt-1"
+              />
+
+              <span>
+                I understand this will delete the project and affect its attached content based on the option I selected.
+              </span>
+            </label>
+
             {deleteError && (
               <p
                 className="mt-4 rounded-lg border border-red-800 bg-red-950 p-3 text-red-300"
@@ -1720,7 +1784,12 @@ function Projects() {
               <button
                 type="button"
                 onClick={confirmDeleteProject}
-                disabled={deleting || !deleteContentChoice}
+                disabled={
+                  deleting ||
+                  !deleteContentChoice ||
+                  deleteTextConfirmation.trim() !== "DELETE" ||
+                  !deleteFinalConfirmed
+                }
                 className="rounded-lg bg-red-600 px-5 py-2.5 font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40"
                 data-testid="confirm-delete-project"
               >

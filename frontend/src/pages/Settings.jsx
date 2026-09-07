@@ -113,6 +113,38 @@ function Settings() {
     setSuccessMessage("");
   };
 
+  const autoSaveSetting = (section, key, value) => {
+    setSettings((currentSettings) => {
+      const updatedSettings = {
+        ...currentSettings,
+        [section]: {
+          ...currentSettings[section],
+          [key]: value,
+        },
+      };
+
+      try {
+        localStorage.setItem(
+          SETTINGS_KEY,
+          JSON.stringify(updatedSettings)
+        );
+
+        window.dispatchEvent(
+          new Event("tanio-settings-updated")
+        );
+
+        setSavedSettings(updatedSettings);
+        setError("");
+        setSuccessMessage("");
+      } catch {
+        setError("Unable to save your settings.");
+        setSuccessMessage("");
+      }
+
+      return updatedSettings;
+    });
+  };  
+
   const handleProfileImageUpload = (event) => {
     const file = event.target.files?.[0];
 
@@ -452,17 +484,6 @@ function Settings() {
             <FaUndo />
             Reset Defaults
           </button>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !hasChanges}
-            className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <FaSave />
-
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
         </div>
       </div>
 
@@ -516,7 +537,7 @@ function Settings() {
               id="theme"
               value={settings.appearance.theme}
               onChange={(event) =>
-                updateSetting(
+                autoSaveSetting(
                   "appearance",
                   "theme",
                   event.target.value
@@ -550,7 +571,7 @@ function Settings() {
               role="switch"
               aria-checked={settings.appearance.compactLayout}
               onClick={() =>
-                updateSetting(
+                autoSaveSetting(
                   "appearance",
                   "compactLayout",
                   !settings.appearance.compactLayout
@@ -611,7 +632,7 @@ function Settings() {
                 id="creativity"
                 value={settings.ai.creativity}
                 onChange={(event) =>
-                  updateSetting(
+                  autoSaveSetting(
                     "ai",
                     "creativity",
                     event.target.value
@@ -644,7 +665,7 @@ function Settings() {
                 id="response-length"
                 value={settings.ai.responseLength}
                 onChange={(event) =>
-                  updateSetting(
+                  autoSaveSetting(
                     "ai",
                     "responseLength",
                     event.target.value
@@ -677,7 +698,7 @@ function Settings() {
                 id="default-tone"
                 value={settings.ai.defaultTone}
                 onChange={(event) =>
-                  updateSetting(
+                  autoSaveSetting(
                     "ai",
                     "defaultTone",
                     event.target.value
@@ -719,7 +740,7 @@ function Settings() {
                 settings.notifications.generationComplete
               }
               onToggle={() =>
-                updateSetting(
+                autoSaveSetting(
                   "notifications",
                   "generationComplete",
                   !settings.notifications.generationComplete
@@ -732,7 +753,7 @@ function Settings() {
               description="Show notifications for project and workspace activity."
               enabled={settings.notifications.activityUpdates}
               onToggle={() =>
-                updateSetting(
+                autoSaveSetting(
                   "notifications",
                   "activityUpdates",
                   !settings.notifications.activityUpdates
@@ -747,7 +768,7 @@ function Settings() {
                 settings.notifications.emailNotifications
               }
               onToggle={() =>
-                updateSetting(
+                autoSaveSetting(
                   "notifications",
                   "emailNotifications",
                   !settings.notifications.emailNotifications
@@ -758,7 +779,7 @@ function Settings() {
         </section>
 
         {/* Account */}
-        <section className="relative rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
           <div className="mb-6 flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
               <FaUserCog />
@@ -881,31 +902,44 @@ function Settings() {
                 Leave blank if you do not want a default workspace.
               </p>
             </div>
-          </div>
+          </div>   
 
-          <div className="absolute bottom-5 right-6 flex items-center gap-4">
+          <div className="mt-6 flex flex-col gap-3 border-t border-slate-800 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailError("");
+                  setEmailSuccess("");
+                  setShowEmailModal(true);
+                }}
+                className="flex min-w-44 items-center justify-center rounded-lg border border-cyan-700/50 bg-cyan-950/40 px-5 py-2.5 text-sm font-semibold text-cyan-300 transition hover:border-cyan-500 hover:bg-cyan-950/70 hover:text-cyan-200"
+              >
+                Update Email
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordError("");
+                  setPasswordSuccess("");
+                  setShowPasswordModal(true);
+                }}
+                className="flex min-w-44 items-center justify-center rounded-lg border border-cyan-700/50 bg-cyan-950/40 px-5 py-2.5 text-sm font-semibold text-cyan-300 transition hover:border-cyan-500 hover:bg-cyan-950/70 hover:text-cyan-200"
+              >
+                Update Password
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={() => {
-                setEmailError("");
-                setEmailSuccess("");
-                setShowEmailModal(true);
-              }}
-              className="text-xs font-medium text-cyan-400 transition hover:text-cyan-300 hover:underline"
+              onClick={handleSave}
+              disabled={saving || !hasChanges}
+              className="flex min-w-44 items-center justify-center gap-2 rounded-lg bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Update Email
-            </button>
+              <FaSave />
 
-            <button
-              type="button"
-              onClick={() => {
-                setPasswordError("");
-                setPasswordSuccess("");
-                setShowPasswordModal(true);
-              }}
-              className="text-xs font-medium text-cyan-400 transition hover:text-cyan-300 hover:underline"
-            >
-              Update Password
+              {saving ? "Saving..." : "Save Account Settings"}
             </button>
           </div>
         </section>
@@ -1204,23 +1238,6 @@ function Settings() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Unsaved Changes */}
-      {hasChanges && (
-        <div className="mt-6 flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-amber-200">
-            You have unsaved changes.
-          </p>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-          >
-            Save Changes
-          </button>
         </div>
       )}
     </main>

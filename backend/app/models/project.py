@@ -19,7 +19,7 @@ class Project(Base):
     workspace_id = Column(
         Integer,
         ForeignKey("workspaces.id"),
-        nullable=False,
+        nullable=True,
     )
 
     owner_id = Column(

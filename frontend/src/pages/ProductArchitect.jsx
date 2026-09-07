@@ -1100,15 +1100,18 @@ ${aiPreferenceInstructions}`;
         return;
       }
 
+      const currentProject = loadedProjects.find(
+        (project) => String(project.id) === String(selectedProjectId)
+      );
+
       const preferredWorkspace =
         loadedWorkspaces.find(
           (workspace) =>
-            selectedProject?.workspace_id &&
-            String(workspace.id) === String(selectedProject.workspace_id)
+            currentProject &&
+            String(workspace.id) === String(currentProject.workspace_id)
         ) || loadedWorkspaces[0];
 
-      const nextWorkspaceId = String(preferredWorkspace.id);
-      setSelectedWorkspaceId(nextWorkspaceId);
+      setSelectedWorkspaceId(String(preferredWorkspace.id));
 
       const projectsInWorkspace = loadedProjects.filter(
         (project) =>
@@ -1117,9 +1120,7 @@ ${aiPreferenceInstructions}`;
 
       const preferredProject =
         projectsInWorkspace.find(
-          (project) =>
-            selectedProject?.id &&
-            String(project.id) === String(selectedProject.id)
+          (project) => String(project.id) === String(selectedProjectId)
         ) || projectsInWorkspace[0];
 
       setSelectedSaveProjectId(
@@ -1453,7 +1454,6 @@ ${aiPreferenceInstructions}`;
             value={projectName}
             onChange={(e) => {
               setProjectName(e.target.value);
-              setSelectedProjectId(null);
 
               if (error) {
                 setError("");

@@ -58,7 +58,7 @@ class ProjectResponse(BaseModel):
     title: str
     description: str | None = None
     ai_summary: str | None = None
-    workspace_id: int
+    workspace_id: int | None = None
     owner_id: int
 
     class Config:

@@ -111,6 +111,20 @@ function createPreview(body = "", maximumLength = 220) {
   return `${plainText.slice(0, maximumLength).trim()}...`;
 }
 
+function sortNewestFirst(items = []) {
+  return [...items].sort((firstItem, secondItem) => {
+    const firstDate = new Date(
+      firstItem.created_at || firstItem.createdAt || 0
+    );
+
+    const secondDate = new Date(
+      secondItem.created_at || secondItem.createdAt || 0
+    );
+
+    return secondDate - firstDate;
+  });
+}
+
 const contentMarkdownClasses = `
   text-slate-200 leading-relaxed
   [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-2 [&_h1]:mb-4
@@ -300,10 +314,18 @@ function Content() {
           }))
         : [];
 
-      setContentItems([
-        ...(Array.isArray(contentData) ? contentData : []),
+      const savedContentItems = sortNewestFirst(
+        Array.isArray(contentData) ? contentData : []
+      );
+
+      const sortedLogoItems = sortNewestFirst([
         ...logoItems,
         ...preservedLogoItems,
+      ]);
+
+      setContentItems([
+        ...savedContentItems,
+        ...sortedLogoItems,
       ]);
 
       setProjects(safeProjects);
@@ -1080,41 +1102,43 @@ function Content() {
                         </p>
                       )}
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="mt-5 border-t border-slate-800 pt-4">
                         <button
                           type="button"
                           onClick={() => setSelectedContent(item)}
-                          className="flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                          className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                         >
                           <FaEye />
                           View
                         </button>
 
-                        {!item.isLogo && (
+                        <div className="flex flex-wrap items-center gap-3">
+                          {!item.isLogo && (
+                            <button
+                              type="button"
+                              onClick={() => openEditContent(item)}
+                              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                            >
+                              Edit
+                            </button>
+                          )}
+
                           <button
                             type="button"
-                            onClick={() => openEditContent(item)}
+                            onClick={() => openMoveContent(item)}
                             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
                           >
-                            Edit
+                            Move
                           </button>
-                        )}
 
-                        <button
-                          type="button"
-                          onClick={() => openMoveContent(item)}
-                          className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                        >
-                          Move
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => openDeleteConfirmation(item)}
-                          className="rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
-                        >
-                          Delete
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => openDeleteConfirmation(item)}
+                            className="ml-auto rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </article>
                   ))}

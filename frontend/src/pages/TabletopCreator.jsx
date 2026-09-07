@@ -941,15 +941,32 @@ function TabletopCreator() {
         return;
       }
 
-      const firstWorkspace = loadedWorkspaces[0];
-      setSelectedWorkspaceId(String(firstWorkspace.id));
-
-      const firstProject = loadedProjects.find(
-        (project) =>
-          String(project.workspace_id) === String(firstWorkspace.id)
+      const currentProject = loadedProjects.find(
+        (project) => String(project.id) === String(selectedProjectId)
       );
 
-      setSelectedSaveProjectId(firstProject ? String(firstProject.id) : "");
+      const preferredWorkspace =
+        loadedWorkspaces.find(
+          (workspace) =>
+            currentProject &&
+            String(workspace.id) === String(currentProject.workspace_id)
+        ) || loadedWorkspaces[0];
+
+      setSelectedWorkspaceId(String(preferredWorkspace.id));
+
+      const projectsInWorkspace = loadedProjects.filter(
+        (project) =>
+          String(project.workspace_id) === String(preferredWorkspace.id)
+      );
+
+      const preferredProject =
+        projectsInWorkspace.find(
+          (project) => String(project.id) === String(selectedProjectId)
+        ) || projectsInWorkspace[0];
+
+      setSelectedSaveProjectId(
+        preferredProject ? String(preferredProject.id) : ""
+      );
     } catch (error) {
       console.error("Workspace options load error:", error);
       setSaveWorkspaceError(
@@ -1207,7 +1224,6 @@ function TabletopCreator() {
               value={campaignName}
               onChange={(event) => {
                 setCampaignName(event.target.value);
-                setSelectedProjectId(null);
               }}
               maxLength={100}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"

@@ -38,6 +38,20 @@ function createPreview(body = "", maximumLength = 220) {
   return `${plainText.slice(0, maximumLength).trim()}...`;
 }
 
+function sortNewestFirst(items = []) {
+  return [...items].sort((firstItem, secondItem) => {
+    const firstDate = new Date(
+      firstItem.created_at || firstItem.createdAt || 0
+    );
+
+    const secondDate = new Date(
+      secondItem.created_at || secondItem.createdAt || 0
+    );
+
+    return secondDate - firstDate;
+  });
+}
+
 const contentMarkdownClasses = `
   text-slate-200 leading-relaxed
   [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-2 [&_h1]:mb-4
@@ -101,6 +115,12 @@ function ProjectDetail() {
   const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  // Move state
+  const [moveTarget, setMoveTarget] = useState(null);
+  const [moveProjectId, setMoveProjectId] = useState("");
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [moveError, setMoveError] = useState("");
+  const [projects, setProjects] = useState([]);
 
   const numericProjectId = Number(projectId);
   const handleBack = () => {
@@ -138,7 +158,7 @@ function ProjectDetail() {
           },
         };
 
-        const [projectResponse, contentResponse, logoResponse] =
+        const [projectResponse, contentResponse, logoResponse, projectsResponse] =
           await Promise.all([
             fetch(`${API_BASE_URL}/projects/${numericProjectId}`, requestOptions),
             fetch(
@@ -149,12 +169,14 @@ function ProjectDetail() {
               `${API_BASE_URL}/product-architect/logos/${numericProjectId}`,
               requestOptions
             ),
+            fetch(`${API_BASE_URL}/projects/`, requestOptions),
           ]);
 
         if (
           projectResponse.status === 401 ||
           contentResponse.status === 401 ||
-          logoResponse.status === 401
+          logoResponse.status === 401 ||
+          projectsResponse.status === 401
         ) {
           localStorage.removeItem("token");
           localStorage.removeItem("tanioSession");
@@ -175,15 +197,30 @@ function ProjectDetail() {
           throw new Error("Unable to load project logos.");
         }
 
-        const [projectData, contentData, logoData] = await Promise.all([
+        if (!projectsResponse.ok) {
+          throw new Error("Unable to load available projects.");
+        }
+
+        const [projectData, contentData, logoData, projectsData] = await Promise.all([
           projectResponse.json(),
           contentResponse.json(),
           logoResponse.json(),
+          projectsResponse.json(),
         ]);
 
-        setProject(projectData);
-        setContentItems(Array.isArray(contentData) ? contentData : []);
-        setLogos(Array.isArray(logoData?.logos) ? logoData.logos : []);
+      setProject(projectData);
+
+      setContentItems(
+        sortNewestFirst(Array.isArray(contentData) ? contentData : [])
+      );
+
+      setLogos(
+        sortNewestFirst(Array.isArray(logoData?.logos) ? logoData.logos : [])
+      );
+      
+      setProjects(
+        sortNewestFirst(Array.isArray(projectsData) ? projectsData : [])
+      );
 
         if (projectData.workspace_id) {
           const workspaceResponse = await fetch(
@@ -360,6 +397,107 @@ function ProjectDetail() {
     setViewingItem(null);
   };
 
+  const openMoveItem = (item, type = "content") => {
+    setMoveTarget({
+      ...item,
+      moveType: type,
+    });
+
+    setMoveProjectId(String(item.project_id || numericProjectId));
+    setMoveError("");
+  };
+
+  const closeMoveItem = () => {
+    if (moveLoading) {
+      return;
+    }
+
+    setMoveTarget(null);
+    setMoveProjectId("");
+    setMoveError("");
+  };
+
+  const confirmMoveItem = async () => {
+    if (!moveTarget || !moveProjectId) {
+      setMoveError("Please choose a project.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setMoveError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setMoveLoading(true);
+    setMoveError("");
+
+    try {
+      const endpoint =
+        moveTarget.moveType === "image"
+          ? `${API_BASE_URL}/product-architect/logos/${moveTarget.id}`
+          : `${API_BASE_URL}/content/${moveTarget.id}`;
+
+      const response = await fetch(endpoint, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          project_id: Number(moveProjectId),
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "This item could not be moved. Please try again."
+        );
+      }
+
+      if (moveTarget.moveType === "image") {
+        setLogos((currentLogos) =>
+          currentLogos.filter((logo) => logo.id !== moveTarget.id)
+        );
+      } else {
+        setContentItems((currentItems) =>
+          currentItems.filter((item) => item.id !== moveTarget.id)
+        );
+      }
+
+      if (
+        viewingItem?.id === moveTarget.id &&
+        viewingItem?.viewType === moveTarget.moveType
+      ) {
+        setViewingItem(null);
+      }
+
+      closeMoveItem();
+    } catch (requestError) {
+      console.error("Move project item failed:", requestError);
+
+      setMoveError(
+        requestError instanceof Error
+          ? requestError.message
+          : "This item could not be moved. Please try again."
+      );
+    } finally {
+      setMoveLoading(false);
+    }
+  };  
+
   const openDeleteItem = (item, type = "content") => {
     setDeleteTarget({
       ...item,
@@ -468,7 +606,7 @@ function ProjectDetail() {
             className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-slate-400 transition hover:bg-slate-900 hover:text-white"
           >
             <FaArrowLeft className="text-xs" />
-            Back to Projects
+            Back
           </button>
 
           {!loading && !error && project && (
@@ -533,7 +671,7 @@ function ProjectDetail() {
                 <div className="min-w-0">
                   <div className="border-b border-slate-800/80 px-6 py-5 sm:px-8 xl:px-10">
                     <nav
-                      className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500"
+                      className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-300"
                       aria-label="Breadcrumb"
                     >
                       <button
@@ -544,19 +682,21 @@ function ProjectDetail() {
                         Workspaces
                       </button>
 
-                      <span className="text-slate-700">/</span>
+                      <span className="text-cyan-500">&gt;</span>
 
                       <button
                         type="button"
-                        onClick={() => navigate("/projects")}
+                        onClick={() =>
+                          navigate(`/projects?workspace=${project.workspace_id}`)
+                        }
                         className="transition hover:text-cyan-300"
                       >
-                        Projects
+                        {workspace?.name || "Unknown Workspace"}
                       </button>
 
-                      <span className="text-slate-700">/</span>
+                      <span className="text-cyan-500">&gt;</span>
 
-                      <span className="font-semibold text-white">
+                      <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 font-bold text-cyan-200 shadow-sm shadow-cyan-950/40">
                         {project.title}
                       </span>
                     </nav>
@@ -864,32 +1004,42 @@ function ProjectDetail() {
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 border-t border-slate-800 bg-slate-950/35 px-5 py-4">
+                      <div className="border-t border-slate-800 bg-slate-950/35 px-5 py-4">
                         <button
                           type="button"
                           onClick={() => openViewItem(item, "content")}
-                          className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-3.5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                          className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-3.5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                         >
                           <FaEye />
                           View
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => openEditContent(item)}
-                          className="rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => openEditContent(item)}
+                            className="rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                          >
+                            Edit
+                          </button>
 
-                        <button
-                          type="button"
-                          onClick={() => openDeleteItem(item, "content")}
-                          className="ml-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/40 hover:text-red-300"
-                        >
-                          <FaTrash />
-                          Delete
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => openMoveItem(item, "content")}
+                            className="rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                          >
+                            Move
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openDeleteItem(item, "content")}
+                            className="ml-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/40 hover:text-red-300"
+                          >
+                            <FaTrash />
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -964,24 +1114,34 @@ function ProjectDetail() {
                           </div>
                         </div>
 
-                        <div className="mt-5 flex items-center gap-2 border-t border-slate-800 pt-4">
+                        <div className="mt-5 border-t border-slate-800 pt-4">
                           <button
                             type="button"
                             onClick={() => openViewItem(logo, "image")}
-                            className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-3.5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                            className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-3.5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                           >
                             <FaEye />
                             View
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => openDeleteItem(logo, "image")}
-                            className="ml-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/40 hover:text-red-300"
-                          >
-                            <FaTrash />
-                            Delete
-                          </button>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => openMoveItem(logo, "image")}
+                              className="rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                            >
+                              Move
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openDeleteItem(logo, "image")}
+                              className="ml-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950/40 hover:text-red-300"
+                            >
+                              <FaTrash />
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </article>
@@ -1176,6 +1336,119 @@ function ProjectDetail() {
           </form>
         </div>
       )}
+
+      {moveTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeMoveItem();
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="move-item-title"
+            className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+          >
+            <header className="border-b border-slate-800 p-6">
+              <h3
+                id="move-item-title"
+                className="text-2xl font-bold text-white"
+              >
+                Move this item
+              </h3>
+
+              <p className="mt-2 text-slate-400">
+                Choose the project this item should belong to.
+              </p>
+            </header>
+
+            <div className="space-y-5 p-6">
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-sm text-slate-500">Item</p>
+
+                <p className="mt-1 font-semibold text-white">
+                  {moveTarget.moveType === "image"
+                    ? `${project.title} Image`
+                    : moveTarget.title}
+                </p>
+
+                <p className="mt-3 text-sm text-slate-500">
+                  Current Project
+                </p>
+
+                <p className="mt-1 text-slate-300">
+                  {project.title}
+                </p>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="project-detail-move-project"
+                  className="block text-sm font-semibold text-slate-300"
+                >
+                  Move to project
+                </label>
+
+                <select
+                  id="project-detail-move-project"
+                  value={moveProjectId}
+                  onChange={(event) => {
+                    setMoveProjectId(event.target.value);
+                    setMoveError("");
+                  }}
+                  disabled={moveLoading}
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                >
+                  <option value="">Choose a project</option>
+
+                  {projects.map((availableProject) => (
+                    <option
+                      key={availableProject.id}
+                      value={availableProject.id}
+                    >
+                      {availableProject.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {moveError && (
+                <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-red-300">
+                  {moveError}
+                </div>
+              )}
+            </div>
+
+            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
+              <button
+                type="button"
+                onClick={closeMoveItem}
+                disabled={moveLoading}
+                className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmMoveItem}
+                disabled={
+                  moveLoading ||
+                  !moveProjectId ||
+                  Number(moveProjectId) === numericProjectId
+                }
+                className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {moveLoading ? "Moving..." : "Move Item"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}      
 
       {deleteTarget && (
         <div
