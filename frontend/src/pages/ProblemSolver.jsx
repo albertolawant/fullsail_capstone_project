@@ -16,42 +16,44 @@ function ProblemSolver() {
 
   const markdownComponents = {
     h1: ({ children }) => (
-      <h1 className="mb-5 mt-6 text-2xl font-bold text-white first:mt-0">
+      <h1 className="mb-4 mt-10 border-b border-slate-700 pb-3 text-2xl font-bold tracking-tight text-white first:mt-0">
         {children}
       </h1>
     ),
 
     h2: ({ children }) => (
-      <h2 className="mb-4 mt-7 text-xl font-bold text-white">
+      <h2 className="mb-4 mt-7 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-xl font-bold text-white">
         {children}
       </h2>
     ),
 
     h3: ({ children }) => (
-      <h3 className="mb-3 mt-6 text-lg font-semibold text-cyan-400">
+      <h3 className="mb-3 mt-5 border-l-4 border-cyan-500 pl-3 text-base font-semibold uppercase tracking-wide text-cyan-300">
         {children}
       </h3>
     ),
 
     p: ({ children }) => (
-      <p className="mb-4 leading-relaxed text-slate-200">
+      <p className="mb-4 leading-7 text-slate-200">
         {children}
       </p>
     ),
 
     ul: ({ children }) => (
-      <ul className="mb-4 list-disc space-y-2 pl-6 text-slate-200">
+      <ul className="mb-5 list-disc space-y-2 pl-6 leading-7 text-slate-200 marker:text-cyan-400">
         {children}
       </ul>
     ),
 
     ol: ({ children }) => (
-      <ol className="mb-4 list-decimal space-y-2 pl-6 text-slate-200">
+      <ol className="mb-5 list-decimal space-y-3 pl-7 leading-7 text-slate-200 marker:font-semibold marker:text-cyan-400">
         {children}
       </ol>
     ),
 
-    li: ({ children }) => <li>{children}</li>,
+    li: ({ children }) => (
+      <li className="pl-1">{children}</li>
+    ),
 
     strong: ({ children }) => (
       <strong className="font-semibold text-white">
@@ -59,8 +61,12 @@ function ProblemSolver() {
       </strong>
     ),
 
+    em: ({ children }) => (
+      <em className="text-slate-300">{children}</em>
+    ),
+
     blockquote: ({ children }) => (
-      <blockquote className="my-4 border-l-4 border-cyan-500 pl-4 italic text-slate-300">
+      <blockquote className="my-5 rounded-r-lg border-l-4 border-cyan-500 bg-slate-900/70 px-4 py-3 italic text-slate-300">
         {children}
       </blockquote>
     ),
@@ -73,9 +79,15 @@ function ProblemSolver() {
       </code>
     ),
 
+    pre: ({ children }) => (
+      <pre className="mb-5 overflow-x-auto rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm text-slate-200">
+        {children}
+      </pre>
+    ),
+
     table: ({ children }) => (
-      <div className="my-6 overflow-x-auto">
-        <table className="w-full border-collapse border border-slate-700">
+      <div className="my-6 overflow-x-auto rounded-lg border border-slate-700">
+        <table className="w-full border-collapse bg-slate-950/50">
           {children}
         </table>
       </div>
@@ -85,14 +97,24 @@ function ProblemSolver() {
       <thead className="bg-slate-800">{children}</thead>
     ),
 
+    tbody: ({ children }) => (
+      <tbody className="divide-y divide-slate-800">{children}</tbody>
+    ),
+
+    tr: ({ children }) => (
+      <tr className="transition-colors hover:bg-slate-900/70">
+        {children}
+      </tr>
+    ),
+
     th: ({ children }) => (
-      <th className="border border-slate-700 px-4 py-3 text-left text-white">
+      <th className="border-r border-slate-700 px-4 py-3 text-left text-sm font-semibold text-white last:border-r-0">
         {children}
       </th>
     ),
 
     td: ({ children }) => (
-      <td className="border border-slate-700 px-4 py-3 text-slate-200">
+      <td className="border-r border-slate-800 px-4 py-3 align-top text-slate-200 last:border-r-0">
         {children}
       </td>
     ),
@@ -462,8 +484,8 @@ function ProblemSolver() {
             </h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              Tanio&apos;s analysis and recommended solution will
-              appear here.
+              Tanio&apos;s structured analysis, possible solutions,
+              recommendation, and action plan will appear here.
             </p>
           </div>
 
@@ -489,7 +511,7 @@ function ProblemSolver() {
               </div>
             </div>
           ) : generatedSolution ? (
-            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-5">
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-5 sm:p-6">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={markdownComponents}
