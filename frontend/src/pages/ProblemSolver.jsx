@@ -1,4 +1,8 @@
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+const AI_REQUEST_TIMEOUT_MS = 35000;
 
 function ProblemSolver() {
   const [problemTitle, setProblemTitle] = useState("");
@@ -10,9 +14,99 @@ function ProblemSolver() {
   const [error, setError] = useState("");
   const [generatedSolution, setGeneratedSolution] = useState("");
 
+  const markdownComponents = {
+    h1: ({ children }) => (
+      <h1 className="mb-5 mt-6 text-2xl font-bold text-white first:mt-0">
+        {children}
+      </h1>
+    ),
+
+    h2: ({ children }) => (
+      <h2 className="mb-4 mt-7 text-xl font-bold text-white">
+        {children}
+      </h2>
+    ),
+
+    h3: ({ children }) => (
+      <h3 className="mb-3 mt-6 text-lg font-semibold text-cyan-400">
+        {children}
+      </h3>
+    ),
+
+    p: ({ children }) => (
+      <p className="mb-4 leading-relaxed text-slate-200">
+        {children}
+      </p>
+    ),
+
+    ul: ({ children }) => (
+      <ul className="mb-4 list-disc space-y-2 pl-6 text-slate-200">
+        {children}
+      </ul>
+    ),
+
+    ol: ({ children }) => (
+      <ol className="mb-4 list-decimal space-y-2 pl-6 text-slate-200">
+        {children}
+      </ol>
+    ),
+
+    li: ({ children }) => <li>{children}</li>,
+
+    strong: ({ children }) => (
+      <strong className="font-semibold text-white">
+        {children}
+      </strong>
+    ),
+
+    blockquote: ({ children }) => (
+      <blockquote className="my-4 border-l-4 border-cyan-500 pl-4 italic text-slate-300">
+        {children}
+      </blockquote>
+    ),
+
+    hr: () => <hr className="my-8 border-slate-700" />,
+
+    code: ({ children }) => (
+      <code className="rounded bg-slate-900 px-1.5 py-0.5 text-cyan-300">
+        {children}
+      </code>
+    ),
+
+    table: ({ children }) => (
+      <div className="my-6 overflow-x-auto">
+        <table className="w-full border-collapse border border-slate-700">
+          {children}
+        </table>
+      </div>
+    ),
+
+    thead: ({ children }) => (
+      <thead className="bg-slate-800">{children}</thead>
+    ),
+
+    th: ({ children }) => (
+      <th className="border border-slate-700 px-4 py-3 text-left text-white">
+        {children}
+      </th>
+    ),
+
+    td: ({ children }) => (
+      <td className="border border-slate-700 px-4 py-3 text-slate-200">
+        {children}
+      </td>
+    ),
+  };
+
   const handleAnalyzeProblem = async () => {
+    if (loading) {
+      return;
+    }
+
     const cleanedTitle = problemTitle.trim();
     const cleanedDescription = problemDescription.trim();
+    const cleanedContext = context.trim();
+    const cleanedConstraints = constraints.trim();
 
     setError("");
     setGeneratedSolution("");
@@ -22,27 +116,143 @@ function ProblemSolver() {
       return;
     }
 
+    if (cleanedTitle.length > 100) {
+      setError("Problem title cannot be longer than 100 characters.");
+      return;
+    }
+
     if (cleanedDescription.length < 10) {
-      setError("Problem description must contain at least 10 characters.");
+      setError(
+        "Problem description must contain at least 10 characters."
+      );
+      return;
+    }
+
+    if (cleanedDescription.length > 5000) {
+      setError(
+        "Problem description cannot be longer than 5,000 characters."
+      );
+      return;
+    }
+
+    if (cleanedContext.length > 2500) {
+      setError(
+        "Additional context cannot be longer than 2,500 characters."
+      );
+      return;
+    }
+
+    if (cleanedConstraints.length > 2500) {
+      setError(
+        "Constraints cannot be longer than 2,500 characters."
+      );
       return;
     }
 
     setLoading(true);
 
+    const controller = new AbortController();
+
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, AI_REQUEST_TIMEOUT_MS);
+
     try {
+      const token = localStorage.getItem("token");
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (!token) {
+        throw new Error(
+          "Your session has expired. Please sign in again."
+        );
+      }
 
-      setGeneratedSolution(
-        "Your AI-generated solution will appear here once the Problem Solver backend is connected."
+      const response = await fetch(
+        "http://127.0.0.1:8000/problem-solver/analyze",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: cleanedTitle,
+            description: cleanedDescription,
+            context: cleanedContext,
+            constraints: cleanedConstraints,
+          }),
+          signal: controller.signal,
+        }
       );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message =
+          "Something went wrong while analyzing the problem. Please try again.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (response.status === 400) {
+          message =
+            "Please check the problem information and try again.";
+        } else if (response.status === 401) {
+          message =
+            "Your session has expired. Please sign in again.";
+        } else if (response.status === 403) {
+          message =
+            "You are not authorized to perform this action.";
+        } else if (response.status === 422) {
+          message =
+            "Please enter a valid problem title and a more detailed description.";
+        } else if (response.status === 429) {
+          message =
+            "The AI service is receiving too many requests. Please wait a moment and try again.";
+        } else if (response.status === 502) {
+          message =
+            "The AI service could not complete the analysis. Please try again.";
+        } else if (response.status === 503) {
+          message =
+            "The AI service is temporarily unavailable. Please try again later.";
+        } else if (response.status === 504) {
+          message =
+            "The AI request took too long. Please try again.";
+        }
+
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+
+      if (!data?.solution || !data.solution.trim()) {
+        throw new Error(
+          "The AI did not return a solution. Please try again."
+        );
+      }
+
+      setGeneratedSolution(data.solution.trim());
     } catch (err) {
       console.error("Problem Solver error:", err);
 
-      setError(
-        "Something went wrong while analyzing the problem. Please try again."
-      );
+      if (
+        err instanceof DOMException &&
+        err.name === "AbortError"
+      ) {
+        setError(
+          "The AI request took too long. Please try analyzing the problem again."
+        );
+      } else if (err instanceof TypeError) {
+        setError(
+          "Could not connect to the server. Make sure the backend is running and try again."
+        );
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while analyzing the problem. Please try again."
+        );
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -61,17 +271,21 @@ function ProblemSolver() {
           <h1 className="text-3xl font-bold">Problem Solver</h1>
 
           <p className="mt-2 text-slate-400">
-            Describe a problem and let AI help you analyze possible solutions.
+            Describe a problem and let AI help you analyze possible
+            solutions.
           </p>
         </div>
 
         {/* Problem Form */}
         <div className="mb-8 rounded-xl border border-slate-800 bg-slate-900 p-6">
           <div className="mb-6">
-            <h2 className="text-xl font-bold">Describe Your Problem</h2>
+            <h2 className="text-xl font-bold">
+              Describe Your Problem
+            </h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              Give Tanio the information it needs to understand the problem.
+              Give Tanio the information it needs to understand the
+              problem.
             </p>
           </div>
 
@@ -141,7 +355,9 @@ function ProblemSolver() {
                 className="mb-2 block text-sm text-slate-400"
               >
                 Additional Context
-                <span className="ml-2 text-xs text-slate-600">Optional</span>
+                <span className="ml-2 text-xs text-slate-600">
+                  Optional
+                </span>
               </label>
 
               <textarea
@@ -169,7 +385,9 @@ function ProblemSolver() {
                 className="mb-2 block text-sm text-slate-400"
               >
                 Constraints
-                <span className="ml-2 text-xs text-slate-600">Optional</span>
+                <span className="ml-2 text-xs text-slate-600">
+                  Optional
+                </span>
               </label>
 
               <textarea
@@ -217,7 +435,9 @@ function ProblemSolver() {
                 Something went wrong
               </p>
 
-              <p className="mt-1 text-sm text-red-300">{error}</p>
+              <p className="mt-1 text-sm text-red-300">
+                {error}
+              </p>
 
               <button
                 type="button"
@@ -237,10 +457,13 @@ function ProblemSolver() {
           aria-busy={loading}
         >
           <div className="mb-5">
-            <h2 className="text-xl font-bold">Generated Solution</h2>
+            <h2 className="text-xl font-bold">
+              Generated Solution
+            </h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              Tanio's analysis and recommended solution will appear here.
+              Tanio&apos;s analysis and recommended solution will
+              appear here.
             </p>
           </div>
 
@@ -267,9 +490,12 @@ function ProblemSolver() {
             </div>
           ) : generatedSolution ? (
             <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-5">
-              <p className="leading-relaxed text-slate-200">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
                 {generatedSolution}
-              </p>
+              </ReactMarkdown>
             </div>
           ) : (
             <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-slate-800 bg-slate-950/30 p-6">
@@ -279,8 +505,8 @@ function ProblemSolver() {
                 </p>
 
                 <p className="mt-2 text-sm text-slate-600">
-                  Enter your problem above and select Analyze Problem to get
-                  started.
+                  Enter your problem above and select Analyze Problem
+                  to get started.
                 </p>
               </div>
             </div>

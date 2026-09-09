@@ -9,6 +9,7 @@ from app.api import content_version as content_version_api
 from app.api import product_architect
 from app.api import project as project_api
 from app.api import tabletop_creator
+from app.api import problem_solver
 from app.api import workspace as workspace_api
 from app.db.database import Base, engine
 from app.models import ai_usage, content, product_logo, project, user, workspace, activity_log
@@ -40,6 +41,7 @@ app.include_router(product_architect.router)
 app.include_router(tabletop_creator.router)
 app.include_router(dashboard.router)
 app.include_router(activity_log_api.router)
+app.include_router(problem_solver.router)
 
 @app.get("/")
 def root():
