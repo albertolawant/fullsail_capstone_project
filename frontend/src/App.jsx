@@ -11,6 +11,7 @@ import Content from "./pages/Content";
 import Settings from "./pages/Settings";
 import ProductArchitect from "./pages/ProductArchitect";
 import TabletopCreator from "./pages/TabletopCreator";
+import ProblemSolver from "./pages/ProblemSolver";
 import HelpGuide from "./pages/HelpGuide";
 
 const SETTINGS_KEY = "tanioSettings";
@@ -150,6 +151,11 @@ function App() {
             <Route
               path="/tabletop-creator"
               element={<TabletopCreator />}
+            />
+
+            <Route
+              path="/problem-solver"
+              element={<ProblemSolver />}
             />
 
             <Route

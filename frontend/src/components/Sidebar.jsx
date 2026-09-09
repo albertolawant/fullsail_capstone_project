@@ -12,6 +12,7 @@ import {
   FaCog,
   FaBrain,
   FaDice,
+  FaLightbulb,
   FaQuestionCircle,
   FaSignOutAlt,
   FaChevronRight,
@@ -72,6 +73,13 @@ function Sidebar() {
       subtitle: "World building",
       icon: FaDice,
       accent: "purple",
+    },
+    {
+      to: "/problem-solver",
+      label: "Problem Solver",
+      subtitle: "Problem analysis",
+      icon: FaLightbulb,
+      accent: "cyan",
     },
   ];
 
