@@ -14,6 +14,16 @@ function ProblemSolver() {
   const [error, setError] = useState("");
   const [generatedSolution, setGeneratedSolution] = useState("");
 
+  const [solutionVersions, setSolutionVersions] = useState([]);
+  const [activeVersionIndex, setActiveVersionIndex] = useState(0);
+
+  const [regenerationInstructions, setRegenerationInstructions] =
+    useState("");
+
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerationError, setRegenerationError] = useState("");
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+
   const markdownComponents = {
     h1: ({ children }) => (
       <h1 className="mb-4 mt-10 border-b border-slate-700 pb-3 text-2xl font-bold tracking-tight text-white first:mt-0">
@@ -132,6 +142,11 @@ function ProblemSolver() {
 
     setError("");
     setGeneratedSolution("");
+    setSolutionVersions([]);
+    setActiveVersionIndex(0);
+    setRegenerationInstructions("");
+    setRegenerationError("");
+    setShowRegenerateModal(false);
 
     if (cleanedTitle.length < 2) {
       setError("Problem title must contain at least 2 characters.");
@@ -251,7 +266,24 @@ function ProblemSolver() {
         );
       }
 
-      setGeneratedSolution(data.solution.trim());
+      
+      const initialSolution = data.solution.trim();
+
+      setGeneratedSolution(initialSolution);
+
+      setSolutionVersions([
+        {
+          solution: initialSolution,
+          instructions: "",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+
+      setActiveVersionIndex(0);
+      setRegenerationInstructions("");
+      setRegenerationError("");
+
+
     } catch (err) {
       console.error("Problem Solver error:", err);
 
@@ -276,6 +308,145 @@ function ProblemSolver() {
     } finally {
       window.clearTimeout(timeoutId);
       setLoading(false);
+    }
+  };
+
+  const handleRegenerateSolution = async () => {
+    if (regenerating || !generatedSolution) {
+      return;
+    }
+
+    const cleanedInstructions = regenerationInstructions.trim();
+
+    if (cleanedInstructions.length > 2500) {
+      setRegenerationError(
+        "Regeneration instructions cannot be longer than 2,500 characters."
+      );
+      return;
+    }
+
+    setRegenerationError("");
+    setRegenerating(true);
+
+    const controller = new AbortController();
+
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, AI_REQUEST_TIMEOUT_MS);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error(
+          "Your session has expired. Please sign in again."
+        );
+      }
+
+      const response = await fetch(
+        "http://127.0.0.1:8000/problem-solver/regenerate",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            original_solution: generatedSolution,
+            instructions: cleanedInstructions,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message =
+          "Something went wrong while regenerating the solution. Please try again.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (response.status === 401) {
+          message =
+            "Your session has expired. Please sign in again.";
+        } else if (response.status === 403) {
+          message =
+            "You are not authorized to perform this action.";
+        } else if (response.status === 422) {
+          message =
+            "Please check your regeneration instructions and try again.";
+        } else if (response.status === 429) {
+          message =
+            "The AI service is receiving too many requests. Please wait a moment and try again.";
+        } else if (response.status === 502) {
+          message =
+            "The AI service could not regenerate the solution. Please try again.";
+        } else if (response.status === 503) {
+          message =
+            "The AI service is temporarily unavailable. Please try again later.";
+        } else if (response.status === 504) {
+          message =
+            "The AI request took too long. Please try again.";
+        }
+
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+
+      if (!data?.solution || !data.solution.trim()) {
+        throw new Error(
+          "The AI did not return a regenerated solution. Please try again."
+        );
+      }
+
+      const regeneratedSolution = data.solution.trim();
+
+      const newVersion = {
+        solution: regeneratedSolution,
+        instructions: cleanedInstructions,
+        createdAt: new Date().toISOString(),
+      };
+
+      setSolutionVersions((previousVersions) => {
+        const updatedVersions = [
+          ...previousVersions,
+          newVersion,
+        ];
+
+        setActiveVersionIndex(updatedVersions.length - 1);
+
+        return updatedVersions;
+      });
+
+      setGeneratedSolution(regeneratedSolution);
+      setRegenerationInstructions("");
+      setShowRegenerateModal(false);
+    } catch (err) {
+      console.error("Problem Solver regeneration error:", err);
+
+      if (
+        err instanceof DOMException &&
+        err.name === "AbortError"
+      ) {
+        setRegenerationError(
+          "The AI request took too long. Please try regenerating the solution again."
+        );
+      } else if (err instanceof TypeError) {
+        setRegenerationError(
+          "Could not connect to the server. Make sure the backend is running and try again."
+        );
+      } else {
+        setRegenerationError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while regenerating the solution. Please try again."
+        );
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      setRegenerating(false);
     }
   };
 
@@ -476,17 +647,33 @@ function ProblemSolver() {
         {/* Generated Solution */}
         <div
           className="rounded-xl border border-slate-800 bg-slate-900 p-6"
-          aria-busy={loading}
+          aria-busy={loading || regenerating}
         >
-          <div className="mb-5">
-            <h2 className="text-xl font-bold">
-              Generated Solution
-            </h2>
+          <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold">
+                Generated Solution
+              </h2>
 
-            <p className="mt-1 text-sm text-slate-400">
-              Tanio&apos;s structured analysis, possible solutions,
-              recommendation, and action plan will appear here.
-            </p>
+              <p className="mt-1 text-sm text-slate-400">
+                Tanio&apos;s structured analysis, possible solutions,
+                recommendation, and action plan will appear here.
+              </p>
+            </div>
+
+            {generatedSolution && !loading && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRegenerationError("");
+                  setShowRegenerateModal(true);
+                }}
+                disabled={regenerating}
+                className="shrink-0 rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Regenerate
+              </button>
+            )}
           </div>
 
           {loading ? (
@@ -511,13 +698,89 @@ function ProblemSolver() {
               </div>
             </div>
           ) : generatedSolution ? (
-            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-5 sm:p-6">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
-              >
-                {generatedSolution}
-              </ReactMarkdown>
+            <div className="space-y-5">
+              {/* Version History */}
+              <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="font-semibold text-white">
+                      Solution Versions
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Switch between the original solution and regenerated versions.
+                    </p>
+                  </div>
+
+                  <span className="text-sm text-slate-400">
+                    Version {activeVersionIndex + 1} of {solutionVersions.length}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {solutionVersions.map((version, index) => (
+                    <button
+                      key={`${version.createdAt}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setActiveVersionIndex(index);
+                        setGeneratedSolution(version.solution);
+                        setRegenerationError("");
+                      }}
+                      disabled={regenerating}
+                      className={`rounded-lg border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        activeVersionIndex === index
+                          ? "border-cyan-500 bg-cyan-500/10 text-cyan-300"
+                          : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white"
+                      }`}
+                    >
+                      {index === 0 ? "Version 1 · Original" : `Version ${index + 1}`}
+                    </button>
+                  ))}
+                </div>
+
+                {solutionVersions[activeVersionIndex]?.instructions && (
+                  <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Regeneration Instructions
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      {solutionVersions[activeVersionIndex].instructions}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Solution Content */}
+              <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-5 sm:p-6">
+                {regenerating && (
+                  <div
+                    className="mb-5 flex items-center gap-3 rounded-lg border border-cyan-900 bg-cyan-950/30 p-4"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div
+                      className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-400"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p className="font-medium text-cyan-200">
+                        Regenerating solution...
+                      </p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        Tanio is applying your instructions while preserving the existing solution where possible.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
+                  {generatedSolution}
+                </ReactMarkdown>
+              </div>
+
             </div>
           ) : (
             <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-slate-800 bg-slate-950/30 p-6">
@@ -535,6 +798,124 @@ function ProblemSolver() {
           )}
         </div>
       </div>
+
+      {showRegenerateModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="regenerate-modal-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !regenerating) {
+              setShowRegenerateModal(false);
+              setRegenerationError("");
+            }
+          }}
+        >
+          <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="regenerate-modal-title"
+                  className="text-2xl font-bold text-white"
+                >
+                  Regenerate Solution
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Tell Tanio what you want changed in the new version.
+                  You can also leave this blank for a general regeneration.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!regenerating) {
+                    setShowRegenerateModal(false);
+                    setRegenerationError("");
+                  }
+                }}
+                disabled={regenerating}
+                className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close regeneration modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6">
+              <label
+                htmlFor="regeneration-instructions"
+                className="mb-2 block text-sm font-semibold text-slate-300"
+              >
+                What would you like to change?
+              </label>
+
+              <textarea
+                id="regeneration-instructions"
+                value={regenerationInstructions}
+                onChange={(event) => {
+                  setRegenerationInstructions(event.target.value);
+
+                  if (regenerationError) {
+                    setRegenerationError("");
+                  }
+                }}
+                rows={6}
+                maxLength={2500}
+                placeholder="e.g. Make the action plan more detailed, reduce the cost, and keep the rest mostly the same."
+                disabled={regenerating}
+                className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              />
+
+              <div className="mt-2 flex items-center justify-between gap-4 text-xs text-slate-500">
+                <span>Optional</span>
+                <span>{regenerationInstructions.length}/2500</span>
+              </div>
+            </div>
+
+            {regenerationError && (
+              <div
+                className="mt-4 rounded-lg border border-red-800 bg-red-950/50 p-4"
+                role="alert"
+                aria-live="polite"
+              >
+                <p className="font-semibold text-red-300">
+                  Regeneration failed
+                </p>
+
+                <p className="mt-1 text-sm text-red-300">
+                  {regenerationError}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRegenerateModal(false);
+                  setRegenerationError("");
+                }}
+                disabled={regenerating}
+                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRegenerateSolution}
+                disabled={regenerating || loading || !generatedSolution}
+                className="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {regenerating ? "Regenerating..." : "Regenerate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

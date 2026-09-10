@@ -25,5 +25,18 @@ class ProblemSolverRequest(BaseModel):
     )
 
 
+class ProblemSolverRegenerateRequest(BaseModel):
+    original_solution: str = Field(
+        ...,
+        min_length=10,
+        max_length=20000,
+    )
+
+    instructions: str = Field(
+        default="",
+        max_length=2500,
+    )
+
+
 class ProblemSolverResponse(BaseModel):
     solution: str
