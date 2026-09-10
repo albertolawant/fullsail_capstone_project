@@ -18,6 +18,7 @@ const API_BASE_URL = "http://127.0.0.1:8000";
 const CATEGORY_ALL = "All";
 const CATEGORY_PRODUCT = "Product Architect";
 const CATEGORY_TABLETOP = "Tabletop Creator";
+const CATEGORY_PROBLEM_SOLVER = "Problem Solver";
 const CATEGORY_LOGOS = "Saved Logos";
 const CATEGORY_OTHER = "Other";
 
@@ -59,6 +60,10 @@ function determineCategory(contentType = "") {
     return CATEGORY_PRODUCT;
   }
 
+  if (normalizedType.includes("problem solver")) {
+    return CATEGORY_PROBLEM_SOLVER;
+  }
+
   return CATEGORY_OTHER;
 }
 
@@ -69,6 +74,10 @@ function getCategoryIcon(category) {
 
   if (category === CATEGORY_TABLETOP) {
     return <FaDiceD20 />;
+  }
+
+  if (category === CATEGORY_PROBLEM_SOLVER) {
+    return <FaBrain />;
   }
 
   if (category === CATEGORY_LOGOS) {
@@ -85,6 +94,10 @@ function getCategoryBadgeClasses(category) {
 
   if (category === CATEGORY_TABLETOP) {
     return "border-purple-800 bg-purple-950/50 text-purple-300";
+  }
+
+  if (category === CATEGORY_PROBLEM_SOLVER) {
+    return "border-amber-800 bg-amber-950/50 text-amber-300";
   }
 
   if (category === CATEGORY_LOGOS) {
@@ -392,6 +405,9 @@ function Content() {
       CATEGORY_ALL,
       CATEGORY_PRODUCT,
       CATEGORY_TABLETOP,
+      ...(categories.has(CATEGORY_PROBLEM_SOLVER)
+        ? [CATEGORY_PROBLEM_SOLVER]
+        : []),
       ...(categories.has(CATEGORY_LOGOS) ? [CATEGORY_LOGOS] : []),
       ...(categories.has(CATEGORY_OTHER) ? [CATEGORY_OTHER] : []),
     ];
@@ -442,6 +458,7 @@ function Content() {
       ? [
           CATEGORY_PRODUCT,
           CATEGORY_TABLETOP,
+          CATEGORY_PROBLEM_SOLVER,
           CATEGORY_LOGOS,
           CATEGORY_OTHER,
         ]
@@ -971,8 +988,8 @@ function Content() {
             </h3>
 
             <p className="mt-2 text-slate-400">
-              Generate and save content or logos from Product Architect or
-              Tabletop Creator, and it will appear here.
+              Generate and save content or logos from Product Architect,
+              Tabletop Creator, or Problem Solver, and it will appear here.
             </p>
           </div>
         </section>

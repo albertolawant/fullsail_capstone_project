@@ -2,6 +2,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+const API_BASE_URL = "http://127.0.0.1:8000";
 const AI_REQUEST_TIMEOUT_MS = 35000;
 
 function ProblemSolver() {
@@ -23,6 +24,15 @@ function ProblemSolver() {
   const [regenerating, setRegenerating] = useState(false);
   const [regenerationError, setRegenerationError] = useState("");
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+
+  // Save to Workspace state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [loadingSaveOptions, setLoadingSaveOptions] = useState(false);
+  const [savingSolution, setSavingSolution] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState("");
 
   const markdownComponents = {
     h1: ({ children }) => (
@@ -147,6 +157,9 @@ function ProblemSolver() {
     setRegenerationInstructions("");
     setRegenerationError("");
     setShowRegenerateModal(false);
+    setShowSaveModal(false);
+    setSaveError("");
+    setSaveSuccess("");
 
     if (cleanedTitle.length < 2) {
       setError("Problem title must contain at least 2 characters.");
@@ -450,6 +463,218 @@ function ProblemSolver() {
     }
   };
 
+  const loadSaveOptions = async () => {
+    if (loadingSaveOptions) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setSaveError("Your session has expired. Please sign in again.");
+      setShowSaveModal(true);
+      return;
+    }
+
+    setLoadingSaveOptions(true);
+    setSaveError("");
+    setSaveSuccess("");
+    setSelectedWorkspaceId("");
+    setShowSaveModal(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/workspaces/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Unable to load your workspaces."
+        );
+      }
+
+      const workspaceData = await response.json();
+
+      setWorkspaces(Array.isArray(workspaceData) ? workspaceData : []);
+    } catch (err) {
+      console.error("Problem Solver save options error:", err);
+
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load your workspaces."
+      );
+    } finally {
+      setLoadingSaveOptions(false);
+    }
+  };
+
+  const closeSaveModal = () => {
+    if (savingSolution) {
+      return;
+    }
+
+    setShowSaveModal(false);
+    setSelectedWorkspaceId("");
+    setSaveError("");
+  };
+
+  const handleSaveSolution = async () => {
+    if (savingSolution || !generatedSolution) {
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      setSaveError("Please choose a workspace.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setSaveError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    const cleanedTitle = problemTitle.trim();
+
+    if (!cleanedTitle) {
+      setSaveError("The problem needs a title before it can be saved.");
+      return;
+    }
+
+    const currentVersion = solutionVersions[activeVersionIndex];
+    const versionNumber = activeVersionIndex + 1;
+    const versionLabel =
+      activeVersionIndex === 0
+        ? "Version 1 · Original"
+        : `Version ${versionNumber}`;
+
+    const versionDetails = currentVersion?.instructions
+      ? `\n\n---\n\n**Saved Problem Solver Version:** ${versionLabel}\n\n**Regeneration Instructions:** ${currentVersion.instructions}`
+      : `\n\n---\n\n**Saved Problem Solver Version:** ${versionLabel}`;
+
+    setSavingSolution(true);
+    setSaveError("");
+    setSaveSuccess("");
+
+    try {
+      // Step 1: create a brand-new project in the selected workspace.
+      const projectResponse = await fetch(`${API_BASE_URL}/projects/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          title: cleanedTitle,
+          description: `Problem Solver project created from the problem: ${cleanedTitle}`,
+          workspace_id: Number(selectedWorkspaceId),
+        }),
+      });
+
+      if (projectResponse.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!projectResponse.ok) {
+        const errorData = await projectResponse.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail ||
+            "Tanio could not create a project for this solution. Please try again."
+        );
+      }
+
+      const newProject = await projectResponse.json();
+
+      if (!newProject?.id) {
+        throw new Error(
+          "The new project was created, but Tanio could not read its project ID."
+        );
+      }
+
+      // Step 2: save the current Problem Solver version inside that new project.
+      const contentResponse = await fetch(`${API_BASE_URL}/content/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          project_id: Number(newProject.id),
+          title: cleanedTitle,
+          content_type: "Problem Solver",
+          body: `${generatedSolution}${versionDetails}`,
+        }),
+      });
+
+      if (contentResponse.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!contentResponse.ok) {
+        const errorData = await contentResponse.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail ||
+            "The project was created, but the solution could not be saved. Please try again."
+        );
+      }
+
+      await contentResponse.json().catch(() => null);
+
+      const selectedWorkspace = workspaces.find(
+        (workspace) =>
+          String(workspace.id) === String(selectedWorkspaceId)
+      );
+
+      setSaveSuccess(
+        `"${cleanedTitle}" was created as its own project in ${
+          selectedWorkspace?.name ||
+          selectedWorkspace?.title ||
+          "your workspace"
+        } and saved to the Content Library.`
+      );
+
+      setShowSaveModal(false);
+      setSelectedWorkspaceId("");
+    } catch (err) {
+      console.error("Problem Solver save error:", err);
+
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : "This solution could not be saved. Please try again."
+      );
+    } finally {
+      setSavingSolution(false);
+    }
+  };
+
   const clearError = () => {
     if (error) {
       setError("");
@@ -662,19 +887,45 @@ function ProblemSolver() {
             </div>
 
             {generatedSolution && !loading && (
-              <button
-                type="button"
-                onClick={() => {
-                  setRegenerationError("");
-                  setShowRegenerateModal(true);
-                }}
-                disabled={regenerating}
-                className="shrink-0 rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Regenerate
-              </button>
+              <div className="flex shrink-0 flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={loadSaveOptions}
+                  disabled={regenerating || savingSolution}
+                  className="rounded-lg bg-violet-600 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Save to Workspace
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegenerationError("");
+                    setShowRegenerateModal(true);
+                  }}
+                  disabled={regenerating || savingSolution}
+                  className="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Regenerate
+                </button>
+              </div>
             )}
           </div>
+
+          {saveSuccess && (
+            <div
+              className="mb-5 rounded-lg border border-emerald-800 bg-emerald-950/40 p-4"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="font-semibold text-emerald-300">
+                Saved successfully
+              </p>
+              <p className="mt-1 text-sm text-emerald-300">
+                {saveSuccess}
+              </p>
+            </div>
+          )}
 
           {loading ? (
             <div
@@ -798,6 +1049,143 @@ function ProblemSolver() {
           )}
         </div>
       </div>
+
+      {showSaveModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-workspace-modal-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !savingSolution) {
+              closeSaveModal();
+            }
+          }}
+        >
+          <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="save-workspace-modal-title"
+                  className="text-2xl font-bold text-white"
+                >
+                  Save to Workspace
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Choose a workspace for the current Problem Solver version.
+                  Tanio will create a new project automatically using the problem title
+                  and save the solution to your Content Library.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeSaveModal}
+                disabled={savingSolution}
+                className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close save modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-lg border border-slate-800 bg-slate-950/50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Solution
+              </p>
+              <p className="mt-1 font-semibold text-white">
+                {problemTitle.trim() || "Untitled Problem"}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Saving Version {activeVersionIndex + 1} of {solutionVersions.length}
+              </p>
+            </div>
+
+            {loadingSaveOptions ? (
+              <div
+                className="mt-6 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/50 p-4"
+                role="status"
+                aria-live="polite"
+              >
+                <div
+                  className="h-5 w-5 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-400"
+                  aria-hidden="true"
+                />
+                <p className="text-sm text-slate-300">
+                  Loading your workspaces...
+                </p>
+              </div>
+            ) : (
+              <div className="mt-6 space-y-5">
+                <div>
+                  <label
+                    htmlFor="save-workspace-select"
+                    className="mb-2 block text-sm font-semibold text-slate-300"
+                  >
+                    Workspace
+                  </label>
+
+                  <select
+                    id="save-workspace-select"
+                    value={selectedWorkspaceId}
+                    onChange={(event) => {
+                      setSelectedWorkspaceId(event.target.value);
+                      setSaveError("");
+                    }}
+                    disabled={savingSolution}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                  >
+                    <option value="">Choose a workspace</option>
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>
+                        {workspace.name || workspace.title || `Workspace #${workspace.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+              </div>
+            )}
+
+            {saveError && (
+              <div
+                className="mt-4 rounded-lg border border-red-800 bg-red-950/50 p-4"
+                role="alert"
+                aria-live="polite"
+              >
+                <p className="font-semibold text-red-300">Save failed</p>
+                <p className="mt-1 text-sm text-red-300">{saveError}</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeSaveModal}
+                disabled={savingSolution}
+                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveSolution}
+                disabled={
+                  loadingSaveOptions ||
+                  savingSolution ||
+                  !selectedWorkspaceId ||
+                  !generatedSolution
+                }
+                className="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingSolution ? "Saving..." : "Save Solution"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showRegenerateModal && (
         <div
