@@ -60,6 +60,17 @@ function Dashboard() {
       accent: "purple",
       features: ["Campaigns", "NPCs", "Quests", "Locations"],
     },
+    {
+      name: "Problem Solver",
+      subtitle: "AI Problem Analysis",
+      description:
+        "Break down complex problems, explore multiple solutions, compare tradeoffs, and build a clear action plan with AI.",
+      icon: "💡",
+      route: "/problem-solver",
+      buttonLabel: "Open Problem Solver",
+      accent: "emerald",
+      features: ["Root Causes", "Solutions", "Pros & Cons", "Action Plans"],
+    },
   ];
 
   const quickActions = [
@@ -664,33 +675,51 @@ function Dashboard() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {modules.map((module) => {
-            const isCyan = module.accent === "cyan";
+            const accentClasses = {
+              cyan: {
+                card: "border-cyan-900/80 bg-gradient-to-br from-cyan-950/35 via-slate-900 to-slate-900 hover:border-cyan-600 hover:shadow-2xl hover:shadow-cyan-950/30",
+                glow: "bg-cyan-400/10",
+                icon: "border-cyan-800 bg-cyan-950/80",
+                subtitle: "text-cyan-400",
+                feature: "border-cyan-900/80 bg-cyan-950/30 text-cyan-200",
+                button: "bg-cyan-500 text-slate-950 hover:bg-cyan-400",
+              },
+              purple: {
+                card: "border-purple-900/80 bg-gradient-to-br from-purple-950/35 via-slate-900 to-slate-900 hover:border-purple-600 hover:shadow-2xl hover:shadow-purple-950/30",
+                glow: "bg-purple-400/10",
+                icon: "border-purple-800 bg-purple-950/80",
+                subtitle: "text-purple-400",
+                feature: "border-purple-900/80 bg-purple-950/30 text-purple-200",
+                button: "bg-purple-600 text-white hover:bg-purple-500",
+              },
+              emerald: {
+                card: "border-emerald-900/80 bg-gradient-to-br from-emerald-950/35 via-slate-900 to-slate-900 hover:border-emerald-600 hover:shadow-2xl hover:shadow-emerald-950/30",
+                glow: "bg-emerald-400/10",
+                icon: "border-emerald-800 bg-emerald-950/80",
+                subtitle: "text-emerald-400",
+                feature: "border-emerald-900/80 bg-emerald-950/30 text-emerald-200",
+                button: "bg-emerald-500 text-slate-950 hover:bg-emerald-400",
+              },
+            };
+
+            const accent =
+              accentClasses[module.accent] || accentClasses.cyan;
 
             return (
               <article
                 key={module.name}
-                className={`group relative overflow-hidden rounded-2xl border p-6 transition duration-200 hover:-translate-y-1 ${
-                  isCyan
-                    ? "border-cyan-900/80 bg-gradient-to-br from-cyan-950/35 via-slate-900 to-slate-900 hover:border-cyan-600 hover:shadow-2xl hover:shadow-cyan-950/30"
-                    : "border-purple-900/80 bg-gradient-to-br from-purple-950/35 via-slate-900 to-slate-900 hover:border-purple-600 hover:shadow-2xl hover:shadow-purple-950/30"
-                }`}
+                className={`group relative overflow-hidden rounded-2xl border p-6 transition duration-200 hover:-translate-y-1 ${accent.card}`}
               >
                 <div
-                  className={`pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full blur-3xl ${
-                    isCyan ? "bg-cyan-400/10" : "bg-purple-400/10"
-                  }`}
+                  className={`pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full blur-3xl ${accent.glow}`}
                 />
 
                 <div className="relative flex h-full flex-col">
                   <div className="flex items-start justify-between gap-4">
                     <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-xl border text-2xl ${
-                        isCyan
-                          ? "border-cyan-800 bg-cyan-950/80"
-                          : "border-purple-800 bg-purple-950/80"
-                      }`}
+                      className={`flex h-12 w-12 items-center justify-center rounded-xl border text-2xl ${accent.icon}`}
                     >
                       {module.icon}
                     </div>
@@ -703,9 +732,7 @@ function Dashboard() {
 
                   <div className="mt-5">
                     <p
-                      className={`text-xs font-semibold uppercase tracking-[0.15em] ${
-                        isCyan ? "text-cyan-400" : "text-purple-400"
-                      }`}
+                      className={`text-xs font-semibold uppercase tracking-[0.15em] ${accent.subtitle}`}
                     >
                       {module.subtitle}
                     </p>
@@ -722,11 +749,7 @@ function Dashboard() {
                       {module.features.map((feature) => (
                         <span
                           key={feature}
-                          className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
-                            isCyan
-                              ? "border-cyan-900/80 bg-cyan-950/30 text-cyan-200"
-                              : "border-purple-900/80 bg-purple-950/30 text-purple-200"
-                          }`}
+                          className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${accent.feature}`}
                         >
                           {feature}
                         </span>
@@ -734,15 +757,11 @@ function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="mt-7">
+                  <div className="mt-auto pt-7">
                     <button
                       type="button"
                       onClick={() => navigate(module.route)}
-                      className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 font-semibold transition ${
-                        isCyan
-                          ? "bg-cyan-500 text-slate-950 hover:bg-cyan-400"
-                          : "bg-purple-600 text-white hover:bg-purple-500"
-                      }`}
+                      className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 font-semibold transition ${accent.button}`}
                     >
                       {module.buttonLabel}
                       <span
