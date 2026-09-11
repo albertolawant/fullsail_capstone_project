@@ -557,15 +557,11 @@ function ProblemSolver() {
     }
 
     const currentVersion = solutionVersions[activeVersionIndex];
-    const versionNumber = activeVersionIndex + 1;
-    const versionLabel =
-      activeVersionIndex === 0
-        ? "Version 1 · Original"
-        : `Version ${versionNumber}`;
 
-    const versionDetails = currentVersion?.instructions
-      ? `\n\n---\n\n**Saved Problem Solver Version:** ${versionLabel}\n\n**Regeneration Instructions:** ${currentVersion.instructions}`
-      : `\n\n---\n\n**Saved Problem Solver Version:** ${versionLabel}`;
+    if (!currentVersion?.solution?.trim() || solutionVersions.length === 0) {
+      setSaveError("Problem Solver version history is unavailable.");
+      return;
+    }
 
     setSavingSolution(true);
     setSaveError("");
@@ -591,13 +587,11 @@ function ProblemSolver() {
         localStorage.removeItem("token");
         localStorage.removeItem("tanioSession");
         localStorage.removeItem("tanioUser");
-
         throw new Error("Your session has expired. Please sign in again.");
       }
 
       if (!projectResponse.ok) {
         const errorData = await projectResponse.json().catch(() => null);
-
         throw new Error(
           errorData?.detail ||
             "Tanio could not create a project for this solution. Please try again."
@@ -612,7 +606,7 @@ function ProblemSolver() {
         );
       }
 
-      // Step 2: save the current Problem Solver version inside that new project.
+      // Step 2: save the selected version as the main Content Library item.
       const contentResponse = await fetch(`${API_BASE_URL}/content/`, {
         method: "POST",
         headers: {
@@ -624,7 +618,7 @@ function ProblemSolver() {
           project_id: Number(newProject.id),
           title: cleanedTitle,
           content_type: "Problem Solver",
-          body: `${generatedSolution}${versionDetails}`,
+          body: currentVersion.solution,
         }),
       });
 
@@ -632,20 +626,59 @@ function ProblemSolver() {
         localStorage.removeItem("token");
         localStorage.removeItem("tanioSession");
         localStorage.removeItem("tanioUser");
-
         throw new Error("Your session has expired. Please sign in again.");
       }
 
       if (!contentResponse.ok) {
         const errorData = await contentResponse.json().catch(() => null);
-
         throw new Error(
           errorData?.detail ||
             "The project was created, but the solution could not be saved. Please try again."
         );
       }
 
-      await contentResponse.json().catch(() => null);
+      const savedContent = await contentResponse.json();
+
+      if (!savedContent?.id) {
+        throw new Error(
+          "The solution was saved, but Tanio could not read its content ID."
+        );
+      }
+
+      // Step 3: persist Version 1 and every regenerated version.
+      for (const version of solutionVersions) {
+        const versionResponse = await fetch(
+          `${API_BASE_URL}/content/${savedContent.id}/versions`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              body: version.solution,
+              regeneration_instructions:
+                version.instructions?.trim() || null,
+            }),
+          }
+        );
+
+        if (versionResponse.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("tanioSession");
+          localStorage.removeItem("tanioUser");
+          throw new Error("Your session has expired. Please sign in again.");
+        }
+
+        if (!versionResponse.ok) {
+          const errorData = await versionResponse.json().catch(() => null);
+          throw new Error(
+            errorData?.detail ||
+              "The solution was saved, but its generation history could not be saved completely."
+          );
+        }
+      }
 
       const selectedWorkspace = workspaces.find(
         (workspace) =>
@@ -657,7 +690,9 @@ function ProblemSolver() {
           selectedWorkspace?.name ||
           selectedWorkspace?.title ||
           "your workspace"
-        } and saved to the Content Library.`
+        } and saved to the Content Library with ${solutionVersions.length} version${
+          solutionVersions.length === 1 ? "" : "s"
+        }.`
       );
 
       setShowSaveModal(false);
@@ -1073,9 +1108,10 @@ function ProblemSolver() {
                 </h2>
 
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Choose a workspace for the current Problem Solver version.
-                  Tanio will create a new project automatically using the problem title
-                  and save the solution to your Content Library.
+                  Choose a workspace for this Problem Solver result.
+                  Tanio will create a new project automatically, save the selected
+                  solution to your Content Library, and preserve the complete generation
+                  history.
                 </p>
               </div>
 
@@ -1098,7 +1134,7 @@ function ProblemSolver() {
                 {problemTitle.trim() || "Untitled Problem"}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Saving Version {activeVersionIndex + 1} of {solutionVersions.length}
+                Saving Version {activeVersionIndex + 1} of {solutionVersions.length} · All versions will be preserved
               </p>
             </div>
 

@@ -166,6 +166,10 @@ function Content() {
   const [contentItems, setContentItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [selectedContent, setSelectedContent] = useState(null);
+  const [selectedContentVersions, setSelectedContentVersions] = useState([]);
+  const [selectedVersionIndex, setSelectedVersionIndex] = useState(-1);
+  const [versionHistoryLoading, setVersionHistoryLoading] = useState(false);
+  const [versionHistoryError, setVersionHistoryError] = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ALL);
@@ -367,7 +371,7 @@ function Content() {
 
     const handleEscape = (event) => {
       if (event.key === "Escape") {
-        setSelectedContent(null);
+        closeSelectedContent();
       }
     };
 
@@ -468,6 +472,92 @@ function Content() {
     setSearchTerm("");
     setSelectedCategory(CATEGORY_ALL);
   };
+
+  // -------------------------------------------------------
+  // VIEW SAVED CONTENT + PROBLEM SOLVER VERSION HISTORY
+  // -------------------------------------------------------
+
+  const closeSelectedContent = () => {
+    setSelectedContent(null);
+    setSelectedContentVersions([]);
+    setSelectedVersionIndex(-1);
+    setVersionHistoryLoading(false);
+    setVersionHistoryError("");
+  };
+
+  const openSelectedContent = async (item) => {
+    setSelectedContent(item);
+    setSelectedContentVersions([]);
+    setSelectedVersionIndex(-1);
+    setVersionHistoryError("");
+
+    if (item.isLogo || item.category !== CATEGORY_PROBLEM_SOLVER) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setVersionHistoryError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setVersionHistoryLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/content/${item.id}/versions`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Unable to load this solution's version history."
+        );
+      }
+
+      const data = await response.json();
+      const versions = Array.isArray(data)
+        ? [...data].sort(
+            (firstVersion, secondVersion) =>
+              firstVersion.version_number - secondVersion.version_number
+          )
+        : [];
+
+      setSelectedContentVersions(versions);
+      setSelectedVersionIndex(versions.length > 0 ? versions.length - 1 : -1);
+    } catch (requestError) {
+      console.error("Problem Solver version history request failed:", requestError);
+
+      setVersionHistoryError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load this solution's version history."
+      );
+    } finally {
+      setVersionHistoryLoading(false);
+    }
+  };
+
+  const selectedVersion =
+    selectedVersionIndex >= 0
+      ? selectedContentVersions[selectedVersionIndex]
+      : null;
 
   // -------------------------------------------------------
   // EDIT SAVED CONTENT
@@ -1122,7 +1212,7 @@ function Content() {
                       <div className="mt-5 border-t border-slate-800 pt-4">
                         <button
                           type="button"
-                          onClick={() => setSelectedContent(item)}
+                          onClick={() => openSelectedContent(item)}
                           className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                         >
                           <FaEye />
@@ -1173,7 +1263,7 @@ function Content() {
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
-              setSelectedContent(null);
+              closeSelectedContent();
             }
           }}
         >
@@ -1215,7 +1305,7 @@ function Content() {
 
               <button
                 type="button"
-                onClick={() => setSelectedContent(null)}
+                onClick={() => closeSelectedContent()}
                 aria-label="Close content details"
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300 transition hover:bg-slate-700 hover:text-white"
               >
@@ -1267,6 +1357,79 @@ function Content() {
                       </div>
                     </dl>
                   </div>
+                ) : selectedContent.category === CATEGORY_PROBLEM_SOLVER ? (
+                  <div>
+                    <div className="mb-5 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-bold text-white">Solution Versions</h4>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Switch between the original solution and regenerated versions.
+                          </p>
+                        </div>
+
+                        {!versionHistoryLoading &&
+                          selectedContentVersions.length > 0 && (
+                            <span className="text-sm text-slate-400">
+                              Version {selectedVersionIndex + 1} of{" "}
+                              {selectedContentVersions.length}
+                            </span>
+                          )}
+                      </div>
+
+                      {versionHistoryLoading ? (
+                        <div className="mt-4 flex items-center gap-2 text-sm text-slate-400">
+                          <FaSyncAlt className="animate-spin" />
+                          Loading version history...
+                        </div>
+                      ) : versionHistoryError ? (
+                        <div className="mt-4 rounded-lg border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">
+                          {versionHistoryError}
+                        </div>
+                      ) : selectedContentVersions.length > 0 ? (
+                        <>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {selectedContentVersions.map((version, index) => (
+                              <button
+                                key={version.id}
+                                type="button"
+                                onClick={() => setSelectedVersionIndex(index)}
+                                className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                                  selectedVersionIndex === index
+                                    ? "border-cyan-500 bg-cyan-950/50 text-cyan-300"
+                                    : "border-slate-700 bg-slate-950 text-slate-300 hover:border-cyan-700 hover:text-cyan-300"
+                                }`}
+                              >
+                                Version {version.version_number}
+                                {version.version_number === 1 ? " · Original" : ""}
+                              </button>
+                            ))}
+                          </div>
+
+                          {selectedVersion?.regeneration_instructions && (
+                            <div className="mt-4 rounded-lg border border-slate-700 bg-slate-950 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Regeneration Instructions
+                              </p>
+                              <p className="mt-2 text-sm leading-6 text-slate-200">
+                                {selectedVersion.regeneration_instructions}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p className="mt-4 text-sm text-slate-500">
+                          No saved version history is available for this solution.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className={contentMarkdownClasses}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {selectedVersion?.body || selectedContent.body}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
                 ) : (
                   <div className={contentMarkdownClasses}>
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1280,7 +1443,7 @@ function Content() {
             <footer className="flex justify-end border-t border-slate-800 p-5">
               <button
                 type="button"
-                onClick={() => setSelectedContent(null)}
+                onClick={() => closeSelectedContent()}
                 className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700"
               >
                 Close
