@@ -168,3 +168,30 @@ export function markAllNotificationsRead() {
 export function getStoredNotifications() {
   return getNotifications();
 }
+
+export function notifyProblemAnalysisComplete(problemTitle) {
+  return addNotification({
+    title: "Problem analysis complete",
+    message: `The analysis for ${problemTitle} is ready.`,
+    type: "ai",
+    actionPath: "/problem-solver",
+  });
+}
+
+export function notifyProblemRegenerated(problemTitle) {
+  return addNotification({
+    title: "Problem solution regenerated",
+    message: `A new solution version for ${problemTitle} is ready.`,
+    type: "ai",
+    actionPath: "/problem-solver",
+  });
+}
+
+export function notifyProblemSaved(problemTitle) {
+  return addNotification({
+    title: "Problem solution saved",
+    message: `${problemTitle} was saved to your Content Library.`,
+    type: "content",
+    actionPath: "/content",
+  });
+}

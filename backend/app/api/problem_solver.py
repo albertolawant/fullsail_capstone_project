@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException
-
 from openai import (
     APIConnectionError,
     APIError,
@@ -8,9 +7,12 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
+from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.config import settings
+from app.db.database import get_db
+from app.models.activity_log import ActivityLog
 from app.models.user import User
 from app.schemas.problem_solver import (
     ProblemSolverRegenerateRequest,
@@ -31,6 +33,27 @@ def create_openai_client() -> OpenAI:
         timeout=30.0,
         max_retries=1,
     )
+
+
+def create_problem_solver_activity(
+    db: Session,
+    current_user: User,
+    action_type: str,
+    title: str,
+    description: str,
+):
+    activity = ActivityLog(
+        owner_id=current_user.id,
+        action_type=action_type,
+        item_type="Problem Solver",
+        item_id=None,
+        title=title,
+        description=description,
+        project_id=None,
+        project_name=None,
+    )
+
+    db.add(activity)
 
 
 def generate_problem_solver_response(prompt: str) -> ProblemSolverResponse:
@@ -117,6 +140,7 @@ def generate_problem_solver_response(prompt: str) -> ProblemSolverResponse:
 )
 def analyze_problem(
     request: ProblemSolverRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     title = request.title.strip()
@@ -295,7 +319,21 @@ General requirements:
   manual prompt changes.
 """
 
-    return generate_problem_solver_response(prompt)
+    result = generate_problem_solver_response(prompt)
+
+    create_problem_solver_activity(
+        db=db,
+        current_user=current_user,
+        action_type="Problem Analysis Generated",
+        title=f"{title} analyzed",
+        description=(
+            f'Problem Solver generated an analysis for "{title}".'
+        ),
+    )
+
+    db.commit()
+
+    return result
 
 
 @router.post(
@@ -304,8 +342,10 @@ General requirements:
 )
 def regenerate_problem_solution(
     request: ProblemSolverRegenerateRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    title = request.title.strip()
     original_solution = request.original_solution.strip()
     instructions = request.instructions.strip()
 
@@ -325,6 +365,10 @@ The user already has an existing structured problem-solving response.
 
 Your job is to regenerate that existing response according to the user's
 instructions.
+
+Problem Title:
+
+{title}
 
 Original Solution:
 
@@ -389,4 +433,18 @@ make that requested change while preserving the remaining sections as closely
 as possible.
 """
 
-    return generate_problem_solver_response(prompt)
+    result = generate_problem_solver_response(prompt)
+
+    create_problem_solver_activity(
+        db=db,
+        current_user=current_user,
+        action_type="Problem Solution Regenerated",
+        title=f"{title} regenerated",
+        description=(
+            f'Problem Solver regenerated the solution for "{title}".'
+        ),
+    )
+
+    db.commit()
+
+    return result

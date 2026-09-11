@@ -1,6 +1,11 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import {
+  notifyProblemAnalysisComplete,
+  notifyProblemRegenerated,
+  notifyProblemSaved,
+} from "../utils/notifications";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const AI_REQUEST_TIMEOUT_MS = 35000;
@@ -296,7 +301,7 @@ function ProblemSolver() {
       setRegenerationInstructions("");
       setRegenerationError("");
 
-
+      notifyProblemAnalysisComplete(cleanedTitle);
     } catch (err) {
       console.error("Problem Solver error:", err);
 
@@ -365,6 +370,7 @@ function ProblemSolver() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            title: problemTitle.trim(),
             original_solution: generatedSolution,
             instructions: cleanedInstructions,
           }),
@@ -436,6 +442,8 @@ function ProblemSolver() {
       setGeneratedSolution(regeneratedSolution);
       setRegenerationInstructions("");
       setShowRegenerateModal(false);
+
+      notifyProblemRegenerated(problemTitle.trim());
     } catch (err) {
       console.error("Problem Solver regeneration error:", err);
 
@@ -684,6 +692,8 @@ function ProblemSolver() {
         (workspace) =>
           String(workspace.id) === String(selectedWorkspaceId)
       );
+
+      notifyProblemSaved(cleanedTitle);
 
       setSaveSuccess(
         `"${cleanedTitle}" was created as its own project in ${
