@@ -124,12 +124,11 @@ function ProductArchitect() {
   );
 
   const [projectName, setProjectName] = useState(
-    selectedProject?.title || "Tanio AI"
+    selectedProject?.title || ""
   );
 
   const [description, setDescription] = useState(
-    selectedProject?.description ||
-      "An AI-powered workspace platform with modules for project planning and content creation."
+    selectedProject?.description || ""
   );
 
   const [contentType, setContentType] = useState("prd");
@@ -172,6 +171,8 @@ function ProductArchitect() {
   const [copyGeneratedLabel, setCopyGeneratedLabel] = useState("Copy");
   const projectSetupRef = useRef(null);
   const [projectSetupHeight, setProjectSetupHeight] = useState(940);
+  const [generatedModalPosition, setGeneratedModalPosition] = useState({ x: 0, y: 0 });
+  const generatedModalDragRef = useRef(null);
 
   const endpointMap = {
     prd: "/product-architect/prd",
@@ -1447,6 +1448,47 @@ ${aiPreferenceInstructions}`;
     }
   };
 
+  const handleGeneratedModalDragStart = (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest("button")) {
+      return;
+    }
+
+    event.preventDefault();
+
+    generatedModalDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: generatedModalPosition.x,
+      originY: generatedModalPosition.y,
+    };
+
+    const handlePointerMove = (moveEvent) => {
+      const dragState = generatedModalDragRef.current;
+      if (!dragState) {
+        return;
+      }
+
+      setGeneratedModalPosition({
+        x: dragState.originX + moveEvent.clientX - dragState.startX,
+        y: dragState.originY + moveEvent.clientY - dragState.startY,
+      });
+    };
+
+    const handlePointerUp = () => {
+      generatedModalDragRef.current = null;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950 px-3 py-4 text-white sm:px-4 lg:px-5 xl:px-6">
       <div className="pointer-events-none absolute inset-0">
@@ -1595,6 +1637,7 @@ ${aiPreferenceInstructions}`;
                   id="project-name"
                   type="text"
                   value={projectName}
+                  placeholder="e.g. Smart Budget Planner, Fitness Coaching App, Team Collaboration Platform"
                   onChange={(e) => {
                     setProjectName(e.target.value);
 
@@ -1618,7 +1661,7 @@ ${aiPreferenceInstructions}`;
                   }}
                   maxLength={100}
                   aria-describedby="project-name-help"
-                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white placeholder:text-slate-600 shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
                 />
 
                 <div id="project-name-help" className="mt-2 flex justify-between gap-4 text-xs text-slate-500">
@@ -1635,6 +1678,7 @@ ${aiPreferenceInstructions}`;
                 <textarea
                   id="project-description"
                   value={description}
+                  placeholder="Describe what you're building, who it's for, the problem it solves, and any important features or goals..."
                   onChange={(e) => {
                     setDescription(e.target.value);
 
@@ -1654,7 +1698,7 @@ ${aiPreferenceInstructions}`;
                   rows={7}
                   maxLength={5000}
                   aria-describedby="project-description-help"
-                  className="w-full resize-none rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
+                  className="w-full resize-none rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white placeholder:text-slate-600 shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
                 />
 
                 <div id="project-description-help" className="mt-2 flex justify-between gap-4 text-xs text-slate-500">
@@ -2437,13 +2481,22 @@ ${aiPreferenceInstructions}`;
 
       {showGeneratedOutputModal && generatedContent && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/85 px-2 pb-4 pt-35 sm:px-3 sm:pb-5 sm:pt-35 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="product-architect-expanded-output-title"
         >
-          <div className="relative flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-cyan-500/20 bg-slate-950 shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.03]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 bg-slate-900/80 px-5 py-4 sm:px-6">
+          <div
+            className="relative flex h-[82vh] w-[98vw] max-w-[2000px] flex-col overflow-hidden rounded-2xl border border-cyan-500/20 bg-slate-950 shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.03]"
+            style={{
+              transform: `translate3d(${generatedModalPosition.x}px, ${generatedModalPosition.y}px, 0)`,
+            }}
+          >
+            <div
+              onPointerDown={handleGeneratedModalDragStart}
+              className="flex cursor-grab select-none flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 bg-slate-900/80 px-5 py-4 active:cursor-grabbing sm:px-6"
+              title="Drag to move"
+            >
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
                   Product Architect

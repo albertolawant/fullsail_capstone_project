@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -21,6 +21,8 @@ function ProblemSolver() {
   const [generatedSolution, setGeneratedSolution] = useState("");
   const [showSolutionModal, setShowSolutionModal] = useState(false);
   const [solutionCopied, setSolutionCopied] = useState(false);
+  const [solutionModalPosition, setSolutionModalPosition] = useState({ x: 0, y: 0 });
+  const solutionModalDragRef = useRef(null);
 
   const [solutionVersions, setSolutionVersions] = useState([]);
   const [activeVersionIndex, setActiveVersionIndex] = useState(0);
@@ -736,6 +738,49 @@ function ProblemSolver() {
     }
   };
 
+  const handleSolutionModalDragStart = (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const target = event.target;
+
+    if (target instanceof HTMLElement && target.closest("button")) {
+      return;
+    }
+
+    event.preventDefault();
+
+    solutionModalDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: solutionModalPosition.x,
+      originY: solutionModalPosition.y,
+    };
+
+    const handlePointerMove = (moveEvent) => {
+      const dragState = solutionModalDragRef.current;
+
+      if (!dragState) {
+        return;
+      }
+
+      setSolutionModalPosition({
+        x: dragState.originX + moveEvent.clientX - dragState.startX,
+        y: dragState.originY + moveEvent.clientY - dragState.startY,
+      });
+    };
+
+    const handlePointerUp = () => {
+      solutionModalDragRef.current = null;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
   const clearError = () => {
     if (error) {
       setError("");
@@ -785,9 +830,15 @@ function ProblemSolver() {
                   </span>
                 </div>
 
-                <h1 className="bg-gradient-to-r from-white via-slate-100 to-cyan-200 bg-clip-text text-3xl font-black tracking-[-0.035em] text-transparent sm:text-4xl">
-                  Problem Solver
-                </h1>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="bg-gradient-to-r from-white via-slate-100 to-cyan-200 bg-clip-text text-3xl font-black tracking-[-0.035em] text-transparent sm:text-4xl">
+                    Problem Solver
+                  </h1>
+
+                  <span className="rounded-full border border-cyan-400/25 bg-cyan-400/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300 shadow-[0_0_16px_rgba(34,211,238,0.08)]">
+                    Beta
+                  </span>
+                </div>
                 <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
                   Transform complex problems into structured insights, practical solutions, and clear next steps.
                 </p>
@@ -831,7 +882,7 @@ function ProblemSolver() {
         {/* Main Workspace */}
         <div className="grid items-stretch gap-4 2xl:gap-5 xl:grid-cols-2">
           {/* Problem Form */}
-          <section className="relative flex min-h-[650px] flex-col overflow-hidden rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6 xl:h-[820px] xl:min-h-0">
+          <section className="relative flex min-h-[740px] flex-col overflow-hidden rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6 xl:h-[930px] xl:min-h-0">
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/45 to-transparent" />
             <div className="mb-6 flex items-start gap-3 border-b border-slate-800/70 pb-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
@@ -1013,7 +1064,7 @@ function ProblemSolver() {
 
           {/* Generated Solution */}
           <section
-            className="relative flex min-h-[650px] flex-col overflow-hidden rounded-2xl border border-cyan-500/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.07),transparent_28%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.26)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6 xl:h-[820px] xl:min-h-0"
+            className="relative flex min-h-[740px] flex-col overflow-hidden rounded-2xl border border-cyan-500/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.07),transparent_28%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.26)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6 xl:h-[930px] xl:min-h-0"
             aria-busy={loading || regenerating}
           >
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/55 to-transparent" />
@@ -1045,7 +1096,10 @@ function ProblemSolver() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowSolutionModal(true)}
+                    onClick={() => {
+                      setSolutionModalPosition({ x: 0, y: 0 });
+                      setShowSolutionModal(true);
+                    }}
                     className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] px-3.5 py-2.5 text-sm font-semibold text-cyan-100 shadow-sm transition-all hover:-translate-y-0.5 hover:border-cyan-400/40 hover:bg-cyan-500/10 hover:shadow-[0_10px_28px_rgba(34,211,238,0.1)]"
                     aria-label="Expand generated solution"
                   >
@@ -1159,7 +1213,7 @@ function ProblemSolver() {
         {/* Bottom Panels */}
         <div className="mt-4 grid items-stretch gap-4 2xl:gap-5 xl:grid-cols-2">
           {/* Version History */}
-          <section className="relative flex h-full min-h-[250px] flex-col overflow-hidden rounded-2xl border border-cyan-500/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.045),transparent_24%),linear-gradient(to_bottom,rgba(15,23,42,0.96),rgba(15,23,42,0.82))] p-5 shadow-[0_22px_65px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6 xl:h-[300px] xl:min-h-0">
+          <section className="relative flex h-full min-h-[300px] flex-col overflow-hidden rounded-2xl border border-cyan-500/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.045),transparent_24%),linear-gradient(to_bottom,rgba(15,23,42,0.96),rgba(15,23,42,0.82))] p-5 shadow-[0_22px_65px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6 xl:h-[340px] xl:min-h-0">
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-500/50 to-transparent" />
             <div className="flex items-start gap-3 border-b border-slate-800/70 pb-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
@@ -1261,7 +1315,7 @@ function ProblemSolver() {
           </section>
 
           {/* Actions */}
-          <section className="relative flex h-full min-h-[250px] flex-col overflow-hidden rounded-2xl border border-violet-500/10 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,0.05),transparent_24%),linear-gradient(to_bottom,rgba(15,23,42,0.96),rgba(15,23,42,0.82))] p-5 shadow-[0_22px_65px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6 xl:h-[300px] xl:min-h-0">
+          <section className="relative flex h-full min-h-[300px] flex-col overflow-hidden rounded-2xl border border-violet-500/10 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,0.05),transparent_24%),linear-gradient(to_bottom,rgba(15,23,42,0.96),rgba(15,23,42,0.82))] p-5 shadow-[0_22px_65px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6 xl:h-[340px] xl:min-h-0">
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-500/50 to-transparent" />
             <div className="flex items-start gap-3 border-b border-slate-800/70 pb-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
@@ -1315,7 +1369,7 @@ function ProblemSolver() {
 
       {showSolutionModal && generatedSolution && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 p-3 backdrop-blur-sm sm:p-6"
+          className="fixed inset-0 z-[60] flex items-start justify-center bg-slate-950/85 px-2 pb-4 pt-35 backdrop-blur-sm sm:px-3 sm:pb-5 sm:pt-35"
           role="dialog"
           aria-modal="true"
           aria-labelledby="expanded-solution-title"
@@ -1325,8 +1379,17 @@ function ProblemSolver() {
             }
           }}
         >
-          <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/50">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-800 px-5 py-4 sm:px-6">
+          <div
+            className="relative flex h-[82vh] w-[98vw] max-w-[2000px] flex-col overflow-hidden rounded-2xl border border-cyan-500/20 bg-slate-950 shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.03]"
+            style={{
+              transform: `translate3d(${solutionModalPosition.x}px, ${solutionModalPosition.y}px, 0)`,
+            }}
+          >
+            <div
+              onPointerDown={handleSolutionModalDragStart}
+              className="flex cursor-grab select-none items-center justify-between gap-4 border-b border-slate-800/80 bg-slate-900/80 px-5 py-4 active:cursor-grabbing sm:px-6"
+              title="Drag to move"
+            >
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
@@ -1356,7 +1419,7 @@ function ProblemSolver() {
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-950/40 p-5 sm:p-7 lg:p-8">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-950/40 px-5 py-5 [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin] sm:px-6 sm:py-6">
               {regenerating && (
                 <div
                   className="sticky top-0 z-10 mb-5 flex items-center gap-3 rounded-xl border border-cyan-900 bg-cyan-950/95 p-4 backdrop-blur"
@@ -1378,7 +1441,7 @@ function ProblemSolver() {
                 </div>
               )}
 
-              <div className="mx-auto max-w-5xl rounded-2xl border border-slate-800 bg-slate-950/55 p-5 sm:p-7 lg:p-9">
+              <div className="w-full rounded-2xl border border-slate-800/80 bg-slate-900/35 p-5 shadow-inner shadow-black/15 sm:p-7 lg:p-9">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={markdownComponents}
@@ -1388,7 +1451,7 @@ function ProblemSolver() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-800 bg-slate-900/95 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-col gap-3 border-t border-slate-800/80 bg-slate-900/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <p className="text-sm text-slate-500">
                 Scroll through the full response without changing the page layout.
               </p>

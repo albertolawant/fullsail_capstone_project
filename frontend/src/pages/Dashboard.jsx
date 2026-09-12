@@ -69,6 +69,7 @@ function Dashboard() {
       route: "/problem-solver",
       buttonLabel: "Open Problem Solver",
       accent: "emerald",
+      beta: true,
       features: ["Root Causes", "Solutions", "Pros & Cons", "Action Plans"],
     },
   ];
@@ -737,9 +738,17 @@ function Dashboard() {
                       {module.subtitle}
                     </p>
 
-                    <h3 className="mt-1 text-2xl font-bold text-white">
-                      {module.name}
-                    </h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-2.5">
+                      <h3 className="text-2xl font-bold text-white">
+                        {module.name}
+                      </h3>
+
+                      {module.beta && (
+                        <span className="rounded-full border border-emerald-400/25 bg-emerald-400/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.08)]">
+                          Beta
+                        </span>
+                      )}
+                    </div>
 
                     <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
                       {module.description}
