@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaFolder,
@@ -16,6 +16,51 @@ import { notifyWorkspaceCreated } from "../utils/notifications";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
+const SORT_NEWEST = "newest";
+const SORT_OLDEST = "oldest";
+const SORT_NAME_ASC = "name-asc";
+const SORT_NAME_DESC = "name-desc";  
+
+function getWorkspaceSortTime(workspace) {
+  const value =
+    workspace.updated_at ||
+    workspace.updatedAt ||
+    workspace.created_at ||
+    workspace.createdAt;
+
+  const time = value ? new Date(value).getTime() : 0;
+
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function sortWorkspaces(workspaceList = [], sortOption = SORT_NEWEST) {
+  return [...workspaceList].sort((firstWorkspace, secondWorkspace) => {
+    const firstSortTime = getWorkspaceSortTime(firstWorkspace);
+    const secondSortTime = getWorkspaceSortTime(secondWorkspace);
+
+    const firstName = (firstWorkspace.name || "").toLowerCase();
+    const secondName = (secondWorkspace.name || "").toLowerCase();
+
+    if (sortOption === SORT_OLDEST) {
+      return firstSortTime - secondSortTime;
+    }
+
+    if (sortOption === SORT_NAME_ASC) {
+      return firstName.localeCompare(secondName);
+    }
+
+    if (sortOption === SORT_NAME_DESC) {
+      return secondName.localeCompare(firstName);
+    }
+
+    if (firstSortTime !== secondSortTime) {
+      return secondSortTime - firstSortTime;
+    }
+
+    return Number(secondWorkspace.id || 0) - Number(firstWorkspace.id || 0);
+  });
+}
+
 function Workspaces() {
   const navigate = useNavigate();
 
@@ -23,6 +68,7 @@ function Workspaces() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [workspaceSortOption, setWorkspaceSortOption] = useState(SORT_NEWEST);
 
   const [showModal, setShowModal] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState(null);
@@ -102,6 +148,10 @@ function Workspaces() {
   useEffect(() => {
     loadWorkspaces();
   }, [loadWorkspaces]);
+
+  const sortedWorkspaces = useMemo(() => {
+    return sortWorkspaces(workspaces, workspaceSortOption);
+  }, [workspaces, workspaceSortOption]);
 
   const openCreateModal = () => {
     setEditingWorkspace(null);
@@ -362,7 +412,32 @@ function Workspaces() {
         </section>
       )}
 
-      {/* Empty State */}
+      {/* Workspace Sort Controls */}
+      {!loading && !error && workspaces.length > 0 && (
+        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900 p-5">
+          <div className="flex flex-col gap-2 sm:max-w-xs">
+            <label
+              htmlFor="workspace-sort"
+              className="text-sm font-semibold text-slate-300"
+            >
+              Sort Workspaces
+            </label>
+
+            <select
+              id="workspace-sort"
+              value={workspaceSortOption}
+              onChange={(event) => setWorkspaceSortOption(event.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500"
+            >
+              <option value={SORT_NEWEST}>Newest First</option>
+              <option value={SORT_OLDEST}>Oldest First</option>
+              <option value={SORT_NAME_ASC}>Name A-Z</option>
+              <option value={SORT_NAME_DESC}>Name Z-A</option>
+            </select>
+          </div>
+        </section>
+      )}
+
       {!loading && !error && workspaces.length === 0 && (
         <section className="flex min-h-80 items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8">
           <div className="max-w-lg text-center">
@@ -392,7 +467,7 @@ function Workspaces() {
       {/* Workspace Cards */}
       {!loading && workspaces.length > 0 && (
         <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {workspaces.map((workspace) => (
+          {sortedWorkspaces.map((workspace) => (
             <article
               key={workspace.id}
               className="flex min-h-64 flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/40 hover:shadow-xl"

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
@@ -161,7 +162,11 @@ def get_all_content(
             GeneratedContent.project_id == project_id
         )
 
-    return query.order_by(GeneratedContent.id.desc()).all()
+    return query.order_by(
+        GeneratedContent.updated_at.desc(),
+        GeneratedContent.created_at.desc(),
+        GeneratedContent.id.desc(),
+    ).all()
 
 
 @router.get("/{content_id}", response_model=ContentResponse)
@@ -273,6 +278,8 @@ def update_content(
             )
 
         content.project_id = content_data.project_id
+
+    content.updated_at = datetime.now(timezone.utc)
 
     new_project = (
         db.query(Project)

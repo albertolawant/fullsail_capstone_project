@@ -31,8 +31,8 @@ class ProductArchitectRequest(BaseModel):
 
 
 class ProductArchitectResponse(BaseModel):
-    id: int
-    project_id: int
+    id: int | None = None
+    project_id: int | None = None
     title: str
     content_type: str
     body: str

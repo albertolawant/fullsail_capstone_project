@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from datetime import datetime, timezone
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 
 from app.db.database import Base
 
@@ -18,5 +20,15 @@ class GeneratedContent(Base):
     owner_id = Column(
         Integer,
         ForeignKey("users.id"),
+        nullable=False,
+    )
+    created_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )

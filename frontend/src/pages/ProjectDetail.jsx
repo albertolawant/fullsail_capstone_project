@@ -21,6 +21,12 @@ import {
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const SORT_NEWEST = "newest";
+const SORT_OLDEST = "oldest";
+const SORT_TITLE_ASC = "title-asc";
+const SORT_TITLE_DESC = "title-desc";
+const SORT_TYPE_ASC = "type-asc";
+
 function createPreview(body = "", maximumLength = 220) {
   const plainText = body
     .replace(/[#*_>`~-]/g, "")
@@ -41,12 +47,82 @@ function createPreview(body = "", maximumLength = 220) {
 function sortNewestFirst(items = []) {
   return [...items].sort((firstItem, secondItem) => {
     const firstDate = new Date(
-      firstItem.created_at || firstItem.createdAt || 0
+      firstItem.updated_at ||
+        firstItem.updatedAt ||
+        firstItem.created_at ||
+        firstItem.createdAt ||
+        0
     );
 
     const secondDate = new Date(
-      secondItem.created_at || secondItem.createdAt || 0
+      secondItem.updated_at ||
+        secondItem.updatedAt ||
+        secondItem.created_at ||
+        secondItem.createdAt ||
+        0
     );
+
+    return secondDate - firstDate;
+  });
+}
+
+function sortProjectItems(items = [], sortOption = SORT_NEWEST) {
+  return [...items].sort((firstItem, secondItem) => {
+    const firstDate = new Date(
+      firstItem.updated_at ||
+        firstItem.updatedAt ||
+        firstItem.created_at ||
+        firstItem.createdAt ||
+        0
+    );
+
+    const secondDate = new Date(
+      secondItem.updated_at ||
+        secondItem.updatedAt ||
+        secondItem.created_at ||
+        secondItem.createdAt ||
+        0
+    );
+
+    const firstTitle = (
+      firstItem.title ||
+      firstItem.style ||
+      ""
+    ).toLowerCase();
+
+    const secondTitle = (
+      secondItem.title ||
+      secondItem.style ||
+      ""
+    ).toLowerCase();
+
+    const firstType = (
+      firstItem.content_type ||
+      firstItem.style ||
+      "Saved Image"
+    ).toLowerCase();
+
+    const secondType = (
+      secondItem.content_type ||
+      secondItem.style ||
+      "Saved Image"
+    ).toLowerCase();
+
+    if (sortOption === SORT_OLDEST) {
+      return firstDate - secondDate;
+    }
+
+    if (sortOption === SORT_TITLE_ASC) {
+      return firstTitle.localeCompare(secondTitle);
+    }
+
+    if (sortOption === SORT_TITLE_DESC) {
+      return secondTitle.localeCompare(firstTitle);
+    }
+
+    if (sortOption === SORT_TYPE_ASC) {
+      return firstType.localeCompare(secondType);
+    }
 
     return secondDate - firstDate;
   });
@@ -99,6 +175,8 @@ function ProjectDetail() {
   const [workspace, setWorkspace] = useState(null);
   const [contentItems, setContentItems] = useState([]);
   const [logos, setLogos] = useState([]);
+  const [contentSortOption, setContentSortOption] = useState(SORT_NEWEST);
+  const [imageSortOption, setImageSortOption] = useState(SORT_NEWEST);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -258,6 +336,14 @@ function ProjectDetail() {
   const totalSavedItems = useMemo(() => {
     return contentItems.length + logos.length;
   }, [contentItems.length, logos.length]);
+
+  const sortedContentItems = useMemo(() => {
+    return sortProjectItems(contentItems, contentSortOption);
+  }, [contentItems, contentSortOption]);
+
+  const sortedLogos = useMemo(() => {
+    return sortProjectItems(logos, imageSortOption);
+  }, [logos, imageSortOption]);
 
   const openProductArchitect = () => {
     navigate("/product-architect", {
@@ -955,10 +1041,24 @@ function ProjectDetail() {
                   </div>
                 </div>
 
-                <span className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
-                  {contentItems.length}{" "}
-                  {contentItems.length === 1 ? "item" : "items"}
-                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <select
+                    value={contentSortOption}
+                    onChange={(event) => setContentSortOption(event.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-white outline-none transition focus:border-cyan-500"
+                  >
+                    <option value={SORT_NEWEST}>Newest First</option>
+                    <option value={SORT_OLDEST}>Oldest First</option>
+                    <option value={SORT_TITLE_ASC}>Title A-Z</option>
+                    <option value={SORT_TITLE_DESC}>Title Z-A</option>
+                    <option value={SORT_TYPE_ASC}>Type A-Z</option>
+                  </select>
+
+                  <span className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
+                    {contentItems.length}{" "}
+                    {contentItems.length === 1 ? "item" : "items"}
+                  </span>
+                </div>
               </div>
 
               {contentItems.length === 0 ? (
@@ -977,7 +1077,7 @@ function ProjectDetail() {
                 </div>
               ) : (
                 <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {contentItems.map((item) => (
+                  {sortedContentItems.map((item) => (
                     <article
                       key={item.id}
                       className="group flex min-h-[270px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-xl hover:shadow-black/20"
@@ -1064,9 +1164,23 @@ function ProjectDetail() {
                   </div>
                 </div>
 
-                <span className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
-                  {logos.length} {logos.length === 1 ? "image" : "images"}
-                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <select
+                    value={imageSortOption}
+                    onChange={(event) => setImageSortOption(event.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-white outline-none transition focus:border-cyan-500"
+                  >
+                    <option value={SORT_NEWEST}>Newest First</option>
+                    <option value={SORT_OLDEST}>Oldest First</option>
+                    <option value={SORT_TITLE_ASC}>Title A-Z</option>
+                    <option value={SORT_TITLE_DESC}>Title Z-A</option>
+                    <option value={SORT_TYPE_ASC}>Type A-Z</option>
+                  </select>
+
+                  <span className="rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
+                    {logos.length} {logos.length === 1 ? "image" : "images"}
+                  </span>
+                </div>
               </div>
 
               {logos.length === 0 ? (
@@ -1085,7 +1199,7 @@ function ProjectDetail() {
                 </div>
               ) : (
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-                  {logos.map((logo) => (
+                  {sortedLogos.map((logo) => (
                     <article
                       key={logo.id}
                       className="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 transition hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-xl hover:shadow-black/20"

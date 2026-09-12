@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -166,7 +167,11 @@ def get_projects(
     return (
         db.query(Project)
         .filter(Project.owner_id == current_user.id)
-        .order_by(Project.created_at.desc(), Project.id.desc())
+        .order_by(
+            Project.updated_at.desc(),
+            Project.created_at.desc(),
+            Project.id.desc(),
+        )
         .all()
     )
 
@@ -280,6 +285,8 @@ def update_project(
             project.title,
             project.description,
         )
+
+    project.updated_at = datetime.now(timezone.utc)
 
     new_workspace = (
         db.query(Workspace)

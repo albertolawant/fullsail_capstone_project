@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -68,6 +69,18 @@ def create_workspace(
     )
 
     db.add(new_workspace)
+    db.flush()
+
+    create_activity_log(
+        db=db,
+        current_user=current_user,
+        action_type="Workspace Created",
+        item_type="Workspace",
+        item_id=new_workspace.id,
+        title=f"{new_workspace.name} created",
+        description="New workspace was created.",
+    )
+
     db.commit()
     db.refresh(new_workspace)
 
@@ -82,6 +95,11 @@ def get_workspaces(
     return (
         db.query(Workspace)
         .filter(Workspace.owner_id == current_user.id)
+        .order_by(
+            Workspace.updated_at.desc(),
+            Workspace.created_at.desc(),
+            Workspace.id.desc(),
+        )
         .all()
     )
 
@@ -138,6 +156,8 @@ def update_workspace(
     if workspace_data.description is not None:
         workspace.description = workspace_data.description
 
+    workspace.updated_at = datetime.now(timezone.utc)    
+
     db.commit()
     db.refresh(workspace)
 
@@ -190,6 +210,19 @@ def delete_workspace(
 
     project_ids = [project.id for project in projects]
 
+    workspace_name = workspace.name
+
+    project_snapshots = [
+        {
+            "id": project.id,
+            "title": project.title,
+        }
+        for project in projects
+    ]
+
+    content_snapshots = []
+    logo_snapshots = []
+
     if project_ids:
         if delete_content_choice == "delete-all":
             generated_content = (
@@ -200,6 +233,33 @@ def delete_workspace(
                 )
                 .all()
             )
+
+            content_snapshots = [
+                {
+                    "id": content.id,
+                    "title": content.title,
+                    "content_type": content.content_type,
+                    "project_id": content.project_id,
+                }
+                for content in generated_content
+            ]
+
+            logos_to_delete = (
+                db.query(ProductLogo)
+                .filter(
+                    ProductLogo.project_id.in_(project_ids),
+                    ProductLogo.owner_id == current_user.id,
+                )
+                .all()
+            )
+
+            logo_snapshots = [
+                {
+                    "id": logo.id,
+                    "project_id": logo.project_id,
+                }
+                for logo in logos_to_delete
+            ]
 
             content_ids = [
                 content.id
@@ -306,6 +366,80 @@ def delete_workspace(
         title=f"{workspace.name} deleted",
         description=activity_description,
     )
+
+    if delete_content_choice != "workspace-only":
+        for project_snapshot in project_snapshots:
+            create_activity_log(
+                db=db,
+                current_user=current_user,
+                action_type="Project Deleted",
+                item_type="Project",
+                item_id=project_snapshot["id"],
+                title=f"{project_snapshot['title']} deleted",
+                description=(
+                    f"Project was deleted when workspace {workspace_name} was deleted."
+                ),
+                project_id=project_snapshot["id"],
+                project_name=project_snapshot["title"],
+            )
+
+    if delete_content_choice == "delete-all":
+        for content_snapshot in content_snapshots:
+            project_snapshot = next(
+                (
+                    project
+                    for project in project_snapshots
+                    if project["id"] == content_snapshot["project_id"]
+                ),
+                None,
+            )
+
+            create_activity_log(
+                db=db,
+                current_user=current_user,
+                action_type="Content Deleted",
+                item_type="Content",
+                item_id=content_snapshot["id"],
+                title=f"{content_snapshot['title']} deleted",
+                description=(
+                    f"Saved {content_snapshot['content_type']} content was deleted "
+                    f"when workspace {workspace_name} was deleted."
+                ),
+                project_id=content_snapshot["project_id"],
+                project_name=(
+                    project_snapshot["title"]
+                    if project_snapshot
+                    else None
+                ),
+            )
+
+        for logo_snapshot in logo_snapshots:
+            project_snapshot = next(
+                (
+                    project
+                    for project in project_snapshots
+                    if project["id"] == logo_snapshot["project_id"]
+                ),
+                None,
+            )
+
+            create_activity_log(
+                db=db,
+                current_user=current_user,
+                action_type="Logo Deleted",
+                item_type="Logo",
+                item_id=logo_snapshot["id"],
+                title="Saved logo deleted",
+                description=(
+                    f"Saved logo was deleted when workspace {workspace_name} was deleted."
+                ),
+                project_id=logo_snapshot["project_id"],
+                project_name=(
+                    project_snapshot["title"]
+                    if project_snapshot
+                    else None
+                ),
+            )
 
     db.delete(workspace)
     db.commit()

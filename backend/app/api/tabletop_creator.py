@@ -296,6 +296,30 @@ def save_generated_content(
             detail="The generated content could not be saved.",
         )
 
+def get_selected_project(
+    db: Session,
+    current_user: User,
+    project_id: int | None,
+) -> Project | None:
+    if project_id is None:
+        return None
+
+    project = (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Selected project was not found.",
+        )
+
+    return project
 
 def create_openai_client() -> OpenAI:
     return OpenAI(
@@ -320,11 +344,9 @@ def generate_campaign_content(
             detail="The AI service is temporarily unavailable.",
         )
 
-    project = get_or_create_campaign_project(
+    project = get_selected_project(
         db=db,
         current_user=current_user,
-        campaign_name=request.campaign_name,
-        campaign_description=request.campaign_description,
         project_id=request.project_id,
     )
 
@@ -416,19 +438,10 @@ and useful for running a tabletop RPG campaign.
             minimum_length=500,
         )
 
-        save_generated_content(
-            db=db,
-            current_user=current_user,
-            project=project,
-            title=f"{request.campaign_name.strip()} - Campaign Lore",
-            content_type="Campaign Lore",
-            body=generated_text,
-        )
-
         log_ai_usage(
             db=db,
             user_id=current_user.id,
-            project_id=project.id,
+            project_id=project.id if project else None,
             feature_type="Campaign Lore Generator",
             content_type="Campaign Lore",
             status="success",
@@ -460,11 +473,9 @@ def generate_npc_content(
             detail="The AI service is temporarily unavailable.",
         )
 
-    project = get_or_create_campaign_project(
+    project = get_selected_project(
         db=db,
         current_user=current_user,
-        campaign_name=request.campaign_name,
-        campaign_description=request.campaign_description,
         project_id=request.project_id,
     )
 
@@ -512,19 +523,10 @@ For each NPC, include these exact labeled sections:
             minimum_length=200,
         )
 
-        save_generated_content(
-            db=db,
-            current_user=current_user,
-            project=project,
-            title=f"{request.campaign_name.strip()} - NPCs",
-            content_type="NPC Content",
-            body=generated_text,
-        )
-
         log_ai_usage(
             db=db,
             user_id=current_user.id,
-            project_id=project.id,
+            project_id=project.id if project else None,
             feature_type="NPC Generator",
             content_type="NPC Content",
             status="success",
@@ -556,11 +558,9 @@ def generate_quest_content(
             detail="The AI service is temporarily unavailable.",
         )
 
-    project = get_or_create_campaign_project(
+    project = get_selected_project(
         db=db,
         current_user=current_user,
-        campaign_name=request.campaign_name,
-        campaign_description=request.campaign_description,
         project_id=request.project_id,
     )
 
@@ -610,19 +610,10 @@ For each quest, include:
             minimum_length=200,
         )
 
-        save_generated_content(
-            db=db,
-            current_user=current_user,
-            project=project,
-            title=f"{request.campaign_name.strip()} - Quests",
-            content_type="Quest Content",
-            body=generated_text,
-        )
-
         log_ai_usage(
             db=db,
             user_id=current_user.id,
-            project_id=project.id,
+            project_id=project.id if project else None,
             feature_type="Quest Generator",
             content_type="Quest Content",
             status="success",
@@ -654,11 +645,9 @@ def generate_encounter_content(
             detail="The AI service is temporarily unavailable.",
         )
 
-    project = get_or_create_campaign_project(
+    project = get_selected_project(
         db=db,
         current_user=current_user,
-        campaign_name=request.campaign_name,
-        campaign_description=request.campaign_description,
         project_id=request.project_id,
     )
 
@@ -710,19 +699,10 @@ For each encounter, include:
             minimum_length=200,
         )
 
-        save_generated_content(
-            db=db,
-            current_user=current_user,
-            project=project,
-            title=f"{request.campaign_name.strip()} - Encounters",
-            content_type="Encounter Content",
-            body=generated_text,
-        )
-
         log_ai_usage(
             db=db,
             user_id=current_user.id,
-            project_id=project.id,
+            project_id=project.id if project else None,
             feature_type="Encounter Generator",
             content_type="Encounter Content",
             status="success",
@@ -754,11 +734,9 @@ def generate_location_content(
             detail="The AI service is temporarily unavailable.",
         )
 
-    project = get_or_create_campaign_project(
+    project = get_selected_project(
         db=db,
         current_user=current_user,
-        campaign_name=request.campaign_name,
-        campaign_description=request.campaign_description,
         project_id=request.project_id,
     )
 
@@ -810,19 +788,10 @@ For each location, include:
             minimum_length=200,
         )
 
-        save_generated_content(
-            db=db,
-            current_user=current_user,
-            project=project,
-            title=f"{request.campaign_name.strip()} - Locations",
-            content_type="Location Content",
-            body=generated_text,
-        )
-
         log_ai_usage(
             db=db,
             user_id=current_user.id,
-            project_id=project.id,
+            project_id=project.id if project else None,
             feature_type="Location Generator",
             content_type="Location Content",
             status="success",

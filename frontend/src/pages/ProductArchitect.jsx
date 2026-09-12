@@ -154,6 +154,11 @@ function ProductArchitect() {
   const [selectedLogoIndex, setSelectedLogoIndex] = useState(-1);
   const [logoGalleryLoading, setLogoGalleryLoading] = useState(false);
   const [logoGalleryError, setLogoGalleryError] = useState("");
+  const [moveLogoOpen, setMoveLogoOpen] = useState(false);
+  const [moveLogoTarget, setMoveLogoTarget] = useState(null);
+  const [moveLogoProjectId, setMoveLogoProjectId] = useState("");
+  const [moveLogoLoading, setMoveLogoLoading] = useState(false);
+  const [moveLogoError, setMoveLogoError] = useState("");
 
   const [saveWorkspaceOpen, setSaveWorkspaceOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState([]);
@@ -1026,6 +1031,125 @@ ${aiPreferenceInstructions}`;
       setLogoError("Something went wrong while downloading the logo.");
     }
   };
+
+  const handleOpenMoveLogo = (logo) => {
+    if (!logo?.id) {
+      setLogoGalleryError("This logo cannot be moved because it does not have a saved ID.");
+      return;
+    }
+
+    setMoveLogoTarget(logo);
+    setMoveLogoProjectId(String(logo.project_id || selectedProjectId || ""));
+    setMoveLogoError("");
+    setMoveLogoOpen(true);
+  };
+
+  const handleCloseMoveLogo = () => {
+    if (moveLogoLoading) {
+      return;
+    }
+
+    setMoveLogoOpen(false);
+    setMoveLogoTarget(null);
+    setMoveLogoProjectId("");
+    setMoveLogoError("");
+  };
+
+  const handleMoveLogo = async () => {
+    if (!moveLogoTarget || !moveLogoProjectId) {
+      setMoveLogoError("Please choose a project.");
+      return;
+    }
+
+    if (String(moveLogoProjectId) === String(moveLogoTarget.project_id)) {
+      setMoveLogoError("Choose a different project before saving this logo.");
+      return;
+    }
+
+    setMoveLogoLoading(true);
+    setMoveLogoError("");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/product-architect/logos/${moveLogoTarget.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            project_id: Number(moveLogoProjectId),
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Logo could not be saved to that project. Please try again."
+        );
+      }
+
+      const movedLogo = await response.json();
+
+      setLogoGallery((currentLogos) => {
+        const updatedLogos = currentLogos.filter(
+          (logo) => logo.id !== movedLogo.id
+        );
+
+        if (updatedLogos.length === 0) {
+          setLogoBase64("");
+          setSelectedLogoIndex(-1);
+          return updatedLogos;
+        }
+
+        const nextIndex = Math.min(selectedLogoIndex, updatedLogos.length - 1);
+
+        setSelectedLogoIndex(nextIndex);
+        setLogoBase64(updatedLogos[nextIndex].image_base64);
+
+        return updatedLogos;
+      });
+
+      const destinationProject = projects.find(
+        (project) => String(project.id) === String(moveLogoProjectId)
+      );
+
+      addRecentActivity({
+        type: "Logo Moved",
+        title: `${projectName.trim() || "Project"} logo moved`,
+        description: `Moved a saved logo to ${
+          destinationProject?.title || "another project"
+        }.`,
+        projectName: projectName.trim() || "Project",
+      });
+
+      setMoveLogoOpen(false);
+      setMoveLogoTarget(null);
+      setMoveLogoProjectId("");
+      setMoveLogoError("");
+    } catch (err) {
+      console.error("Save logo to project error:", err);
+
+      setMoveLogoError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while saving this logo to the project."
+      );
+    } finally {
+      setMoveLogoLoading(false);
+    }
+  };  
 
   const getProjectsForWorkspace = (workspaceId) => {
     if (!workspaceId) {
@@ -2116,6 +2240,17 @@ ${aiPreferenceInstructions}`;
                 Download Logo
               </button>
             )}
+
+            {logoGallery[selectedLogoIndex]?.id && (
+              <button
+                type="button"
+                onClick={() => handleOpenMoveLogo(logoGallery[selectedLogoIndex])}
+                disabled={moveLogoLoading}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save Logo to Project
+              </button>
+            )}            
           </div>
         </div>
 
@@ -2420,48 +2555,63 @@ ${aiPreferenceInstructions}`;
                 const isCurrent = index === logoGallery.length - 1;
 
                 return (
-                  <button
+                  <article
                     key={logo.id ?? `${logo.project_id}-${index}`}
-                    type="button"
-                    onClick={() => handleSelectLogoVersion(index)}
                     className={`overflow-hidden rounded-xl border p-3 text-left transition ${
                       isSelected
                         ? "border-purple-500 bg-purple-950/20"
                         : "border-slate-800 bg-slate-950/40 hover:border-slate-600"
                     }`}
                   >
-                    <div className="aspect-square overflow-hidden rounded-lg bg-white">
-                      <img
-                        src={`data:image/png;base64,${logo.image_base64}`}
-                        alt={`${projectName.trim() || "Project"} logo version ${
-                          index + 1
-                        }`}
-                        className="h-full w-full object-contain"
-                      />
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectLogoVersion(index)}
+                    className="w-full text-left"
+                  >
+                  <div className="aspect-square overflow-hidden rounded-lg bg-white">
+                    <img
+                      src={`data:image/png;base64,${logo.image_base64}`}
+                      alt={`${projectName.trim() || "Project"} logo version ${
+                        index + 1
+                      }`}
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
 
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <span className="font-semibold text-white">
-                        Version {index + 1}
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <span className="font-semibold text-white">
+                      Version {index + 1}
+                    </span>
+
+                    {isCurrent && (
+                      <span className="rounded-md border border-emerald-800 bg-emerald-950 px-2 py-1 text-xs font-semibold text-emerald-300">
+                        Current
                       </span>
-
-                      {isCurrent && (
-                        <span className="rounded-md border border-emerald-800 bg-emerald-950 px-2 py-1 text-xs font-semibold text-emerald-300">
-                          Current
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="mt-1 text-xs capitalize text-slate-400">
-                      {logo.style || "default"} style
-                    </p>
-
-                    {logo.created_at && (
-                      <p className="mt-1 text-xs text-slate-500">
-                        {new Date(logo.created_at).toLocaleString()}
-                      </p>
                     )}
-                  </button>
+                  </div>
+
+                  <p className="mt-1 text-xs capitalize text-slate-400">
+                    {logo.style || "default"} style
+                  </p>
+
+                  {logo.created_at && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {new Date(logo.created_at).toLocaleString()}
+                    </p>
+                  )}
+                    </button>
+
+                    {logo.id && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenMoveLogo(logo)}
+                        disabled={moveLogoLoading}
+                        className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Save Logo to Project
+                      </button>
+                    )}
+                  </article>
                 );
               })}
             </div>
@@ -2638,6 +2788,103 @@ ${aiPreferenceInstructions}`;
           </div>
         </div>
       )}
+
+      {moveLogoOpen && moveLogoTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="move-logo-title"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="move-logo-title" className="text-2xl font-bold text-white">
+                  Save Logo to Project
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Choose the project where this saved logo should be saved.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseMoveLogo}
+                disabled={moveLogoLoading}
+                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close move logo dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <p className="text-sm text-slate-500">Current Project</p>
+              <p className="mt-1 font-semibold text-white">
+                {projectName.trim() || "Current Project"}
+              </p>
+            </div>
+
+            <div className="mt-5">
+              <label
+                htmlFor="move-logo-project"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Save to Project
+              </label>
+
+              <select
+                id="move-logo-project"
+                value={moveLogoProjectId}
+                onChange={(e) => {
+                  setMoveLogoProjectId(e.target.value);
+                  setMoveLogoError("");
+                }}
+                disabled={moveLogoLoading}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
+              >
+                <option value="">Choose a project</option>
+
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {moveLogoError && (
+              <div className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4">
+                <p className="text-sm text-red-300">{moveLogoError}</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseMoveLogo}
+                disabled={moveLogoLoading}
+                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleMoveLogo}
+                disabled={
+                  moveLogoLoading ||
+                  !moveLogoProjectId ||
+                  String(moveLogoProjectId) === String(moveLogoTarget.project_id)
+                }
+                className="rounded-lg bg-violet-600 px-5 py-2.5 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {moveLogoLoading ? "Saving..." : "Save Logo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}      
 
       {saveWorkspaceOpen && (
         <div

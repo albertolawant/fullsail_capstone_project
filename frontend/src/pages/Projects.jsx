@@ -10,6 +10,12 @@ import {
   updateDemoProject,
 } from "../utils/demodata";
 
+const SORT_NEWEST = "newest";
+const SORT_OLDEST = "oldest";
+const SORT_TITLE_ASC = "title-asc";
+const SORT_TITLE_DESC = "title-desc";
+const SORT_WORKSPACE_ASC = "workspace-asc";
+
 function createProjectSummaryFallback(project) {
   if (project.ai_summary) {
     return project.ai_summary;
@@ -24,21 +30,68 @@ function createProjectSummaryFallback(project) {
   return "No AI summary has been created for this project yet.";
 }
 
+function getProjectSortTime(project) {
+  const value =
+    project.updated_at ||
+    project.updatedAt ||
+    project.created_at ||
+    project.createdAt;
+
+  const time = value ? new Date(value).getTime() : 0;
+
+  return Number.isNaN(time) ? 0 : time;
+}
+
 function sortProjectsNewestFirst(projectList) {
   return [...projectList].sort((a, b) => {
-    const aCreatedAt = a.created_at
-      ? new Date(a.created_at).getTime()
-      : 0;
+    const aSortTime = getProjectSortTime(a);
+    const bSortTime = getProjectSortTime(b);
 
-    const bCreatedAt = b.created_at
-      ? new Date(b.created_at).getTime()
-      : 0;
-
-    if (aCreatedAt !== bCreatedAt) {
-      return bCreatedAt - aCreatedAt;
+    if (aSortTime !== bSortTime) {
+      return bSortTime - aSortTime;
     }
 
     return Number(b.id || 0) - Number(a.id || 0);
+  });
+}
+
+function sortProjects(projectList = [], sortOption = SORT_NEWEST, getWorkspaceName = null) {
+  return [...projectList].sort((firstProject, secondProject) => {
+    const firstSortTime = getProjectSortTime(firstProject);
+    const secondSortTime = getProjectSortTime(secondProject);
+
+    const firstTitle = (firstProject.title || "").toLowerCase();
+    const secondTitle = (secondProject.title || "").toLowerCase();
+
+    const firstWorkspace = getWorkspaceName
+      ? getWorkspaceName(firstProject.workspace_id).toLowerCase()
+      : "";
+
+    const secondWorkspace = getWorkspaceName
+      ? getWorkspaceName(secondProject.workspace_id).toLowerCase()
+      : "";
+
+    if (sortOption === SORT_OLDEST) {
+      return firstSortTime - secondSortTime;
+    }
+
+    if (sortOption === SORT_TITLE_ASC) {
+      return firstTitle.localeCompare(secondTitle);
+    }
+
+    if (sortOption === SORT_TITLE_DESC) {
+      return secondTitle.localeCompare(firstTitle);
+    }
+
+    if (sortOption === SORT_WORKSPACE_ASC) {
+      return firstWorkspace.localeCompare(secondWorkspace);
+    }
+
+    if (firstSortTime !== secondSortTime) {
+      return secondSortTime - firstSortTime;
+    }
+
+    return Number(secondProject.id || 0) - Number(firstProject.id || 0);
   });
 }
 
@@ -64,6 +117,9 @@ function Projects() {
 
   const [projectSearchTerm, setProjectSearchTerm] =
     useState("");
+
+  const [projectSortOption, setProjectSortOption] = 
+    useState(SORT_NEWEST);
 
   const [
     selectedWorkspaceFilter,
@@ -236,6 +292,25 @@ function Projects() {
     loadWorkspaceName();
   }, [selectedWorkspaceId]);
 
+  const getWorkspaceName = useCallback(
+    (workspaceId) => {
+      if (!workspaceId) {
+        return "No Workspace";
+      }
+
+      const matchingWorkspace = workspaces.find(
+        (workspace) =>
+          Number(workspace.id) === Number(workspaceId)
+      );
+
+      return (
+        matchingWorkspace?.name ||
+        `Workspace #${workspaceId}`
+      );
+    },
+    [workspaces]
+  );
+
   const filteredProjects = useMemo(() => {
     let workspaceFilteredProjects =
       selectedWorkspaceId
@@ -258,14 +333,10 @@ function Projects() {
     const normalizedSearch =
       projectSearchTerm.trim().toLowerCase();
 
-    if (!normalizedSearch) {
-      return sortProjectsNewestFirst(
-        workspaceFilteredProjects
-      );
-    }
+    let searchedProjects = workspaceFilteredProjects;
 
-    return sortProjectsNewestFirst(
-      workspaceFilteredProjects.filter((project) => {
+    if (normalizedSearch) {
+      searchedProjects = workspaceFilteredProjects.filter((project) => {
         const matchingWorkspace = workspaces.find(
           (workspace) =>
             Number(workspace.id) ===
@@ -287,7 +358,13 @@ function Projects() {
             .includes(normalizedSearch) ||
           resolvedWorkspaceName.includes(normalizedSearch)
         );
-      })
+      });
+    }
+
+    return sortProjects(
+      searchedProjects,
+      projectSortOption,
+      getWorkspaceName
     );
   }, [
     projects,
@@ -295,6 +372,8 @@ function Projects() {
     selectedWorkspaceId,
     selectedWorkspaceFilter,
     projectSearchTerm,
+    projectSortOption,
+    getWorkspaceName,
   ]);
 
   const displayWorkspaceName =
@@ -341,25 +420,6 @@ function Projects() {
       name,
     }));
   }, [workspaces, projects]);
-
-  const getWorkspaceName = useCallback(
-    (workspaceId) => {
-      if (!workspaceId) {
-        return "No Workspace";
-      }
-
-      const matchingWorkspace = workspaces.find(
-        (workspace) =>
-          Number(workspace.id) === Number(workspaceId)
-      );
-
-      return (
-        matchingWorkspace?.name ||
-        `Workspace #${workspaceId}`
-      );
-    },
-    [workspaces]
-  );
 
   const openProject = (project) => {
     navigate(`/projects/${project.id}`, {
@@ -894,7 +954,7 @@ function Projects() {
 
       {!loading && !error && (
         <section className="mb-8 rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div>
               <label
                 htmlFor="project-search"
@@ -962,6 +1022,29 @@ function Projects() {
                 </p>
               )}
             </div>
+
+            <div>
+              <label
+                htmlFor="project-sort"
+                className="mb-2 block text-sm font-semibold text-slate-300"
+              >
+                Sort Projects
+              </label>
+
+              <select
+                id="project-sort"
+                value={projectSortOption}
+                onChange={(event) => setProjectSortOption(event.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500"
+              >
+                <option value={SORT_NEWEST}>Newest First</option>
+                <option value={SORT_OLDEST}>Oldest First</option>
+                <option value={SORT_TITLE_ASC}>Title A-Z</option>
+                <option value={SORT_TITLE_DESC}>Title Z-A</option>
+                <option value={SORT_WORKSPACE_ASC}>Workspace A-Z</option>
+              </select>
+            </div>
+
           </div>
         </section>
       )}

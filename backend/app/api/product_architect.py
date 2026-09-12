@@ -344,18 +344,28 @@ def generate_and_save_content(
     prompt: str,
     db: Session,
     current_user: User,
-) -> GeneratedContent:
+) -> ProductArchitectResponse:
     """
-    Find or create the authenticated user's project, generate an AI
-    document, and save the document under that project.
+    Find or create the authenticated user's project and generate an AI
+    document without automatically saving it.
     """
-    project = get_or_create_user_project(
-        db=db,
-        current_user=current_user,
-        project_name=request.project_name,
-        description=request.description,
-        project_id=request.project_id,
-    )
+    project = None
+
+    if request.project_id is not None:
+        project = (
+            db.query(Project)
+            .filter(
+                Project.id == request.project_id,
+                Project.owner_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not project:
+            raise HTTPException(
+                status_code=404,
+                detail="Selected project was not found.",
+            )
 
     if not settings.OPENAI_API_KEY:
         raise HTTPException(
@@ -382,6 +392,23 @@ def generate_and_save_content(
                 status_code=502,
                 detail="The AI did not return any content. Please try again.",
             )
+
+        log_ai_usage(
+            db=db,
+            user_id=current_user.id,
+            project_id=project.id if project else None,
+            feature_type="Product Architect",
+            content_type=content_type,
+            status="success",
+        )
+
+        return ProductArchitectResponse(
+            id=None,
+            project_id=project.id if project else None,
+            title=title,
+            content_type=content_type,
+            body=generated_text.strip(),
+        )
 
     except APITimeoutError:
         raise HTTPException(
@@ -427,60 +454,6 @@ def generate_and_save_content(
             status_code=500,
             detail=(
                 "An unexpected error occurred while generating content. "
-                "Please try again."
-            ),
-        )
-
-    content = GeneratedContent(
-        title=title,
-        content_type=content_type,
-        body=generated_text.strip(),
-        project_id=project.id,
-        owner_id=current_user.id,
-    )
-
-    try:
-        db.add(content)
-        db.flush()
-
-        create_activity_log(
-            db=db,
-            current_user=current_user,
-            action_type="Content Created",
-            item_type="Content",
-            item_id=content.id,
-            title=f"{content.title} created",
-            description=f"{content.content_type} was generated in Product Architect.",
-            project_id=project.id,
-            project_name=project.title,
-            new_project_id=project.id,
-            new_project_name=project.title,
-        )
-
-        db.commit()
-        db.refresh(content)
-
-        log_ai_usage(
-            db=db,
-            user_id=current_user.id,
-            project_id=project.id,
-            feature_type="Product Architect",
-            content_type=content_type,
-            status="success",
-        )
-
-        return content
-
-    except HTTPException:
-        raise
-
-    except Exception:
-        db.rollback()
-
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "The document was generated but could not be saved. "
                 "Please try again."
             ),
         )
@@ -932,8 +905,8 @@ def get_product_logo_gallery(
             ProductLogo.owner_id == current_user.id,
         )
         .order_by(
-            ProductLogo.created_at.asc(),
-            ProductLogo.id.asc(),
+            ProductLogo.created_at.desc(),
+            ProductLogo.id.desc(),
         )
         .all()
     )

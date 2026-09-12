@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -16,6 +18,8 @@ class WorkspaceResponse(BaseModel):
     name: str
     description: str | None = None
     owner_id: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True

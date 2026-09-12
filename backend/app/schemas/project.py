@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -60,6 +61,8 @@ class ProjectResponse(BaseModel):
     ai_summary: str | None = None
     workspace_id: int | None = None
     owner_id: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True

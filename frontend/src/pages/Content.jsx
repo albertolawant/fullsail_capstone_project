@@ -22,6 +22,12 @@ const CATEGORY_PROBLEM_SOLVER = "Problem Solver";
 const CATEGORY_LOGOS = "Saved Logos";
 const CATEGORY_OTHER = "Other";
 
+const SORT_NEWEST = "newest";
+const SORT_OLDEST = "oldest";
+const SORT_TITLE_ASC = "title-asc";
+const SORT_TITLE_DESC = "title-desc";
+const SORT_TYPE_ASC = "type-asc";
+
 function determineCategory(contentType = "") {
   const normalizedType = contentType.trim().toLowerCase();
 
@@ -127,12 +133,64 @@ function createPreview(body = "", maximumLength = 220) {
 function sortNewestFirst(items = []) {
   return [...items].sort((firstItem, secondItem) => {
     const firstDate = new Date(
-      firstItem.created_at || firstItem.createdAt || 0
+      firstItem.updated_at ||
+        firstItem.updatedAt ||
+        firstItem.created_at ||
+        firstItem.createdAt ||
+        0
     );
 
     const secondDate = new Date(
-      secondItem.created_at || secondItem.createdAt || 0
+      secondItem.updated_at ||
+        secondItem.updatedAt ||
+        secondItem.created_at ||
+        secondItem.createdAt ||
+        0
     );
+
+    return secondDate - firstDate;
+  });
+}
+
+function sortContentItems(items = [], sortOption = SORT_NEWEST) {
+  return [...items].sort((firstItem, secondItem) => {
+    const firstDate = new Date(
+      firstItem.updated_at ||
+        firstItem.updatedAt ||
+        firstItem.created_at ||
+        firstItem.createdAt ||
+        0
+    );
+
+    const secondDate = new Date(
+      secondItem.updated_at ||
+        secondItem.updatedAt ||
+        secondItem.created_at ||
+        secondItem.createdAt ||
+        0
+    );
+
+    const firstTitle = (firstItem.title || "").toLowerCase();
+    const secondTitle = (secondItem.title || "").toLowerCase();
+
+    const firstType = (firstItem.content_type || "").toLowerCase();
+    const secondType = (secondItem.content_type || "").toLowerCase();
+
+    if (sortOption === SORT_OLDEST) {
+      return firstDate - secondDate;
+    }
+
+    if (sortOption === SORT_TITLE_ASC) {
+      return firstTitle.localeCompare(secondTitle);
+    }
+
+    if (sortOption === SORT_TITLE_DESC) {
+      return secondTitle.localeCompare(firstTitle);
+    }
+
+    if (sortOption === SORT_TYPE_ASC) {
+      return firstType.localeCompare(secondType);
+    }
 
     return secondDate - firstDate;
   });
@@ -173,6 +231,7 @@ function Content() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ALL);
+  const [sortOption, setSortOption] = useState(SORT_NEWEST);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -340,10 +399,12 @@ function Content() {
         ...preservedLogoItems,
       ]);
 
-      setContentItems([
-        ...savedContentItems,
-        ...sortedLogoItems,
-      ]);
+      setContentItems(
+        sortNewestFirst([
+          ...savedContentItems,
+          ...sortedLogoItems,
+        ])
+      );
 
       setProjects(safeProjects);
     } catch (requestError) {
@@ -446,27 +507,9 @@ function Content() {
     });
   }, [preparedContent, searchTerm, selectedCategory]);
 
-  const groupedContent = useMemo(() => {
-    return filteredContent.reduce((groups, item) => {
-      if (!groups[item.category]) {
-        groups[item.category] = [];
-      }
-
-      groups[item.category].push(item);
-      return groups;
-    }, {});
-  }, [filteredContent]);
-
-  const visibleCategoryOrder =
-    selectedCategory === CATEGORY_ALL
-      ? [
-          CATEGORY_PRODUCT,
-          CATEGORY_TABLETOP,
-          CATEGORY_PROBLEM_SOLVER,
-          CATEGORY_LOGOS,
-          CATEGORY_OTHER,
-        ]
-      : [selectedCategory];
+  const visibleContent = useMemo(() => {
+    return sortContentItems(filteredContent, sortOption);
+  }, [filteredContent, sortOption]);
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -1033,6 +1076,29 @@ function Content() {
             );
           })}
         </div>
+
+        <div className="mt-5 flex flex-col gap-2 sm:max-w-xs">
+          <label
+            htmlFor="content-sort"
+            className="text-sm font-semibold text-slate-300"
+          >
+            Sort by
+          </label>
+
+          <select
+            id="content-sort"
+            value={sortOption}
+            onChange={(event) => setSortOption(event.target.value)}
+            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-cyan-500"
+          >
+            <option value={SORT_NEWEST}>Newest First</option>
+            <option value={SORT_OLDEST}>Oldest First</option>
+            <option value={SORT_TITLE_ASC}>Title A-Z</option>
+            <option value={SORT_TITLE_DESC}>Title Z-A</option>
+            <option value={SORT_TYPE_ASC}>Type A-Z</option>
+          </select>
+        </div>
+
       </section>
 
       {loading && (
@@ -1112,149 +1178,139 @@ function Content() {
           </section>
         )}
 
-      {!loading && !error && filteredContent.length > 0 && (
-        <div className="space-y-10">
-          {visibleCategoryOrder.map((category) => {
-            const categoryItems = groupedContent[category] || [];
+    {!loading && !error && visibleContent.length > 0 && (
+      <section>
+        <div className="mb-4 flex items-center gap-3">
+          <span className="text-xl text-cyan-400">
+            {selectedCategory === CATEGORY_ALL ? <FaFileAlt /> : getCategoryIcon(selectedCategory)}
+          </span>
 
-            if (categoryItems.length === 0) {
-              return null;
-            }
+          <h3 className="text-2xl font-bold">
+            {selectedCategory === CATEGORY_ALL ? "All Saved Content" : selectedCategory}
+          </h3>
 
-            return (
-              <section key={category}>
-                <div className="mb-4 flex items-center gap-3">
-                  <span className="text-xl text-cyan-400">
-                    {getCategoryIcon(category)}
-                  </span>
-
-                  <h3 className="text-2xl font-bold">{category}</h3>
-
-                  <span className="rounded-full bg-slate-800 px-3 py-1 text-sm text-slate-300">
-                    {categoryItems.length}
-                  </span>
-                </div>
-
-                <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-                  {categoryItems.map((item) => (
-                    <article
-                      key={item.id}
-                      className="flex min-h-72 flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5 transition hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-xl"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <h4 className="break-words text-xl font-bold text-white">
-                            {item.title}
-                          </h4>
-
-                          {item.project_id == null ? (
-                            <span className="mt-2 inline-flex items-center rounded-md border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs font-semibold text-slate-300">
-                              No Project
-                            </span>
-                          ) : (
-                            <p className="mt-1 text-sm text-slate-500">
-                              {item.projectName}
-                            </p>
-                          )}
-                        </div>
-
-                        <span
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getCategoryBadgeClasses(
-                            item.category
-                          )}`}
-                        >
-                          {getCategoryIcon(item.category)}
-                        </span>
-                      </div>
-
-                      <div className="mt-4">
-                        <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getCategoryBadgeClasses(
-                            item.category
-                          )}`}
-                        >
-                          {item.content_type}
-                        </span>
-                      </div>
-
-                      {item.isLogo ? (
-                        <div className="mt-4 flex-1">
-                          <img
-                            src={`data:image/png;base64,${item.image_base64}`}
-                            alt={`${item.projectName} saved logo`}
-                            className="h-40 w-full rounded-xl border border-slate-700 bg-white object-contain"
-                          />
-
-                          <p className="mt-3 text-sm text-slate-400">
-                            Style: {item.style || "default"}
-                          </p>
-
-                          {(item.preferred_colors ||
-                            item.logo_ideas ||
-                            item.branding_direction) && (
-                            <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
-                              {[
-                                item.preferred_colors,
-                                item.logo_ideas,
-                                item.branding_direction,
-                              ]
-                                .filter(Boolean)
-                                .join(" • ")}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="mt-4 flex-1 text-sm leading-6 text-slate-400">
-                          {createPreview(item.body)}
-                        </p>
-                      )}
-
-                      <div className="mt-5 border-t border-slate-800 pt-4">
-                        <button
-                          type="button"
-                          onClick={() => openSelectedContent(item)}
-                          className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-                        >
-                          <FaEye />
-                          View
-                        </button>
-
-                        <div className="flex flex-wrap items-center gap-3">
-                          {!item.isLogo && (
-                            <button
-                              type="button"
-                              onClick={() => openEditContent(item)}
-                              className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                            >
-                              Edit
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => openMoveContent(item)}
-                            className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                          >
-                            Move
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => openDeleteConfirmation(item)}
-                            className="ml-auto rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+          <span className="rounded-full bg-slate-800 px-3 py-1 text-sm text-slate-300">
+            {visibleContent.length}
+          </span>
         </div>
-      )}
+
+        <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
+          {visibleContent.map((item) => (
+            <article
+              key={item.id}
+              className="flex min-h-72 flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5 transition hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h4 className="break-words text-xl font-bold text-white">
+                    {item.title}
+                  </h4>
+
+                  {item.project_id == null ? (
+                    <span className="mt-2 inline-flex items-center rounded-md border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs font-semibold text-slate-300">
+                      No Project
+                    </span>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500">
+                      {item.projectName}
+                    </p>
+                  )}
+                </div>
+
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getCategoryBadgeClasses(
+                    item.category
+                  )}`}
+                >
+                  {getCategoryIcon(item.category)}
+                </span>
+              </div>
+
+              <div className="mt-4">
+                <span
+                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getCategoryBadgeClasses(
+                    item.category
+                  )}`}
+                >
+                  {item.content_type}
+                </span>
+              </div>
+
+              {item.isLogo ? (
+                <div className="mt-4 flex-1">
+                  <img
+                    src={`data:image/png;base64,${item.image_base64}`}
+                    alt={`${item.projectName} saved logo`}
+                    className="h-40 w-full rounded-xl border border-slate-700 bg-white object-contain"
+                  />
+
+                  <p className="mt-3 text-sm text-slate-400">
+                    Style: {item.style || "default"}
+                  </p>
+
+                  {(item.preferred_colors ||
+                    item.logo_ideas ||
+                    item.branding_direction) && (
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+                      {[
+                        item.preferred_colors,
+                        item.logo_ideas,
+                        item.branding_direction,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ")}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-4 flex-1 text-sm leading-6 text-slate-400">
+                  {createPreview(item.body)}
+                </p>
+              )}
+
+              <div className="mt-5 border-t border-slate-800 pt-4">
+                <button
+                  type="button"
+                  onClick={() => openSelectedContent(item)}
+                  className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                >
+                  <FaEye />
+                  View
+                </button>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {!item.isLogo && (
+                    <button
+                      type="button"
+                      onClick={() => openEditContent(item)}
+                      className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                    >
+                      Edit
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => openMoveContent(item)}
+                    className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                  >
+                    Move
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openDeleteConfirmation(item)}
+                    className="ml-auto rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    )}
 
       {/* VIEW CONTENT MODAL */}
       {selectedContent && (
