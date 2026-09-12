@@ -1122,31 +1122,108 @@ function TabletopCreator() {
   };
 
   return (
-    <main className="flex-1 p-10" data-testid="tabletop-creator-page">
-      <div className="mb-8">
-        <p className="text-cyan-400 font-semibold mb-2">Tanio AI Module</p>
-
-        <h2 className="text-4xl font-bold">Tabletop Creator</h2>
-
-        <p className="text-slate-400 mt-2 max-w-3xl">
-          Build tabletop campaigns, generate story content, and organize
-          campaign materials from one central workspace.
-        </p>
+    <main
+      className="relative min-h-screen flex-1 overflow-hidden bg-slate-950 px-3 py-4 text-white sm:px-4 lg:px-5 xl:px-6"
+      data-testid="tabletop-creator-page"
+    >
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-40 top-[-12rem] h-[32rem] w-[32rem] rounded-full bg-violet-500/[0.06] blur-3xl" />
+        <div className="absolute right-[-10rem] top-[18rem] h-[28rem] w-[28rem] rounded-full bg-cyan-500/[0.05] blur-3xl" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.025)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:linear-gradient(to_bottom,black,transparent_80%)]" />
       </div>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-        <h3 className="text-2xl font-bold">Campaign Creation Tools</h3>
+      <div className="relative z-10 w-full">
+        {/* Hero Header */}
+        <div className="group relative mb-5 overflow-hidden rounded-[22px] border border-violet-400/20 bg-slate-950/80 shadow-[0_30px_100px_rgba(0,0,0,0.34)] ring-1 ring-white/[0.035] backdrop-blur-2xl">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-20 -top-32 h-72 w-72 rounded-full bg-violet-400/[0.13] blur-[90px]" />
+            <div className="absolute left-[35%] -top-40 h-80 w-80 rounded-full bg-fuchsia-500/[0.06] blur-[110px]" />
+            <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-500/[0.08] blur-[100px]" />
+            <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_0%,rgba(255,255,255,0.025)_38%,transparent_62%)]" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-300/70 to-transparent" />
+            <div className="absolute bottom-0 left-[8%] right-[8%] h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
+          </div>
 
-        <p className="text-slate-400 mt-2">
-          Select a tool below to begin building or organizing tabletop content.
-        </p>
+          <div className="relative flex flex-col gap-5 p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between xl:px-7 xl:py-6">
+            <div className="flex min-w-0 items-center gap-5">
+              <div className="relative flex h-[68px] w-[68px] shrink-0 items-center justify-center">
+                <div className="absolute inset-0 rounded-[20px] bg-violet-400/15 blur-xl transition duration-500 group-hover:bg-violet-400/25" />
+                <div className="absolute inset-0 rotate-6 rounded-[20px] border border-violet-400/15 bg-violet-500/[0.04]" />
+                <div className="relative flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-[18px] border border-violet-300/30 bg-gradient-to-br from-violet-400/25 via-fuchsia-500/10 to-slate-950 text-[28px] text-violet-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_35px_rgba(139,92,246,0.14)]">
+                  <span className="absolute inset-0 bg-gradient-to-br from-white/[0.12] via-transparent to-transparent" />
+                  <span className="relative drop-shadow-[0_0_12px_rgba(196,181,253,0.75)]">✦</span>
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-violet-400/20 bg-violet-400/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-300">
+                    Tanio Intelligence
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-300/90">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_9px_rgba(52,211,153,0.85)]" />
+                    Online
+                  </span>
+                </div>
+
+                <h1 className="bg-gradient-to-r from-white via-slate-100 to-violet-200 bg-clip-text text-3xl font-black tracking-[-0.035em] text-transparent sm:text-4xl">
+                  Tabletop Creator
+                </h1>
+                <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
+                  Build campaigns, characters, quests, encounters, and locations from one intelligent world-building workspace.
+                </p>
+              </div>
+            </div>
+
+            <div className="relative overflow-hidden rounded-2xl border border-violet-400/15 bg-gradient-to-br from-slate-950/80 via-slate-950/60 to-violet-950/25 p-[1px] shadow-[0_16px_45px_rgba(0,0,0,0.20)] xl:min-w-[470px]">
+              <div className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-violet-400/[0.08] blur-3xl" />
+              <div className="relative flex items-center gap-4 rounded-[15px] bg-slate-950/65 px-4 py-3.5">
+                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-300/25 bg-violet-400/[0.08] text-lg text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.10)]">
+                  <span className="absolute h-6 w-6 animate-ping rounded-full border border-violet-400/10" />
+                  <span className="relative">◎</span>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate font-bold text-white">AI Worldbuilding Engine</p>
+                    <span className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+                      Ready
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-slate-400 sm:text-sm">
+                    Imagine → build → connect → play
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-1.5" aria-hidden="true">
+                    <span className="h-1 flex-1 rounded-full bg-violet-400/70 shadow-[0_0_8px_rgba(139,92,246,0.35)]" />
+                    <span className="h-1 flex-1 rounded-full bg-fuchsia-400/55" />
+                    <span className="h-1 flex-1 rounded-full bg-cyan-400/45" />
+                    <span className="h-1 flex-1 rounded-full bg-emerald-400/45" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      <section className="relative mb-5 overflow-hidden rounded-2xl border border-violet-500/15 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.055),transparent_25%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+        <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-500/15 to-slate-900 text-xl text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.10)]">
+            ✦
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white">Campaign Creation Tools</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Choose a world-building tool and generate connected campaign content.
+            </p>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
           {tools.map((tool) => (
             <button
               key={tool.title}
               type="button"
-              className="bg-slate-950 border border-slate-800 hover:border-cyan-500 rounded-xl p-5 text-left transition-all duration-200"
+              className="group rounded-2xl border border-slate-800/90 bg-gradient-to-br from-slate-950/80 to-violet-950/[0.10] p-5 text-left shadow-inner shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-400/30 hover:bg-violet-950/[0.16] hover:shadow-[0_16px_36px_rgba(0,0,0,0.18)]"
               data-testid={`tabletop-tool-${tool.title
                 .toLowerCase()
                 .replaceAll(" ", "-")}`}
@@ -1156,7 +1233,7 @@ function TabletopCreator() {
                   {tool.title}
                 </h4>
 
-                <span className="text-xs text-cyan-400 bg-cyan-950/40 border border-cyan-900 rounded-full px-2 py-1">
+                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
                   {tool.status}
                 </span>
               </div>
@@ -1169,8 +1246,18 @@ function TabletopCreator() {
         </div>
       </section>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-        <h3 className="text-2xl font-bold">Create Campaign</h3>
+      <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.05),transparent_24%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+        <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
+            ◈
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white">Create Campaign</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Define your campaign foundation, then generate the content you need.
+            </p>
+          </div>
+        </div>
         
         <div className="mb-5">
           <label
@@ -1185,7 +1272,7 @@ function TabletopCreator() {
             value={selectedProjectId || ""}
             onChange={(event) => handleSelectedProjectChange(event.target.value)}
             disabled={isAnyGenerationInProgress}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+            className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">Create a new project automatically</option>
 
@@ -1226,7 +1313,7 @@ function TabletopCreator() {
                 setCampaignName(event.target.value);
               }}
               maxLength={100}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
+              className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
               data-testid="campaign-name"
             />
           </div>
@@ -1247,7 +1334,7 @@ function TabletopCreator() {
               }
               rows="5"
               maxLength={5000}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
+              className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
               data-testid="campaign-description"
             />
           </div>
@@ -1257,7 +1344,7 @@ function TabletopCreator() {
               type="button"
               onClick={() => handleGenerateCampaign(false)}
               disabled={isAnyGenerationInProgress}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-3 font-bold text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.14)] transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-campaign"
             >
               {generating ? "Generating..." : "Generate Campaign Content"}
@@ -1267,7 +1354,7 @@ function TabletopCreator() {
               type="button"
               onClick={() => handleGenerateNPCs(false)}
               disabled={isAnyGenerationInProgress}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-npcs"
             >
               {generatingNPCs ? "Generating NPCs..." : "Generate NPCs"}
@@ -1277,7 +1364,7 @@ function TabletopCreator() {
               type="button"
               onClick={() => handleGenerateQuests(false)}
               disabled={isAnyGenerationInProgress}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-quests"
             >
               {generatingQuests ? "Generating Quests..." : "Generate Quests"}
@@ -1287,7 +1374,7 @@ function TabletopCreator() {
               type="button"
               onClick={() => handleGenerateEncounters(false)}
               disabled={isAnyGenerationInProgress}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-encounters"
             >
               {generatingEncounters
@@ -1299,7 +1386,7 @@ function TabletopCreator() {
               type="button"
               onClick={() => handleGenerateLocations(false)}
               disabled={isAnyGenerationInProgress}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-lg disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="generate-locations"
             >
               {generatingLocations
@@ -1338,7 +1425,7 @@ function TabletopCreator() {
 
       {saveWorkspaceSuccess && (
         <div
-          className="mb-8 rounded-xl border border-emerald-800 bg-emerald-950/50 p-4"
+          className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.14)]"
           role="status"
           aria-live="polite"
         >
@@ -1351,7 +1438,7 @@ function TabletopCreator() {
 
       {relatedContentWarning && (
         <section
-          className="mb-8 rounded-xl border border-amber-700 bg-amber-950/30 p-6"
+          className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.14)] sm:p-6"
           data-testid="related-content-warning"
         >
           <div className="flex flex-col gap-4">
@@ -1429,7 +1516,7 @@ function TabletopCreator() {
       )}
 
       {(generateError || generatedCampaignContent) && (
-        <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
           <h3 className="text-2xl font-bold">Generated Campaign Content</h3>
           {generatedCampaignContent && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1442,7 +1529,7 @@ function TabletopCreator() {
                   isAnyGenerationInProgress ||
                   currentVersionIndex.campaign <= 0
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 ← Previous
               </button>
@@ -1457,7 +1544,7 @@ function TabletopCreator() {
                   currentVersionIndex.campaign >=
                     generationHistory.campaign.length - 1
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next →
               </button>
@@ -1466,7 +1553,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenRegenerate("campaign")}
                 disabled={isAnyGenerationInProgress}
-                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {generating ? "Regenerating..." : "Regenerate Campaign"}
               </button>
@@ -1475,7 +1562,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenSaveWorkspace("campaign")}
                 disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Save to Workspace
               </button>
@@ -1536,7 +1623,7 @@ function TabletopCreator() {
 
           {generatedCampaignContent && (
             <div
-              className={generatedMarkdownClasses}
+              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
               data-testid="generated-campaign-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1548,7 +1635,7 @@ function TabletopCreator() {
       )}
 
       {(npcError || generatedNPCContent) && (
-        <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
           <h3 className="text-2xl font-bold">Generated NPCs</h3>
           {generatedNPCContent && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1561,7 +1648,7 @@ function TabletopCreator() {
                   isAnyGenerationInProgress ||
                   currentVersionIndex.npc <= 0
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 ← Previous
               </button>
@@ -1576,7 +1663,7 @@ function TabletopCreator() {
                   currentVersionIndex.npc >=
                     generationHistory.npc.length - 1
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next →
               </button>
@@ -1585,7 +1672,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenRegenerate("npc")}
                 disabled={isAnyGenerationInProgress}
-                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {generatingNPCs ? "Regenerating..." : "Regenerate NPCs"}
               </button>
@@ -1594,7 +1681,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenSaveWorkspace("npc")}
                 disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Save to Workspace
               </button>
@@ -1655,7 +1742,7 @@ function TabletopCreator() {
 
           {generatedNPCContent && (
             <div
-              className={generatedMarkdownClasses}
+              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
               data-testid="generated-npc-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1667,7 +1754,7 @@ function TabletopCreator() {
       )}
 
       {(questError || generatedQuestContent) && (
-        <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
           <h3 className="text-2xl font-bold">Generated Quests</h3>
           {generatedQuestContent && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1680,7 +1767,7 @@ function TabletopCreator() {
                   isAnyGenerationInProgress ||
                   currentVersionIndex.quest <= 0
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 ← Previous
               </button>
@@ -1695,7 +1782,7 @@ function TabletopCreator() {
                   currentVersionIndex.quest >=
                     generationHistory.quest.length - 1
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next →
               </button>
@@ -1704,7 +1791,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenRegenerate("quest")}
                 disabled={isAnyGenerationInProgress}
-                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {generatingQuests ? "Regenerating..." : "Regenerate Quests"}
               </button>
@@ -1713,7 +1800,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenSaveWorkspace("quest")}
                 disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Save to Workspace
               </button>
@@ -1774,7 +1861,7 @@ function TabletopCreator() {
 
           {generatedQuestContent && (
             <div
-              className={generatedMarkdownClasses}
+              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
               data-testid="generated-quest-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1786,7 +1873,7 @@ function TabletopCreator() {
       )}
 
       {(encounterError || generatedEncounterContent) && (
-        <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
           <h3 className="text-2xl font-bold">Generated Encounters</h3>
           {generatedEncounterContent && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1799,7 +1886,7 @@ function TabletopCreator() {
                   isAnyGenerationInProgress ||
                   currentVersionIndex.encounter <= 0
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 ← Previous
               </button>
@@ -1814,7 +1901,7 @@ function TabletopCreator() {
                   currentVersionIndex.encounter >=
                     generationHistory.encounter.length - 1
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next →
               </button>
@@ -1823,7 +1910,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenRegenerate("encounter")}
                 disabled={isAnyGenerationInProgress}
-                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {generatingEncounters ? "Regenerating..." : "Regenerate Encounters"}
               </button>
@@ -1832,7 +1919,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenSaveWorkspace("encounter")}
                 disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Save to Workspace
               </button>
@@ -1893,7 +1980,7 @@ function TabletopCreator() {
 
           {generatedEncounterContent && (
             <div
-              className={generatedMarkdownClasses}
+              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
               data-testid="generated-encounter-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1905,7 +1992,7 @@ function TabletopCreator() {
       )}
 
       {(locationError || generatedLocationContent) && (
-        <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
           <h3 className="text-2xl font-bold">Generated Locations</h3>
           {generatedLocationContent && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1918,7 +2005,7 @@ function TabletopCreator() {
                   isAnyGenerationInProgress ||
                   currentVersionIndex.location <= 0
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 ← Previous
               </button>
@@ -1933,7 +2020,7 @@ function TabletopCreator() {
                   currentVersionIndex.location >=
                     generationHistory.location.length - 1
                 }
-                className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next →
               </button>
@@ -1942,7 +2029,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenRegenerate("location")}
                 disabled={isAnyGenerationInProgress}
-                className="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {generatingLocations ? "Regenerating..." : "Regenerate Locations"}
               </button>
@@ -1951,7 +2038,7 @@ function TabletopCreator() {
                 type="button"
                 onClick={() => handleOpenSaveWorkspace("location")}
                 disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Save to Workspace
               </button>
@@ -2012,7 +2099,7 @@ function TabletopCreator() {
 
           {generatedLocationContent && (
             <div
-              className={generatedMarkdownClasses}
+              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
               data-testid="generated-location-content"
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -2276,6 +2363,7 @@ function TabletopCreator() {
           </div>
         </div>
       )}
+      </div>
     </main>
   );
 }

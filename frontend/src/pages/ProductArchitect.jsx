@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -168,6 +168,10 @@ function ProductArchitect() {
 
   const [projectContentLoading, setProjectContentLoading] = useState(false);
   const [projectContentError, setProjectContentError] = useState("");
+  const [showGeneratedOutputModal, setShowGeneratedOutputModal] = useState(false);
+  const [copyGeneratedLabel, setCopyGeneratedLabel] = useState("Copy");
+  const projectSetupRef = useRef(null);
+  const [projectSetupHeight, setProjectSetupHeight] = useState(940);
 
   const endpointMap = {
     prd: "/product-architect/prd",
@@ -700,6 +704,33 @@ ${aiPreferenceInstructions}`;
       setLogoGalleryLoading(false);
     }
   };
+
+  useEffect(() => {
+    const projectSetupElement = projectSetupRef.current;
+
+    if (!projectSetupElement || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const syncProjectSetupHeight = () => {
+      const nextHeight = Math.ceil(
+        projectSetupElement.getBoundingClientRect().height
+      );
+
+      if (nextHeight > 0) {
+        setProjectSetupHeight(nextHeight);
+      }
+    };
+
+    syncProjectSetupHeight();
+
+    const resizeObserver = new ResizeObserver(syncProjectSetupHeight);
+    resizeObserver.observe(projectSetupElement);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     const loadProjectsForSelection = async () => {
@@ -1399,228 +1430,619 @@ ${aiPreferenceInstructions}`;
     }
   };
 
+
+  const handleCopyGeneratedOutput = async () => {
+    if (!generatedContent.trim()) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(generatedContent);
+      setCopyGeneratedLabel("Copied");
+      window.setTimeout(() => setCopyGeneratedLabel("Copy"), 1600);
+    } catch (err) {
+      console.error("Copy generated output error:", err);
+      setCopyGeneratedLabel("Copy failed");
+      window.setTimeout(() => setCopyGeneratedLabel("Copy"), 1600);
+    }
+  };
+
   return (
-    <div className="min-h-screen w-full bg-slate-950 p-8 text-white">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Product Architect</h1>
+    <div className="relative min-h-screen w-full overflow-hidden bg-slate-950 px-3 py-4 text-white sm:px-4 lg:px-5 xl:px-6">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-40 top-[-12rem] h-[32rem] w-[32rem] rounded-full bg-cyan-500/[0.06] blur-3xl" />
+        <div className="absolute right-[-10rem] top-[18rem] h-[28rem] w-[28rem] rounded-full bg-violet-500/[0.05] blur-3xl" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.025)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:linear-gradient(to_bottom,black,transparent_80%)]" />
+      </div>
 
-        <p className="text-slate-400 mt-2">
-          Generate project planning documents with AI.
-        </p>
-      </div>     
+      <div className="relative z-10 w-full">
+        {/* Hero Header */}
+        <div className="group relative mb-5 overflow-hidden rounded-[22px] border border-cyan-400/20 bg-slate-950/80 shadow-[0_30px_100px_rgba(0,0,0,0.34)] ring-1 ring-white/[0.035] backdrop-blur-2xl">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-20 -top-32 h-72 w-72 rounded-full bg-cyan-400/[0.13] blur-[90px]" />
+            <div className="absolute left-[35%] -top-40 h-80 w-80 rounded-full bg-sky-500/[0.07] blur-[110px]" />
+            <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-violet-500/[0.09] blur-[100px]" />
+            <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_0%,rgba(255,255,255,0.025)_38%,transparent_62%)]" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
+            <div className="absolute bottom-0 left-[8%] right-[8%] h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
+          </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
-        <div className="mb-4">
-          <label
-            htmlFor="existing-project"
-            className="block text-sm text-slate-400 mb-2"
-          >
-            Choose Existing Project
-          </label>
+          <div className="relative flex flex-col gap-5 p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between xl:px-7 xl:py-6">
+            <div className="flex min-w-0 items-center gap-5">
+              <div className="relative flex h-[68px] w-[68px] shrink-0 items-center justify-center">
+                <div className="absolute inset-0 rounded-[20px] bg-cyan-400/15 blur-xl transition duration-500 group-hover:bg-cyan-400/25" />
+                <div className="absolute inset-0 rotate-6 rounded-[20px] border border-cyan-400/15 bg-cyan-500/[0.04]" />
+                <div className="relative flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-[18px] border border-cyan-300/30 bg-gradient-to-br from-cyan-400/25 via-sky-500/10 to-slate-950 text-[28px] text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_35px_rgba(34,211,238,0.14)]">
+                  <span className="absolute inset-0 bg-gradient-to-br from-white/[0.12] via-transparent to-transparent" />
+                  <span className="relative drop-shadow-[0_0_12px_rgba(103,232,249,0.75)]">◈</span>
+                </div>
+              </div>
 
-          <select
-            id="existing-project"
-            value={selectedProjectId || ""}
-            onChange={(e) => handleSelectedProjectChange(e.target.value)}
-            disabled={loading || logoLoading}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500 disabled:opacity-50"
-          >
-            <option value="">Create a new project automatically</option>
+              <div className="min-w-0">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+                    Tanio Intelligence
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-300/90">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_9px_rgba(52,211,153,0.85)]" />
+                    Online
+                  </span>
+                </div>
 
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.title}
-              </option>
-            ))}
-          </select>
+                <h1 className="bg-gradient-to-r from-white via-slate-100 to-cyan-200 bg-clip-text text-3xl font-black tracking-[-0.035em] text-transparent sm:text-4xl">
+                  Product Architect
+                </h1>
+                <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
+                  Turn product ideas into structured plans, requirements, architecture, and launch-ready documentation.
+                </p>
+              </div>
+            </div>
 
-          <p className="text-xs text-slate-500 mt-2">
-            Select an existing project to save generated content and logos there.
-            Leave this blank to auto-create a new project.
-          </p>
-        </div> 
+            <div className="relative overflow-hidden rounded-2xl border border-cyan-400/15 bg-gradient-to-br from-slate-950/80 via-slate-950/60 to-violet-950/25 p-[1px] shadow-[0_16px_45px_rgba(0,0,0,0.20)] xl:min-w-[470px]">
+              <div className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-violet-400/[0.08] blur-3xl" />
+              <div className="relative flex items-center gap-4 rounded-[15px] bg-slate-950/65 px-4 py-3.5">
+                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/[0.08] text-lg text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.10)]">
+                  <span className="absolute h-6 w-6 animate-ping rounded-full border border-cyan-400/10" />
+                  <span className="relative">◎</span>
+                </div>
 
-        <div className="mb-4">
-          <label
-            htmlFor="project-name"
-            className="block text-sm text-slate-400 mb-2"
-          >
-            Project Name
-          </label>
-
-          <input
-            id="project-name"
-            type="text"
-            value={projectName}
-            onChange={(e) => {
-              setProjectName(e.target.value);
-
-              if (error) {
-                setError("");
-              }
-              if (successMessage) {
-                setSuccessMessage("");
-              }
-              if (logoError) {
-                setLogoError("");
-              }
-              if (logoBase64) {
-                setLogoBase64("");
-              }
-
-              setLogoProjectId(null);
-              setLogoGallery([]);
-              setSelectedLogoIndex(-1);
-              setLogoGalleryError("");
-            }}
-            maxLength={100}
-            aria-describedby="project-name-help"
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
-          />
-
-          <p id="project-name-help" className="text-xs text-slate-500 mt-2">
-            Use between 2 and 100 characters.
-          </p>
-        </div>
-
-        <div className="mb-4">
-          <label
-            htmlFor="project-description"
-            className="block text-sm text-slate-400 mb-2"
-          >
-            Project Description
-          </label>
-
-          <textarea
-            id="project-description"
-            value={description}
-            onChange={(e) => {
-              setDescription(e.target.value);
-
-              if (error) {
-                setError("");
-              }
-              if (successMessage) {
-                setSuccessMessage("");
-              }
-              if (logoError) {
-                setLogoError("");
-              }
-              if (logoBase64) {
-                setLogoBase64("");
-              }
-            }}
-            rows="4"
-            maxLength={5000}
-            aria-describedby="project-description-help"
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
-          />
-
-          <div
-            id="project-description-help"
-            className="flex justify-between gap-4 text-xs text-slate-500 mt-2"
-          >
-            <span>Use at least 10 characters.</span>
-            <span>{description.length}/5000</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate font-bold text-white">AI Planning Engine</p>
+                    <span className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+                      Ready
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-slate-400 sm:text-sm">
+                    Plan → define → generate → ship
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-1.5" aria-hidden="true">
+                    <span className="h-1 flex-1 rounded-full bg-cyan-400/70 shadow-[0_0_8px_rgba(34,211,238,0.35)]" />
+                    <span className="h-1 flex-1 rounded-full bg-sky-400/55" />
+                    <span className="h-1 flex-1 rounded-full bg-violet-400/45" />
+                    <span className="h-1 flex-1 rounded-full bg-emerald-400/45" />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="mb-6">
-          <label
-            htmlFor="document-type"
-            className="block text-sm text-slate-400 mb-2"
-          >
-            Document Type
-          </label>
+        {/* Main Product Architect Workspace */}
+        <div className="grid items-stretch gap-4 2xl:gap-5 xl:grid-cols-2">
+        {/* Project Setup */}
+        <section ref={projectSetupRef} className="relative flex h-full min-h-[940px] flex-col overflow-visible rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/55 to-transparent" />
 
-          <select
-            id="document-type"
-            value={contentType}
-            onChange={(e) => {
-              setContentType(e.target.value);
+          <div className="mb-6 flex items-start gap-3 border-b border-slate-800/70 pb-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
+              ◈
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">Project Setup</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Choose your project, describe the product, and select what Tanio should generate.
+              </p>
+            </div>
+          </div>
 
-              if (error) {
-                setError("");
-              }
-              if (successMessage) {
-                setSuccessMessage("");
-              }
-            }}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
-          >
-            <option value="prd">Product Requirements Document</option>
-            <option value="persona">User Persona</option>
-            <option value="userStories">User Stories</option>
-            <option value="featureList">Feature List</option>
-            <option value="technicalArchitecture">
-              Technical Architecture
-            </option>
-          </select>
-        </div>
+          <div className="flex flex-1 flex-col"><div className="grid gap-5">
+            <div className="rounded-2xl border border-slate-800/80 bg-slate-950/35 p-4 sm:p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Project Details</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Use an existing project or create a new one automatically.
+                  </p>
+                </div>
+                <span className="rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-cyan-300">
+                  Step 1
+                </span>
+              </div>
 
-        <button
-          type="button"
-          onClick={() => handleGenerate(false)}
-          disabled={
-            loading ||
-            projectName.trim().length < 2 ||
-            description.trim().length < 10
-          }
-          className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? "Generating..." : "Generate Content"}
-        </button>
+              <div className="mb-4">
+                <label htmlFor="existing-project" className="mb-2 block text-sm font-medium text-slate-300">
+                  Choose Existing Project
+                </label>
 
-        {error && (
-          <div
-            className="mt-4 bg-red-950/50 border border-red-800 rounded-lg p-4"
-            role="alert"
-            aria-live="polite"
-          >
-            <p className="font-semibold text-red-300">
-              Something went wrong
-            </p>
+                <select
+                  id="existing-project"
+                  value={selectedProjectId || ""}
+                  onChange={(e) => handleSelectedProjectChange(e.target.value)}
+                  disabled={loading || logoLoading}
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">Create a new project automatically</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.title}
+                    </option>
+                  ))}
+                </select>
 
-            <p className="text-sm text-red-300 mt-1">{error}</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Select an existing project to save generated content and logos there.
+                  Leave this blank to auto-create a new project.
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="project-name" className="mb-2 block text-sm font-medium text-slate-300">
+                  Project Name
+                </label>
+
+                <input
+                  id="project-name"
+                  type="text"
+                  value={projectName}
+                  onChange={(e) => {
+                    setProjectName(e.target.value);
+
+                    if (error) {
+                      setError("");
+                    }
+                    if (successMessage) {
+                      setSuccessMessage("");
+                    }
+                    if (logoError) {
+                      setLogoError("");
+                    }
+                    if (logoBase64) {
+                      setLogoBase64("");
+                    }
+
+                    setLogoProjectId(null);
+                    setLogoGallery([]);
+                    setSelectedLogoIndex(-1);
+                    setLogoGalleryError("");
+                  }}
+                  maxLength={100}
+                  aria-describedby="project-name-help"
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
+                />
+
+                <div id="project-name-help" className="mt-2 flex justify-between gap-4 text-xs text-slate-500">
+                  <span>Use between 2 and 100 characters.</span>
+                  <span>{projectName.length}/100</span>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="project-description" className="mb-2 block text-sm font-medium text-slate-300">
+                  Project Description
+                </label>
+
+                <textarea
+                  id="project-description"
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+
+                    if (error) {
+                      setError("");
+                    }
+                    if (successMessage) {
+                      setSuccessMessage("");
+                    }
+                    if (logoError) {
+                      setLogoError("");
+                    }
+                    if (logoBase64) {
+                      setLogoBase64("");
+                    }
+                  }}
+                  rows={7}
+                  maxLength={5000}
+                  aria-describedby="project-description-help"
+                  className="w-full resize-none rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
+                />
+
+                <div id="project-description-help" className="mt-2 flex justify-between gap-4 text-xs text-slate-500">
+                  <span>Use at least 10 characters.</span>
+                  <span>{description.length}/5000</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col rounded-2xl border border-cyan-500/10 bg-gradient-to-b from-cyan-950/[0.10] to-slate-950/45 p-4 sm:p-5">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Generation Settings</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Choose the planning document you want Tanio to build.
+                  </p>
+                </div>
+                <span className="rounded-full border border-violet-500/20 bg-violet-500/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-300">
+                  Step 2
+                </span>
+              </div>
+
+              <div className="mb-5">
+                <label htmlFor="document-type" className="mb-2 block text-sm font-medium text-slate-300">
+                  Document Type
+                </label>
+
+                <select
+                  id="document-type"
+                  value={contentType}
+                  onChange={(e) => {
+                    setContentType(e.target.value);
+
+                    if (error) {
+                      setError("");
+                    }
+                    if (successMessage) {
+                      setSuccessMessage("");
+                    }
+                  }}
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
+                >
+                  <option value="prd">Product Requirements Document</option>
+                  <option value="persona">User Persona</option>
+                  <option value="userStories">User Stories</option>
+                  <option value="featureList">Feature List</option>
+                  <option value="technicalArchitecture">Technical Architecture</option>
+                </select>
+              </div>
+
+              <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Ready to Generate
+                </p>
+                <p className="mt-2 text-base font-semibold text-white">
+                  {documentTypeLabels[contentType] || "Generated Content"}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-400">
+                  Tanio will use the project information on the left together with your saved AI preferences.
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-cyan-500/15 bg-cyan-500/[0.05] px-2.5 py-1 text-xs text-cyan-300">
+                    AI-assisted
+                  </span>
+                  <span className="rounded-full border border-violet-500/15 bg-violet-500/[0.05] px-2.5 py-1 text-xs text-violet-300">
+                    Versioned
+                  </span>
+                  <span className="rounded-full border border-emerald-500/15 bg-emerald-500/[0.05] px-2.5 py-1 text-xs text-emerald-300">
+                    Exportable
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleGenerate(false)}
+                disabled={
+                  loading ||
+                  projectName.trim().length < 2 ||
+                  description.trim().length < 10
+                }
+                className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-400 to-sky-400 px-6 py-3.5 font-bold text-slate-950 shadow-[0_-10px_30px_rgba(2,6,23,0.45),0_14px_36px_rgba(34,211,238,0.16)] transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 hover:shadow-[0_-10px_30px_rgba(2,6,23,0.45),0_18px_44px_rgba(34,211,238,0.22)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span aria-hidden="true">✦</span>
+                {loading ? "Generating..." : "Generate Content"}
+              </button>
+
+              {error && (
+                <div className="mt-4 rounded-xl border border-red-800 bg-red-950/50 p-4" role="alert" aria-live="polite">
+                  <p className="font-semibold text-red-300">Something went wrong</p>
+                  <p className="mt-1 text-sm text-red-300">{error}</p>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerate(false)}
+                    disabled={loading}
+                    className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="mt-4 rounded-xl border border-emerald-800 bg-emerald-950/50 p-4" role="status" aria-live="polite">
+                  <p className="font-semibold text-emerald-300">Success</p>
+                  <p className="mt-1 text-sm text-emerald-300">{successMessage}</p>
+                </div>
+              )}
+            </div>
+          </div>
+          </div>
+        </section>
+
+      <div
+        style={{
+          "--project-setup-height": `${projectSetupHeight}px`,
+        }}
+        className="relative flex min-h-[700px] flex-col overflow-hidden rounded-2xl border border-cyan-500/15 xl:h-[var(--project-setup-height)] xl:min-h-0 xl:max-h-[var(--project-setup-height)] bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.06),transparent_28%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
+        aria-busy={loading}
+      >
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/55 to-transparent" />
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/70 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
+              ▤
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Generated Output</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Review, regenerate, save, or export your AI-generated planning document.
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={() => handleGenerate(false)}
-              disabled={loading}
-              className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleCopyGeneratedOutput}
+              disabled={!generatedContent.trim()}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/60 px-3.5 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Retry
+              <span aria-hidden="true">⧉</span>
+              {copyGeneratedLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowGeneratedOutputModal(true)}
+              disabled={!generatedContent.trim()}
+              className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.08] px-3.5 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/45 hover:bg-cyan-500/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span aria-hidden="true">⛶</span>
+              Expand
             </button>
           </div>
-        )}
 
-        {successMessage && (
+          {generatedContent && (
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handlePreviousVersion}
+                disabled={loading || currentVersionIndex <= 0}
+                className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ← Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNextVersion}
+                disabled={
+                  loading ||
+                  currentVersionIndex >= generationHistory.length - 1
+                }
+                className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next →
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenRegenerate}
+                disabled={loading}
+                className="rounded-lg border border-violet-400/30 bg-gradient-to-r from-violet-500/20 via-purple-500/15 to-slate-900 px-4 py-2 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/55 hover:text-white disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {regenerating ? "Regenerating..." : "Regenerate"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenSaveWorkspace}
+                disabled={loading || savingToWorkspace}
+                className="rounded-lg border border-emerald-400/30 bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-slate-900 px-4 py-2 font-semibold text-emerald-100 transition-all hover:-translate-y-0.5 hover:border-emerald-400/55 hover:text-white disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingToWorkspace ? "Saving..." : "Save to Workspace"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportTxt}
+                disabled={loading}
+                className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Export TXT
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportMarkdown}
+                disabled={loading}
+                className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Export Markdown
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                disabled={loading}
+                className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-200 transition-all hover:border-emerald-400/45 hover:bg-emerald-500/15 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Export PDF
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Scrollable generated-content body */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pr-2 [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin]">
+        {projectContentLoading && (
           <div
-            className="mt-4 bg-emerald-950/50 border border-emerald-800 rounded-lg p-4"
+            className="mb-6 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-slate-400"
             role="status"
             aria-live="polite"
           >
-            <p className="font-semibold text-emerald-300">
-              Success
-            </p>
+            <div
+              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
+              aria-hidden="true"
+            />
+            <p>Loading saved project content...</p>
+          </div>
+        )}
 
-            <p className="text-sm text-emerald-300 mt-1">
-              {successMessage}
+        {projectContentError && (
+          <div
+            className="mb-6 rounded-lg border border-amber-800 bg-amber-950/40 p-4"
+            role="alert"
+          >
+            <p className="font-semibold text-amber-300">
+              Saved content could not be loaded
+            </p>
+            <p className="mt-1 text-sm text-amber-300">
+              {projectContentError}
+            </p>
+            {selectedProject?.id && (
+              <button
+                type="button"
+                onClick={() => loadProjectContent(selectedProject.id)}
+                disabled={projectContentLoading}
+                className="mt-3 rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
+
+        {saveWorkspaceSuccess && (
+          <div
+            className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/50 p-4"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-emerald-300">Saved successfully</p>
+            <p className="mt-1 text-sm text-emerald-300">
+              {saveWorkspaceSuccess}
             </p>
           </div>
         )}
+
+        {loading && !generatedContent ? (
+          <div className="flex items-center gap-3 text-slate-400">
+            <div
+              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
+              aria-hidden="true"
+            />
+
+            <p>Generating your document. This may take a moment...</p>
+          </div>
+        ) : generatedContent ? (
+          <>
+            {regenerating && (
+              <div
+                className="mb-6 flex items-center gap-3 rounded-lg border border-cyan-800/60 bg-cyan-950/30 p-4 text-cyan-200"
+                role="status"
+                aria-live="polite"
+              >
+                <div
+                  className="h-5 w-5 shrink-0 rounded-full border-2 border-cyan-800 border-t-cyan-300 animate-spin"
+                  aria-hidden="true"
+                />
+
+                <p>
+                  Regenerating your document. Your current version will stay
+                  visible until the new one is ready.
+                </p>
+              </div>
+            )}
+
+            {generationHistory.length > 0 && (
+              <div className="mb-5 flex flex-wrap items-center gap-3 text-sm">
+                <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                  Version {currentVersionIndex + 1} of {generationHistory.length}
+                </span>
+
+                <span
+                  className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                    currentVersionIndex === generationHistory.length - 1
+                      ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                      : "border-slate-700 bg-slate-800 text-slate-400"
+                  }`}
+                >
+                  {currentVersionIndex === generationHistory.length - 1
+                    ? "Current Version"
+                    : "Previous Version"}
+                </span>
+              </div>
+            )}
+
+            {generationHistory[currentVersionIndex]?.regenerationInstructions && (
+              <div className="mb-5 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                  Regeneration Instructions
+                </p>
+                <p className="mt-2 text-sm text-slate-300">
+                  {generationHistory[currentVersionIndex].regenerationInstructions}
+                </p>
+              </div>
+            )}
+
+            <div className="min-h-full max-w-none rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {generatedContent}
+              </ReactMarkdown>
+            </div>
+          </>
+        ) : (
+          <div className="flex h-full min-h-0 flex-1 items-center justify-center rounded-2xl border border-slate-800/80 bg-slate-950/45 p-8 text-center shadow-inner shadow-black/15">
+            <div className="max-w-sm">
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-3xl text-cyan-300 shadow-lg shadow-cyan-950/20">
+                ▤
+              </div>
+              <div className="mt-6 flex justify-center gap-3 text-cyan-400" aria-hidden="true">
+                <span>✦</span>
+                <span className="text-xl">✦</span>
+                <span>✦</span>
+              </div>
+              <p className="mt-5 text-lg font-semibold text-slate-200">
+                Your planning document will appear here
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Complete the project details and click &quot;Generate Content&quot; to get started.
+              </p>
+            </div>
+          </div>
+        )}
+        </div>
       </div>
+        </div>
 
-
+        {/* Logo Generator */}
       <div
-        className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8"
+        className="relative mt-5 overflow-hidden rounded-2xl border border-violet-500/15 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,0.07),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
         aria-busy={logoLoading}
       >
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <div>
-            <h2 className="text-xl font-bold">AI Product Logo</h2>
-            <p className="text-slate-400 mt-1">
-              Generate a logo using your project name and description.
-            </p>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/70 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-500/15 to-slate-900 text-xl text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.10)]">
+              ✦
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">AI Product Logo</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Generate and refine a visual identity for your product.
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -1632,7 +2054,7 @@ ${aiPreferenceInstructions}`;
                 projectName.trim().length < 2 ||
                 description.trim().length < 10
               }
-              className="bg-purple-500 hover:bg-purple-400 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/35 bg-gradient-to-r from-violet-500/80 to-fuchsia-500/75 px-5 py-2.5 font-bold text-white shadow-[0_12px_30px_rgba(139,92,246,0.20)] transition-all hover:-translate-y-0.5 hover:from-violet-400 hover:to-fuchsia-400 hover:shadow-[0_16px_36px_rgba(139,92,246,0.28)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {logoLoading
                 ? "Generating Logo..."
@@ -1653,7 +2075,7 @@ ${aiPreferenceInstructions}`;
           </div>
         </div>
 
-        <div className="mb-6 rounded-xl border border-slate-800 bg-slate-950/40 p-5">
+        <div className="mb-6 rounded-xl border border-violet-500/10 bg-gradient-to-br from-violet-950/10 via-slate-950/55 to-slate-950/70 p-5 shadow-inner shadow-black/10">
           <div className="mb-4">
             <h3 className="font-semibold text-white">Customize Logo Prompt</h3>
             <p className="mt-1 text-sm text-slate-400">
@@ -1675,7 +2097,7 @@ ${aiPreferenceInstructions}`;
                   setLogoError("");
                 }}
                 disabled={logoLoading}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
+                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="default">Default</option>
                 <option value="modern">Modern</option>
@@ -1702,7 +2124,7 @@ ${aiPreferenceInstructions}`;
                 maxLength={200}
                 disabled={logoLoading}
                 placeholder="e.g. navy blue, purple, silver"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-purple-500 focus:outline-none disabled:opacity-50"
+                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               />
               <p className="mt-2 text-right text-xs text-slate-500">
                 {preferredColors.length}/200
@@ -1724,7 +2146,7 @@ ${aiPreferenceInstructions}`;
                 maxLength={300}
                 disabled={logoLoading}
                 placeholder="e.g. letter T, spark, circuit, shield"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-purple-500 focus:outline-none disabled:opacity-50"
+                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               />
               <p className="mt-2 text-right text-xs text-slate-500">
                 {logoIdeas.length}/300
@@ -1746,7 +2168,7 @@ ${aiPreferenceInstructions}`;
                 maxLength={500}
                 disabled={logoLoading}
                 placeholder="e.g. Clean, trustworthy SaaS brand for creative professionals"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-purple-500 focus:outline-none disabled:opacity-50"
+                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               />
               <p className="mt-2 text-right text-xs text-slate-500">
                 {brandingDirection.length}/500
@@ -2012,210 +2434,64 @@ ${aiPreferenceInstructions}`;
           )}
       </div>
 
-      <div
-        className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8"
-        aria-busy={loading}
-      >
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <h2 className="text-xl font-bold">Generated Output</h2>
 
-          {generatedContent && (
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handlePreviousVersion}
-                disabled={loading || currentVersionIndex <= 0}
-                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                ← Previous
-              </button>
-
-              <button
-                type="button"
-                onClick={handleNextVersion}
-                disabled={
-                  loading ||
-                  currentVersionIndex >= generationHistory.length - 1
-                }
-                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next →
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenRegenerate}
-                disabled={loading}
-                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {regenerating ? "Regenerating..." : "Regenerate"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenSaveWorkspace}
-                disabled={loading || savingToWorkspace}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {savingToWorkspace ? "Saving..." : "Save to Workspace"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportTxt}
-                disabled={loading}
-                className="bg-slate-600 hover:bg-slate-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Export TXT
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportMarkdown}
-                disabled={loading}
-                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Export Markdown
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportPdf}
-                disabled={loading}
-                className="bg-green-600 hover:bg-green-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Export PDF
-              </button>
-            </div>
-          )}
-        </div>
-
-        {projectContentLoading && (
-          <div
-            className="mb-6 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-slate-400"
-            role="status"
-            aria-live="polite"
-          >
-            <div
-              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
-              aria-hidden="true"
-            />
-            <p>Loading saved project content...</p>
-          </div>
-        )}
-
-        {projectContentError && (
-          <div
-            className="mb-6 rounded-lg border border-amber-800 bg-amber-950/40 p-4"
-            role="alert"
-          >
-            <p className="font-semibold text-amber-300">
-              Saved content could not be loaded
-            </p>
-            <p className="mt-1 text-sm text-amber-300">
-              {projectContentError}
-            </p>
-            {selectedProject?.id && (
-              <button
-                type="button"
-                onClick={() => loadProjectContent(selectedProject.id)}
-                disabled={projectContentLoading}
-                className="mt-3 rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-
-        {saveWorkspaceSuccess && (
-          <div
-            className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/50 p-4"
-            role="status"
-            aria-live="polite"
-          >
-            <p className="font-semibold text-emerald-300">Saved successfully</p>
-            <p className="mt-1 text-sm text-emerald-300">
-              {saveWorkspaceSuccess}
-            </p>
-          </div>
-        )}
-
-        {loading && !generatedContent ? (
-          <div className="flex items-center gap-3 text-slate-400">
-            <div
-              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
-              aria-hidden="true"
-            />
-
-            <p>Generating your document. This may take a moment...</p>
-          </div>
-        ) : generatedContent ? (
-          <>
-            {regenerating && (
-              <div
-                className="mb-6 flex items-center gap-3 rounded-lg border border-cyan-800/60 bg-cyan-950/30 p-4 text-cyan-200"
-                role="status"
-                aria-live="polite"
-              >
-                <div
-                  className="h-5 w-5 shrink-0 rounded-full border-2 border-cyan-800 border-t-cyan-300 animate-spin"
-                  aria-hidden="true"
-                />
-
-                <p>
-                  Regenerating your document. Your current version will stay
-                  visible until the new one is ready.
+      {showGeneratedOutputModal && generatedContent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="product-architect-expanded-output-title"
+        >
+          <div className="relative flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-cyan-500/20 bg-slate-950 shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.03]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 bg-slate-900/80 px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
+                  Product Architect
                 </p>
-              </div>
-            )}
-
-            {generationHistory.length > 0 && (
-              <div className="mb-5 flex flex-wrap items-center gap-3 text-sm">
-                <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
-                  Version {currentVersionIndex + 1} of {generationHistory.length}
-                </span>
-
-                <span
-                  className={`rounded-lg border px-3 py-1.5 font-semibold ${
-                    currentVersionIndex === generationHistory.length - 1
-                      ? "border-emerald-800 bg-emerald-950 text-emerald-300"
-                      : "border-slate-700 bg-slate-800 text-slate-400"
-                  }`}
+                <h3
+                  id="product-architect-expanded-output-title"
+                  className="mt-1 text-xl font-bold text-white"
                 >
-                  {currentVersionIndex === generationHistory.length - 1
-                    ? "Current Version"
-                    : "Previous Version"}
-                </span>
-              </div>
-            )}
-
-            {generationHistory[currentVersionIndex]?.regenerationInstructions && (
-              <div className="mb-5 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
-                  Regeneration Instructions
-                </p>
-                <p className="mt-2 text-sm text-slate-300">
-                  {generationHistory[currentVersionIndex].regenerationInstructions}
+                  {documentTypeLabels[contentType] || "Generated Output"}
+                </h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {projectName.trim() || "Untitled Project"}
                 </p>
               </div>
-            )}
 
-            <div className="max-w-none">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
-              >
-                {generatedContent}
-              </ReactMarkdown>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyGeneratedOutput}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/70 px-3.5 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500/30 hover:text-white"
+                >
+                  <span aria-hidden="true">⧉</span>
+                  {copyGeneratedLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGeneratedOutputModal(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/70 text-lg text-slate-300 transition hover:border-slate-600 hover:text-white"
+                  aria-label="Close expanded generated output"
+                >
+                  ×
+                </button>
+              </div>
             </div>
-          </>
-        ) : (
-          <p className="text-slate-500">
-            Generated content will appear here.
-          </p>
-        )}
-      </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin] sm:px-6 sm:py-6">
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/35 p-5 shadow-inner shadow-black/15 sm:p-7">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
+                  {generatedContent}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {regenerateModalOpen && (
         <div
@@ -2474,6 +2750,7 @@ ${aiPreferenceInstructions}`;
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
