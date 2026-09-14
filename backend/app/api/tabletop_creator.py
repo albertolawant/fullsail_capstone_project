@@ -10,6 +10,7 @@ from app.models.project import Project
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.activity_log import ActivityLog
+from app.models.product_logo import ProductLogo
 from app.schemas.tabletop_creator import (
     CampaignGenerateRequest,
     CampaignGenerateResponse,
@@ -23,6 +24,8 @@ from app.schemas.tabletop_creator import (
     QuestGenerateResponse,
     TabletopImageGenerateRequest,
     TabletopImageGenerateResponse,
+    TabletopImageSaveRequest,
+    TabletopImageSaveResponse,
 )
 from app.services.ai_response_validation import validate_ai_response
 from app.services.ai_usage_service import log_ai_usage
@@ -949,4 +952,70 @@ Style Requirements:
         raise HTTPException(
             status_code=500,
             detail="Unable to generate tabletop image.",
+        )
+
+@router.post("/save-image", response_model=TabletopImageSaveResponse)
+def save_tabletop_image(
+    request: TabletopImageSaveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = get_selected_project(
+        db=db,
+        current_user=current_user,
+        project_id=request.project_id,
+    )
+
+    if project is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Please choose a project before saving this image.",
+        )
+
+    cleaned_image_type = request.image_type.strip()
+    cleaned_prompt = request.image_prompt.strip()
+
+    image = ProductLogo(
+        project_id=project.id,
+        owner_id=current_user.id,
+        image_base64=request.image_base64,
+        style=f"tabletop_{cleaned_image_type}",
+        preferred_colors="",
+        logo_ideas=cleaned_prompt,
+        branding_direction="Tabletop Creator Image",
+    )
+
+    try:
+        db.add(image)
+        db.flush()
+
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Image Saved",
+            item_type="Image",
+            item_id=image.id,
+            title=f"{cleaned_image_type} image saved",
+            description="A tabletop image was saved to a project.",
+            project_id=project.id,
+            project_name=project.title,
+            new_project_id=project.id,
+            new_project_name=project.title,
+        )
+
+        db.commit()
+        db.refresh(image)
+
+        return {
+            "id": image.id,
+            "project_id": image.project_id,
+            "image_type": cleaned_image_type,
+        }
+    except Exception as error:
+        print("Tabletop image save failed:", error)
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to save tabletop image.",
         )

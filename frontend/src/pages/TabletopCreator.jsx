@@ -161,6 +161,39 @@ const TABLETOP_TABS = [
   },
 ];
 
+const CONTENT_IMAGE_TYPE_MAP = {
+  campaign: "Campaign Scene",
+  npc: "NPC Portrait",
+  quest: "Quest Item",
+  encounter: "Encounter",
+  location: "Location",
+};
+
+function getImageSource(imageBase64) {
+  if (!imageBase64) {
+    return "";
+  }
+
+  return imageBase64.startsWith("data:image")
+    ? imageBase64
+    : `data:image/png;base64,${imageBase64}`;
+}
+
+function downloadBase64Image(imageBase64, filename = "tabletop-image.png") {
+  if (!imageBase64) {
+    return;
+  }
+
+  const imageSource = getImageSource(imageBase64);
+  const link = document.createElement("a");
+
+  link.href = imageSource;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function TabletopCreator() {
   const location = useLocation();
   const selectedProject = location.state?.project;
@@ -173,6 +206,19 @@ function TabletopCreator() {
   const [imageGenerateError, setImageGenerateError] = useState("");
   const [imageGenerateSuccess, setImageGenerateSuccess] = useState("");
   const [generatedImage, setGeneratedImage] = useState("");
+  const [generateImageWithContent, setGenerateImageWithContent] =
+    useState(false);
+  const [contentGeneratedImage, setContentGeneratedImage] = useState("");
+  const [contentImageLoading, setContentImageLoading] = useState(false);
+  const [contentImageError, setContentImageError] = useState("");
+  const [contentGeneratedImageType, setContentGeneratedImageType] = useState("");
+  const [contentGeneratedImagePrompt, setContentGeneratedImagePrompt] = useState("");
+  const [imageToSave, setImageToSave] = useState(null);
+  const [saveImageOpen, setSaveImageOpen] = useState(false);
+  const [saveImageTarget, setSaveImageTarget] = useState(null);
+  const [saveImageProjectId, setSaveImageProjectId] = useState("");
+  const [saveImageLoading, setSaveImageLoading] = useState(false);
+  const [saveImageError, setSaveImageError] = useState("");
 
   const [selectedProjectId, setSelectedProjectId] = useState(
     selectedProject?.id || null
@@ -446,6 +492,121 @@ function TabletopCreator() {
     setSelectedRelatedContent([]);
   };
 
+  const handleDownloadImage = (imageBase64, namePrefix = "tabletop-image") => {
+    if (!imageBase64) {
+      return;
+    }
+
+    const safeName = (namePrefix || "tabletop-image")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
+    downloadBase64Image(imageBase64, `${safeName || "tabletop-image"}.png`);
+  };  
+
+  const handleGenerateContentImage = async ({
+    contentKey,
+    contentBody,
+    cleanedName,
+    cleanedDescription,
+  }) => {
+    if (!generateImageWithContent || !contentBody?.trim()) {
+      return;
+    }
+
+    setContentImageLoading(true);
+    setContentImageError("");
+    setContentGeneratedImage("");
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      IMAGE_REQUEST_TIMEOUT_MS
+    );
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const chosenImageType =
+        CONTENT_IMAGE_TYPE_MAP[contentKey] || "Campaign Scene";
+
+      const descriptionReference = cleanedDescription.slice(0, 350);
+      const contentImageReference = contentBody.slice(0, 750);
+
+      const finalPrompt = `Create a ${chosenImageType.toLowerCase()} for the tabletop campaign "${
+        cleanedName || "Untitled Campaign"
+      }".
+
+      Campaign Description:
+      ${descriptionReference || "No campaign description provided."}
+
+      Generated ${CONTENT_LABELS[contentKey] || "tabletop"} Content:
+      ${contentImageReference}`;
+
+      const response = await fetch(
+        "http://127.0.0.1:8000/tabletop-creator/generate-image",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            project_id: selectedProjectId,
+            campaign_name: cleanedName || null,
+            campaign_description: cleanedDescription || null,
+            image_type: chosenImageType,
+            image_prompt: finalPrompt,
+            use_campaign_context: true,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message = "Unable to generate content image.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (Array.isArray(errorData?.detail)) {
+          message = errorData.detail
+            .map((item) => item?.msg || JSON.stringify(item))
+            .join(" ");
+        }
+
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+
+      setContentGeneratedImage(data.image_base64 || "");
+      setContentGeneratedImageType(data.image_type || chosenImageType);
+      setContentGeneratedImagePrompt(data.prompt || finalPrompt);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setContentImageError(
+          "The image request took too long. Please try generating the content again."
+        );
+      } else {
+        setContentImageError(
+          error instanceof Error
+            ? error.message
+            : "Something went wrong while generating the content image."
+        );
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      setContentImageLoading(false);
+    }
+  };
+
   const requestAIContent = async ({
     requestKey,
     endpoint,
@@ -573,6 +734,15 @@ function TabletopCreator() {
       setSuccess(successMessage);
 
       notifyGenerationComplete("Tabletop Creator", cleanedName);
+
+      if (generateImageWithContent) {
+        await handleGenerateContentImage({
+          contentKey: historyKey,
+          contentBody: generatedContent,
+          cleanedName,
+          cleanedDescription,
+        });
+      }
 
       if (isRegeneration && !suppressRelatedWarning) {
         checkForRelatedContent(historyKey);
@@ -1059,7 +1229,9 @@ function TabletopCreator() {
 
       if (loadedWorkspaces.length === 0) {
         setSelectedWorkspaceId("");
-        setSelectedSaveProjectId("");
+        setSelectedSaveProjectId(
+          loadedProjects.length > 0 ? String(loadedProjects[0].id) : ""
+        );
         return;
       }
 
@@ -1108,6 +1280,8 @@ function TabletopCreator() {
       return;
     }
 
+    setImageToSave(null);
+
     setContentToSave({
       key: contentKey,
       label: CONTENT_LABELS[contentKey],
@@ -1119,6 +1293,128 @@ function TabletopCreator() {
     await loadWorkspaceOptions();
   };
 
+  const handleOpenSaveImage = (imageData) => {
+    if (!imageData?.imageBase64) {
+      return;
+    }
+
+    setSaveImageTarget(imageData);
+    setSaveImageProjectId(String(selectedProjectId || projects[0]?.id || ""));
+    setSaveImageError("");
+    setSaveImageOpen(true);
+  };
+
+  const handleCloseSaveImage = () => {
+    if (saveImageLoading) {
+      return;
+    }
+
+    setSaveImageOpen(false);
+    setSaveImageTarget(null);
+    setSaveImageProjectId("");
+    setSaveImageError("");
+  };
+
+  const handleSaveImage = async () => {
+    if (!saveImageTarget || !saveImageProjectId) {
+      setSaveImageError("Please choose a project.");
+      return;
+    }
+
+    setSaveImageLoading(true);
+    setSaveImageError("");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const response = await fetch(
+        "http://127.0.0.1:8000/tabletop-creator/save-image",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            project_id: Number(saveImageProjectId),
+            image_base64: saveImageTarget.imageBase64,
+            image_type: saveImageTarget.imageType || "Tabletop Image",
+            image_prompt:
+              saveImageTarget.imagePrompt || "Generated tabletop image.",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Image could not be saved to that project. Please try again."
+        );
+      }
+
+      const destinationProject = projects.find(
+        (project) => String(project.id) === String(saveImageProjectId)
+      );
+
+      notifyContentSaved(
+        `${campaignName.trim() || "Untitled Campaign"} - ${
+          saveImageTarget.imageType || "Tabletop Image"
+        }`
+      );
+
+      setSaveWorkspaceSuccess(
+        `${saveImageTarget.imageType || "Tabletop Image"} saved to ${
+          destinationProject?.title || "the selected project"
+        } successfully.`
+      );
+
+      setSaveImageOpen(false);
+      setSaveImageTarget(null);
+      setSaveImageProjectId("");
+      setSaveImageError("");
+    } catch (error) {
+      console.error("Save image to project error:", error);
+
+      setSaveImageError(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while saving this image."
+      );
+    } finally {
+      setSaveImageLoading(false);
+    }
+  };  
+
+  const handleOpenSaveImageWorkspace = async ({
+    imageBase64,
+    imageType,
+    imagePrompt,
+  }) => {
+    if (!imageBase64 || savingToWorkspace) {
+      return;
+    }
+
+    setImageToSave({
+      imageBase64,
+      imageType: imageType || "Tabletop Image",
+      imagePrompt: imagePrompt || "Generated tabletop image.",
+    });
+
+    setContentToSave(null);
+    setSaveWorkspaceError("");
+    setSaveWorkspaceSuccess("");
+    setSaveWorkspaceOpen(true);
+
+    await loadWorkspaceOptions();
+  };  
+
   const handleCloseSaveWorkspace = () => {
     if (savingToWorkspace) {
       return;
@@ -1127,6 +1423,7 @@ function TabletopCreator() {
     setSaveWorkspaceOpen(false);
     setContentToSave(null);
     setSaveWorkspaceError("");
+    setImageToSave(null);
   };
 
   const handleWorkspaceSelection = (workspaceId) => {
@@ -1141,19 +1438,12 @@ function TabletopCreator() {
   };
 
   const handleSaveToWorkspace = async () => {
-    if (savingToWorkspace || !contentToSave) {
-      return;
-    }
-
-    if (!selectedWorkspaceId) {
-      setSaveWorkspaceError("Please choose a workspace.");
+    if (savingToWorkspace || (!contentToSave && !imageToSave)) {
       return;
     }
 
     if (!selectedSaveProjectId) {
-      setSaveWorkspaceError(
-        "Please choose a project in the selected workspace."
-      );
+      setSaveWorkspaceError("Please choose a project.");
       return;
     }
 
@@ -1161,14 +1451,23 @@ function TabletopCreator() {
       (project) => String(project.id) === String(selectedSaveProjectId)
     );
 
-    if (
-      !selectedProject ||
-      String(selectedProject.workspace_id) !== String(selectedWorkspaceId)
-    ) {
-      setSaveWorkspaceError(
-        "The selected project does not belong to that workspace."
-      );
+    if (!selectedProject) {
+      setSaveWorkspaceError("The selected project could not be found.");
       return;
+    }
+
+    if (contentToSave) {
+      if (!selectedWorkspaceId) {
+        setSaveWorkspaceError("Please choose a workspace.");
+        return;
+      }
+
+      if (String(selectedProject.workspace_id) !== String(selectedWorkspaceId)) {
+        setSaveWorkspaceError(
+          "The selected project does not belong to that workspace."
+        );
+        return;
+      }
     }
 
     setSavingToWorkspace(true);
@@ -1183,6 +1482,52 @@ function TabletopCreator() {
       }
 
       const cleanedCampaignName = campaignName.trim() || "Untitled Campaign";
+
+      if (imageToSave) {
+        const response = await fetch(
+          "http://127.0.0.1:8000/tabletop-creator/save-image",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              project_id: Number(selectedSaveProjectId),
+              image_base64: imageToSave.imageBase64,
+              image_type: imageToSave.imageType,
+              image_prompt: imageToSave.imagePrompt,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+
+          let message = "Image could not be saved. Please try again.";
+
+          if (typeof errorData?.detail === "string") {
+            message = errorData.detail;
+          } else if (response.status === 401) {
+            message = "Your session has expired. Please sign in again.";
+          } else if (response.status === 404) {
+            message = "The selected project could not be found.";
+          }
+
+          throw new Error(message);
+        }
+
+        notifyContentSaved(`${cleanedCampaignName} - ${imageToSave.imageType}`);
+
+        setSaveWorkspaceSuccess(
+          `${imageToSave.imageType} saved to ${selectedProject.title} successfully.`
+        );
+
+        setSaveWorkspaceOpen(false);
+        setImageToSave(null);
+        return;
+      }
+
       const response = await fetch("http://127.0.0.1:8000/content/", {
         method: "POST",
         headers: {
@@ -1219,9 +1564,7 @@ function TabletopCreator() {
         (workspace) => String(workspace.id) === String(selectedWorkspaceId)
       );
 
-      notifyContentSaved(
-        `${cleanedCampaignName} - ${contentToSave.label}`
-      );
+      notifyContentSaved(`${cleanedCampaignName} - ${contentToSave.label}`);
 
       setSaveWorkspaceSuccess(
         `${contentToSave.label} saved to ${
@@ -1236,7 +1579,7 @@ function TabletopCreator() {
       setSaveWorkspaceError(
         error instanceof Error
           ? error.message
-          : "Something went wrong while saving the content."
+          : "Something went wrong while saving."
       );
     } finally {
       setSavingToWorkspace(false);
@@ -1485,6 +1828,43 @@ function TabletopCreator() {
                 />
               </div>
 
+              <div className="mb-5 rounded-2xl border border-cyan-500/15 bg-slate-950/50 p-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">
+                      Generate Image with Content
+                    </h3>
+
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      Turn this on and Tanio will automatically create an image that matches
+                      the content you generate from the campaign name, description, and output.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setGenerateImageWithContent((previous) => !previous)
+                    }
+                    disabled={isAnyGenerationInProgress}
+                    className={`rounded-xl border px-5 py-2 text-sm font-bold transition ${
+                      generateImageWithContent
+                        ? "border-cyan-400/40 bg-cyan-500/15 text-cyan-200"
+                        : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white"
+                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    {generateImageWithContent ? "Image On" : "Image Off"}
+                  </button>
+                </div>
+
+                {generateImageWithContent && (
+                  <p className="mt-4 rounded-xl border border-cyan-400/15 bg-cyan-500/[0.06] px-4 py-3 text-sm text-cyan-200">
+                    Image generation is enabled. Tanio will choose the best image type based
+                    on the content button you click.
+                  </p>
+                )}
+              </div>              
+
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
@@ -1582,7 +1962,7 @@ function TabletopCreator() {
             </div>
           )}
 
-          {generatedImage && (
+          {generateImageWithContent && (
             <section className="relative mb-5 overflow-hidden rounded-2xl border border-fuchsia-500/15 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.055),transparent_25%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
               <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-fuchsia-400/20 bg-gradient-to-br from-fuchsia-500/15 to-slate-900 text-xl text-fuchsia-300 shadow-[0_0_24px_rgba(217,70,239,0.08)]">
@@ -1590,48 +1970,109 @@ function TabletopCreator() {
                 </div>
 
                 <div>
-                  <h2 className="text-xl font-bold text-white">Generated Campaign Image</h2>
+                  <h2 className="text-xl font-bold text-white">
+                    Content Image Preview
+                  </h2>
                   <p className="mt-1 text-sm text-slate-400">
-                    This image was generated from the Image Generator tab. It has not been saved yet.
+                    This image is generated from the Content Generator page when the image option is turned on.
                   </p>
                 </div>
               </div>
 
-              <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-                <img
-                  src={`data:image/png;base64,${generatedImage}`}
-                  alt="Generated tabletop asset"
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-950 object-cover"
-                />
+              {contentImageLoading && (
+                <div
+                  className="flex items-center gap-3 text-sm text-fuchsia-300"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div
+                    className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-fuchsia-400 animate-spin"
+                    aria-hidden="true"
+                  />
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
-                  <p className="text-sm font-semibold uppercase tracking-wide text-fuchsia-300">
-                    Image Details
-                  </p>
+                  <p>Tanio AI is generating the content image. Please wait...</p>
+                </div>
+              )}
 
-                  <p className="mt-3 text-lg font-bold text-white">{imageType}</p>
+              {contentImageError && (
+                <p
+                  className="rounded-lg border border-red-800 bg-red-950 p-3 text-red-300"
+                  role="alert"
+                >
+                  {contentImageError}
+                </p>
+              )}
 
-                  <p className="mt-3 text-sm leading-6 text-slate-400">
-                    {imagePrompt}
-                  </p>
+              {!contentImageLoading &&
+                !contentImageError &&
+                !contentGeneratedImage && (
+                  <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-center">
+                    <div>
+                      <p className="text-lg font-bold text-white">
+                        No content image generated yet
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        Generate campaign content while Image On is enabled.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white"
-                    >
-                      Download Image
-                    </button>
+              {contentGeneratedImage && (
+                <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <img
+                    src={getImageSource(contentGeneratedImage)}
+                    alt="Generated content visual"
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-950 object-cover"
+                  />
 
-                    <button
-                      type="button"
-                      className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15"
-                    >
-                      Save Image to Workspace
-                    </button>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-fuchsia-300">
+                      Image Details
+                    </p>
+
+                    <p className="mt-3 text-lg font-bold text-white">
+                      Automatic Content Image
+                    </p>
+
+                    <p className="mt-3 text-sm leading-6 text-slate-400">
+                      Generated automatically from the campaign name, campaign description, and
+                      content output.
+                    </p>
+
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleDownloadImage(
+                            contentGeneratedImage,
+                            `${campaignName || "campaign"}-content-image`
+                          )
+                        }
+                        className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white"
+                      >
+                        Download Image
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleOpenSaveImage({
+                            imageBase64: contentGeneratedImage,
+                            imageType: contentGeneratedImageType || "Automatic Content Image",
+                            imagePrompt:
+                              contentGeneratedImagePrompt ||
+                              "Generated automatically from campaign content.",
+                          })
+                        }
+                        className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15"
+                      >
+                        Save Image to Project
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </section>
           )}
 
@@ -2465,6 +2906,12 @@ function TabletopCreator() {
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button
                       type="button"
+                      onClick={() =>
+                        handleDownloadImage(
+                          generatedImage,
+                          `${campaignName || "tabletop"}-${imageType || "image"}`
+                        )
+                      }
                       className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white"
                     >
                       Download Image
@@ -2472,9 +2919,16 @@ function TabletopCreator() {
 
                     <button
                       type="button"
+                      onClick={() =>
+                        handleOpenSaveImage({
+                          imageBase64: generatedImage,
+                          imageType,
+                          imagePrompt: imagePrompt || "Generated tabletop image.",
+                        })
+                      }
                       className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15"
                     >
-                      Save Image to Workspace
+                      Save Image to Project
                     </button>
                   </div>
                 </div>
@@ -2586,6 +3040,92 @@ function TabletopCreator() {
         </div>
       )}
 
+      {saveImageOpen && saveImageTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-image-title"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="save-image-title" className="text-2xl font-bold text-white">
+                  Save Image to Project
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Choose the project where this generated image should be saved.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseSaveImage}
+                disabled={saveImageLoading}
+                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close save image dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-5">
+              <label
+                htmlFor="save-image-project"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Save to Project
+              </label>
+
+              <select
+                id="save-image-project"
+                value={saveImageProjectId}
+                onChange={(event) => {
+                  setSaveImageProjectId(event.target.value);
+                  setSaveImageError("");
+                }}
+                disabled={saveImageLoading}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
+              >
+                <option value="">Choose a project</option>
+
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {saveImageError && (
+              <div className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4">
+                <p className="text-sm text-red-300">{saveImageError}</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleCloseSaveImage}
+                disabled={saveImageLoading}
+                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveImage}
+                disabled={saveImageLoading || !saveImageProjectId}
+                className="rounded-lg bg-violet-600 px-5 py-2.5 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saveImageLoading ? "Saving..." : "Save Image"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}      
+
       {saveWorkspaceOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -2603,7 +3143,7 @@ function TabletopCreator() {
                   Save to Workspace
                 </h2>
                 <p className="mt-2 text-sm text-slate-400">
-                  Save {contentToSave?.label || "this content"} to one of your
+                  Save {imageToSave ? imageToSave.imageType : contentToSave?.label || "this content"} to one of your
                   workspace projects.
                 </p>
               </div>
@@ -2619,6 +3159,38 @@ function TabletopCreator() {
               </button>
             </div>
 
+            {imageToSave && !workspaceOptionsLoading && (
+              <div className="mt-6">
+                <label
+                  htmlFor="tabletop-save-image-project"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  Project
+                </label>
+
+                <select
+                  id="tabletop-save-image-project"
+                  value={selectedSaveProjectId}
+                  onChange={(event) => {
+                    setSelectedSaveProjectId(event.target.value);
+                    setSaveWorkspaceError("");
+                  }}
+                  disabled={savingToWorkspace || projects.length === 0}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                >
+                  {projects.length === 0 ? (
+                    <option value="">No projects available</option>
+                  ) : (
+                    projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.title}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            )}
+
             {workspaceOptionsLoading ? (
               <div className="mt-6 flex items-center gap-3 text-slate-400">
                 <div
@@ -2627,7 +3199,7 @@ function TabletopCreator() {
                 />
                 <p>Loading your workspaces and projects...</p>
               </div>
-            ) : (
+            ) : !imageToSave ? (
               <>
                 <div className="mt-6">
                   <label
@@ -2702,7 +3274,7 @@ function TabletopCreator() {
                     )}
                 </div>
               </>
-            )}
+            ) : null}
 
             {saveWorkspaceError && (
               <div
@@ -2735,12 +3307,16 @@ function TabletopCreator() {
                 disabled={
                   workspaceOptionsLoading ||
                   savingToWorkspace ||
-                  !selectedWorkspaceId ||
-                  !selectedSaveProjectId
+                  !selectedSaveProjectId ||
+                  (!imageToSave && !selectedWorkspaceId)
                 }
                 className="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {savingToWorkspace ? "Saving..." : "Save Content"}
+                {savingToWorkspace
+                  ? "Saving..."
+                  : imageToSave
+                    ? "Save Image"
+                    : "Save Content"}
               </button>
             </div>
           </div>
