@@ -213,7 +213,6 @@ function TabletopCreator() {
   const [contentImageError, setContentImageError] = useState("");
   const [contentGeneratedImageType, setContentGeneratedImageType] = useState("");
   const [contentGeneratedImagePrompt, setContentGeneratedImagePrompt] = useState("");
-  const [imageToSave, setImageToSave] = useState(null);
   const [saveImageOpen, setSaveImageOpen] = useState(false);
   const [saveImageTarget, setSaveImageTarget] = useState(null);
   const [saveImageProjectId, setSaveImageProjectId] = useState("");
@@ -1280,8 +1279,6 @@ function TabletopCreator() {
       return;
     }
 
-    setImageToSave(null);
-
     setContentToSave({
       key: contentKey,
       label: CONTENT_LABELS[contentKey],
@@ -1392,29 +1389,6 @@ function TabletopCreator() {
     }
   };  
 
-  const handleOpenSaveImageWorkspace = async ({
-    imageBase64,
-    imageType,
-    imagePrompt,
-  }) => {
-    if (!imageBase64 || savingToWorkspace) {
-      return;
-    }
-
-    setImageToSave({
-      imageBase64,
-      imageType: imageType || "Tabletop Image",
-      imagePrompt: imagePrompt || "Generated tabletop image.",
-    });
-
-    setContentToSave(null);
-    setSaveWorkspaceError("");
-    setSaveWorkspaceSuccess("");
-    setSaveWorkspaceOpen(true);
-
-    await loadWorkspaceOptions();
-  };  
-
   const handleCloseSaveWorkspace = () => {
     if (savingToWorkspace) {
       return;
@@ -1423,7 +1397,6 @@ function TabletopCreator() {
     setSaveWorkspaceOpen(false);
     setContentToSave(null);
     setSaveWorkspaceError("");
-    setImageToSave(null);
   };
 
   const handleWorkspaceSelection = (workspaceId) => {
@@ -1438,7 +1411,12 @@ function TabletopCreator() {
   };
 
   const handleSaveToWorkspace = async () => {
-    if (savingToWorkspace || (!contentToSave && !imageToSave)) {
+    if (savingToWorkspace || !contentToSave) {
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      setSaveWorkspaceError("Please choose a workspace.");
       return;
     }
 
@@ -1456,18 +1434,11 @@ function TabletopCreator() {
       return;
     }
 
-    if (contentToSave) {
-      if (!selectedWorkspaceId) {
-        setSaveWorkspaceError("Please choose a workspace.");
-        return;
-      }
-
-      if (String(selectedProject.workspace_id) !== String(selectedWorkspaceId)) {
-        setSaveWorkspaceError(
-          "The selected project does not belong to that workspace."
-        );
-        return;
-      }
+    if (String(selectedProject.workspace_id) !== String(selectedWorkspaceId)) {
+      setSaveWorkspaceError(
+        "The selected project does not belong to that workspace."
+      );
+      return;
     }
 
     setSavingToWorkspace(true);
@@ -1482,51 +1453,6 @@ function TabletopCreator() {
       }
 
       const cleanedCampaignName = campaignName.trim() || "Untitled Campaign";
-
-      if (imageToSave) {
-        const response = await fetch(
-          "http://127.0.0.1:8000/tabletop-creator/save-image",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              project_id: Number(selectedSaveProjectId),
-              image_base64: imageToSave.imageBase64,
-              image_type: imageToSave.imageType,
-              image_prompt: imageToSave.imagePrompt,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-
-          let message = "Image could not be saved. Please try again.";
-
-          if (typeof errorData?.detail === "string") {
-            message = errorData.detail;
-          } else if (response.status === 401) {
-            message = "Your session has expired. Please sign in again.";
-          } else if (response.status === 404) {
-            message = "The selected project could not be found.";
-          }
-
-          throw new Error(message);
-        }
-
-        notifyContentSaved(`${cleanedCampaignName} - ${imageToSave.imageType}`);
-
-        setSaveWorkspaceSuccess(
-          `${imageToSave.imageType} saved to ${selectedProject.title} successfully.`
-        );
-
-        setSaveWorkspaceOpen(false);
-        setImageToSave(null);
-        return;
-      }
 
       const response = await fetch("http://127.0.0.1:8000/content/", {
         method: "POST",
@@ -3143,8 +3069,7 @@ function TabletopCreator() {
                   Save to Workspace
                 </h2>
                 <p className="mt-2 text-sm text-slate-400">
-                  Save {imageToSave ? imageToSave.imageType : contentToSave?.label || "this content"} to one of your
-                  workspace projects.
+                  Save {contentToSave?.label || "this content"} to one of your workspace projects.
                 </p>
               </div>
 
@@ -3159,38 +3084,6 @@ function TabletopCreator() {
               </button>
             </div>
 
-            {imageToSave && !workspaceOptionsLoading && (
-              <div className="mt-6">
-                <label
-                  htmlFor="tabletop-save-image-project"
-                  className="mb-2 block text-sm font-medium text-slate-300"
-                >
-                  Project
-                </label>
-
-                <select
-                  id="tabletop-save-image-project"
-                  value={selectedSaveProjectId}
-                  onChange={(event) => {
-                    setSelectedSaveProjectId(event.target.value);
-                    setSaveWorkspaceError("");
-                  }}
-                  disabled={savingToWorkspace || projects.length === 0}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                >
-                  {projects.length === 0 ? (
-                    <option value="">No projects available</option>
-                  ) : (
-                    projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.title}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-            )}
-
             {workspaceOptionsLoading ? (
               <div className="mt-6 flex items-center gap-3 text-slate-400">
                 <div
@@ -3199,7 +3092,7 @@ function TabletopCreator() {
                 />
                 <p>Loading your workspaces and projects...</p>
               </div>
-            ) : !imageToSave ? (
+            ) : (
               <>
                 <div className="mt-6">
                   <label
@@ -3274,7 +3167,7 @@ function TabletopCreator() {
                     )}
                 </div>
               </>
-            ) : null}
+            )}
 
             {saveWorkspaceError && (
               <div
@@ -3307,16 +3200,12 @@ function TabletopCreator() {
                 disabled={
                   workspaceOptionsLoading ||
                   savingToWorkspace ||
-                  !selectedSaveProjectId ||
-                  (!imageToSave && !selectedWorkspaceId)
+                  !selectedWorkspaceId ||
+                  !selectedSaveProjectId
                 }
                 className="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {savingToWorkspace
-                  ? "Saving..."
-                  : imageToSave
-                    ? "Save Image"
-                    : "Save Content"}
+                {savingToWorkspace ? "Saving..." : "Save Content"}
               </button>
             </div>
           </div>
