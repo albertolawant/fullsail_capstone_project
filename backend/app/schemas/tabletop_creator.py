@@ -56,3 +56,17 @@ class LocationGenerateRequest(BaseModel):
 
 class LocationGenerateResponse(BaseModel):
     location_content: str
+
+class TabletopImageGenerateRequest(BaseModel):
+    project_id: Optional[int] = None
+    campaign_name: Optional[str] = Field(default=None, max_length=100)
+    campaign_description: Optional[str] = Field(default=None, max_length=5000)
+    image_type: str = Field(..., min_length=2, max_length=100)
+    image_prompt: str = Field(..., min_length=5, max_length=1500)
+    use_campaign_context: bool = True
+
+
+class TabletopImageGenerateResponse(BaseModel):
+    image_base64: str
+    image_type: str
+    prompt: str

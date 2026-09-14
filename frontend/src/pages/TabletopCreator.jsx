@@ -9,6 +9,7 @@ import {
 } from "../utils/notifications";
 
 const AI_REQUEST_TIMEOUT_MS = 35000;
+const IMAGE_REQUEST_TIMEOUT_MS = 120000;
 const SLOW_REQUEST_THRESHOLD_MS = 30000;
 
 
@@ -140,9 +141,38 @@ const CONTENT_LABELS = {
   location: "Locations",
 };
 
+const IMAGE_TYPES = [
+  "Campaign Scene",
+  "NPC Portrait",
+  "Location",
+  "Encounter",
+  "Quest Item",
+  "Map / Environment Concept",
+];
+
+const TABLETOP_TABS = [
+  {
+    key: "content",
+    label: "Content Generator",
+  },
+  {
+    key: "image",
+    label: "Image Generator",
+  },
+];
+
 function TabletopCreator() {
   const location = useLocation();
   const selectedProject = location.state?.project;
+  const [activeTab, setActiveTab] = useState("content");
+  const [imageType, setImageType] = useState("Campaign Scene");
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [useCampaignContextForImage, setUseCampaignContextForImage] =
+    useState(true);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [imageGenerateError, setImageGenerateError] = useState("");
+  const [imageGenerateSuccess, setImageGenerateSuccess] = useState("");
+  const [generatedImage, setGeneratedImage] = useState("");
 
   const [selectedProjectId, setSelectedProjectId] = useState(
     selectedProject?.id || null
@@ -250,7 +280,8 @@ function TabletopCreator() {
     generatingNPCs ||
     generatingQuests ||
     generatingEncounters ||
-    generatingLocations;
+    generatingLocations ||
+    generatingImage;
 
   const tools = [
     {
@@ -847,6 +878,97 @@ function TabletopCreator() {
     });
   };
 
+  const handleGenerateImage = async () => {
+    const cleanedPrompt = imagePrompt.trim();
+
+    if (!cleanedPrompt) {
+      setImageGenerateError("Image prompt is required.");
+      return;
+    }
+
+    if (generatingImage) {
+      return;
+    }
+
+    setGeneratingImage(true);
+    setGeneratedImage("");
+    setImageGenerateError("");
+    setImageGenerateSuccess("");
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      IMAGE_REQUEST_TIMEOUT_MS
+    );
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const response = await fetch(
+        "http://127.0.0.1:8000/tabletop-creator/generate-image",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            project_id: selectedProjectId,
+            campaign_name: campaignName.trim() || null,
+            campaign_description: campaignDescription.trim() || null,
+            image_type: imageType,
+            image_prompt: cleanedPrompt,
+            use_campaign_context: useCampaignContextForImage,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message = "Unable to generate tabletop image.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (Array.isArray(errorData?.detail)) {
+          message = errorData.detail
+            .map((item) => item?.msg || JSON.stringify(item))
+            .join(" ");
+        } else if (response.status === 401) {
+          message = "Your session has expired. Please sign in again.";
+        }
+
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+
+      setGeneratedImage(data.image_base64 || "");
+      setImageGenerateSuccess(`${data.image_type || imageType} image generated successfully.`);
+      notifyGenerationComplete("Tabletop Image Generator", imageType);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setImageGenerateError(
+          "The image request took too long. Please try generating the image again."
+        );
+      } else {
+        setImageGenerateError(
+          error instanceof Error
+            ? error.message
+            : "Something went wrong while generating the image."
+        );
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      setGeneratingImage(false);
+    }
+  };  
+
   const getProjectsForWorkspace = (workspaceId) => {
     if (!workspaceId) {
       return [];
@@ -1205,910 +1327,1171 @@ function TabletopCreator() {
           </div>
         </div>
 
-      <section className="relative mb-5 overflow-hidden rounded-2xl border border-violet-500/15 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.055),transparent_25%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-        <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-500/15 to-slate-900 text-xl text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.10)]">
-            ✦
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">Campaign Creation Tools</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Choose a world-building tool and generate connected campaign content.
-            </p>
-          </div>
-        </div>
+      <div className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
+        {TABLETOP_TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
-          {tools.map((tool) => (
+          return (
             <button
-              key={tool.title}
+              key={tab.key}
               type="button"
-              className="group rounded-2xl border border-slate-800/90 bg-gradient-to-br from-slate-950/80 to-violet-950/[0.10] p-5 text-left shadow-inner shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-400/30 hover:bg-violet-950/[0.16] hover:shadow-[0_16px_36px_rgba(0,0,0,0.18)]"
-              data-testid={`tabletop-tool-${tool.title
-                .toLowerCase()
-                .replaceAll(" ", "-")}`}
+              onClick={() => setActiveTab(tab.key)}
+              className={`rounded-xl px-5 py-3 text-sm font-bold transition-all ${
+                isActive
+                  ? "border border-cyan-400/40 bg-cyan-400/15 text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,0.10)]"
+                  : "border border-transparent text-slate-400 hover:bg-slate-900 hover:text-white"
+              }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <h4 className="text-lg font-semibold text-white">
-                  {tool.title}
-                </h4>
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
 
-                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
-                  {tool.status}
-                </span>
+      {activeTab === "content" && (
+        <>
+
+          <section className="relative mb-5 overflow-hidden rounded-2xl border border-violet-500/15 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.055),transparent_25%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+            <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-500/15 to-slate-900 text-xl text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.10)]">
+                ✦
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">Campaign Creation Tools</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Choose a world-building tool and generate connected campaign content.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
+              {tools.map((tool) => (
+                <button
+                  key={tool.title}
+                  type="button"
+                  className="group rounded-2xl border border-slate-800/90 bg-gradient-to-br from-slate-950/80 to-violet-950/[0.10] p-5 text-left shadow-inner shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-400/30 hover:bg-violet-950/[0.16] hover:shadow-[0_16px_36px_rgba(0,0,0,0.18)]"
+                  data-testid={`tabletop-tool-${tool.title
+                    .toLowerCase()
+                    .replaceAll(" ", "-")}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h4 className="text-lg font-semibold text-white">
+                      {tool.title}
+                    </h4>
+
+                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+                      {tool.status}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-slate-400 mt-3">
+                    {tool.description}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.05),transparent_24%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+            <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
+                ◈
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">Create Campaign</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Define your campaign foundation, then generate the content you need.
+                </p>
+              </div>
+            </div>
+            
+            <div className="mb-5">
+              <label
+                htmlFor="existing-tabletop-project"
+                className="block text-sm text-slate-300 mb-2"
+              >
+                Choose Existing Project
+              </label>
+
+              <select
+                id="existing-tabletop-project"
+                value={selectedProjectId || ""}
+                onChange={(event) => handleSelectedProjectChange(event.target.value)}
+                disabled={isAnyGenerationInProgress}
+                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Create a new project automatically</option>
+
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+              </select>
+
+              <p className="text-xs text-slate-500 mt-2">
+                Select an existing project to save generated tabletop content there.
+                Leave this blank to auto-create a new campaign project.
+              </p>
+            </div>
+
+            <p className="text-slate-400 mt-2">
+              Enter campaign details and world-building information.
+            </p>
+
+            <form
+              onSubmit={(event) => event.preventDefault()}
+              className="mt-6"
+              data-testid="campaign-creation-form"
+            >
+              <div className="mb-5">
+                <label
+                  htmlFor="campaign-name"
+                  className="block text-sm text-slate-300 mb-2"
+                >
+                  Campaign Name
+                </label>
+
+                <input
+                  id="campaign-name"
+                  value={campaignName}
+                  onChange={(event) => {
+                    setCampaignName(event.target.value);
+                  }}
+                  maxLength={100}
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
+                  data-testid="campaign-name"
+                />
               </div>
 
-              <p className="text-sm text-slate-400 mt-3">
-                {tool.description}
-              </p>
-            </button>
-          ))}
-        </div>
-      </section>
+              <div className="mb-5">
+                <label
+                  htmlFor="campaign-description"
+                  className="block text-sm text-slate-300 mb-2"
+                >
+                  Campaign Description / World-Building Notes
+                </label>
 
-      <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.05),transparent_24%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-        <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
-            ◈
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">Create Campaign</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Define your campaign foundation, then generate the content you need.
-            </p>
-          </div>
-        </div>
-        
-        <div className="mb-5">
-          <label
-            htmlFor="existing-tabletop-project"
-            className="block text-sm text-slate-300 mb-2"
-          >
-            Choose Existing Project
-          </label>
+                <textarea
+                  id="campaign-description"
+                  value={campaignDescription}
+                  onChange={(event) =>
+                    setCampaignDescription(event.target.value)
+                  }
+                  rows="5"
+                  maxLength={5000}
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
+                  data-testid="campaign-description"
+                />
+              </div>
 
-          <select
-            id="existing-tabletop-project"
-            value={selectedProjectId || ""}
-            onChange={(event) => handleSelectedProjectChange(event.target.value)}
-            disabled={isAnyGenerationInProgress}
-            className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">Create a new project automatically</option>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleGenerateCampaign(false)}
+                  disabled={isAnyGenerationInProgress}
+                  className="rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-3 font-bold text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.14)] transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="generate-campaign"
+                >
+                  {generating ? "Generating..." : "Generate Campaign Content"}
+                </button>
 
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.title}
-              </option>
-            ))}
-          </select>
+                <button
+                  type="button"
+                  onClick={() => handleGenerateNPCs(false)}
+                  disabled={isAnyGenerationInProgress}
+                  className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="generate-npcs"
+                >
+                  {generatingNPCs ? "Generating NPCs..." : "Generate NPCs"}
+                </button>
 
-          <p className="text-xs text-slate-500 mt-2">
-            Select an existing project to save generated tabletop content there.
-            Leave this blank to auto-create a new campaign project.
-          </p>
-        </div>
+                <button
+                  type="button"
+                  onClick={() => handleGenerateQuests(false)}
+                  disabled={isAnyGenerationInProgress}
+                  className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="generate-quests"
+                >
+                  {generatingQuests ? "Generating Quests..." : "Generate Quests"}
+                </button>
 
-        <p className="text-slate-400 mt-2">
-          Enter campaign details and world-building information.
-        </p>
+                <button
+                  type="button"
+                  onClick={() => handleGenerateEncounters(false)}
+                  disabled={isAnyGenerationInProgress}
+                  className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="generate-encounters"
+                >
+                  {generatingEncounters
+                    ? "Generating Encounters..."
+                    : "Generate Encounters"}
+                </button>
 
-        <form
-          onSubmit={(event) => event.preventDefault()}
-          className="mt-6"
-          data-testid="campaign-creation-form"
-        >
-          <div className="mb-5">
-            <label
-              htmlFor="campaign-name"
-              className="block text-sm text-slate-300 mb-2"
-            >
-              Campaign Name
-            </label>
+                <button
+                  type="button"
+                  onClick={() => handleGenerateLocations(false)}
+                  disabled={isAnyGenerationInProgress}
+                  className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="generate-locations"
+                >
+                  {generatingLocations
+                    ? "Generating Locations..."
+                    : "Generate Locations"}
+                </button>
+              </div>
 
-            <input
-              id="campaign-name"
-              value={campaignName}
-              onChange={(event) => {
-                setCampaignName(event.target.value);
-              }}
-              maxLength={100}
-              className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
-              data-testid="campaign-name"
-            />
-          </div>
+              {isAnyGenerationInProgress && (
+                <div
+                  className="mt-4 flex items-center gap-3 text-sm text-cyan-300"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="ai-generation-loading"
+                >
+                  <div
+                    className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
+                    aria-hidden="true"
+                  />
 
-          <div className="mb-5">
-            <label
-              htmlFor="campaign-description"
-              className="block text-sm text-slate-300 mb-2"
-            >
-              Campaign Description / World-Building Notes
-            </label>
+                  <p>Tanio AI is generating content. Please wait...</p>
+                </div>
+              )}
 
-            <textarea
-              id="campaign-description"
-              value={campaignDescription}
-              onChange={(event) =>
-                setCampaignDescription(event.target.value)
-              }
-              rows="5"
-              maxLength={5000}
-              className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
-              data-testid="campaign-description"
-            />
-          </div>
+              {generateSuccess && (
+                <p
+                  className="mt-4 bg-emerald-950 border border-emerald-800 text-emerald-300 rounded-lg p-3"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {generateSuccess}
+                </p>
+              )}
+            </form>
+          </section>
 
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => handleGenerateCampaign(false)}
-              disabled={isAnyGenerationInProgress}
-              className="rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-3 font-bold text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.14)] transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="generate-campaign"
-            >
-              {generating ? "Generating..." : "Generate Campaign Content"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleGenerateNPCs(false)}
-              disabled={isAnyGenerationInProgress}
-              className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="generate-npcs"
-            >
-              {generatingNPCs ? "Generating NPCs..." : "Generate NPCs"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleGenerateQuests(false)}
-              disabled={isAnyGenerationInProgress}
-              className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="generate-quests"
-            >
-              {generatingQuests ? "Generating Quests..." : "Generate Quests"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleGenerateEncounters(false)}
-              disabled={isAnyGenerationInProgress}
-              className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="generate-encounters"
-            >
-              {generatingEncounters
-                ? "Generating Encounters..."
-                : "Generate Encounters"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleGenerateLocations(false)}
-              disabled={isAnyGenerationInProgress}
-              className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="generate-locations"
-            >
-              {generatingLocations
-                ? "Generating Locations..."
-                : "Generate Locations"}
-            </button>
-          </div>
-
-          {isAnyGenerationInProgress && (
+          {saveWorkspaceSuccess && (
             <div
-              className="mt-4 flex items-center gap-3 text-sm text-cyan-300"
-              role="status"
-              aria-live="polite"
-              data-testid="ai-generation-loading"
-            >
-              <div
-                className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
-                aria-hidden="true"
-              />
-
-              <p>Tanio AI is generating content. Please wait...</p>
-            </div>
-          )}
-
-          {generateSuccess && (
-            <p
-              className="mt-4 bg-emerald-950 border border-emerald-800 text-emerald-300 rounded-lg p-3"
+              className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.14)]"
               role="status"
               aria-live="polite"
             >
-              {generateSuccess}
-            </p>
-          )}
-        </form>
-      </section>
-
-      {saveWorkspaceSuccess && (
-        <div
-          className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.14)]"
-          role="status"
-          aria-live="polite"
-        >
-          <p className="font-semibold text-emerald-300">Saved successfully</p>
-          <p className="mt-1 text-sm text-emerald-300">
-            {saveWorkspaceSuccess}
-          </p>
-        </div>
-      )}
-
-      {relatedContentWarning && (
-        <section
-          className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.14)] sm:p-6"
-          data-testid="related-content-warning"
-        >
-          <div className="flex flex-col gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-amber-400">
-                Related Content May Need Updating
-              </p>
-
-              <h3 className="mt-1 text-2xl font-bold text-white">
-                {CONTENT_LABELS[relatedContentWarning.source]} was regenerated
-              </h3>
-
-              <p className="mt-2 max-w-3xl text-slate-300">
-                Some content you already generated may no longer match the new
-                version. Choose anything you want Tanio to regenerate, or keep
-                the existing content as is.
+              <p className="font-semibold text-emerald-300">Saved successfully</p>
+              <p className="mt-1 text-sm text-emerald-300">
+                {saveWorkspaceSuccess}
               </p>
             </div>
+          )}
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {relatedContentWarning.related.map((contentKey) => {
-                const isSelected = selectedRelatedContent.includes(contentKey);
+          {generatedImage && (
+            <section className="relative mb-5 overflow-hidden rounded-2xl border border-fuchsia-500/15 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.055),transparent_25%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+              <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-fuchsia-400/20 bg-gradient-to-br from-fuchsia-500/15 to-slate-900 text-xl text-fuchsia-300 shadow-[0_0_24px_rgba(217,70,239,0.08)]">
+                  ✧
+                </div>
 
-                return (
-                  <label
-                    key={contentKey}
-                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition ${
-                      isSelected
-                        ? "border-amber-500 bg-amber-950/60"
-                        : "border-slate-700 bg-slate-950/60 hover:border-slate-600"
+                <div>
+                  <h2 className="text-xl font-bold text-white">Generated Campaign Image</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    This image was generated from the Image Generator tab. It has not been saved yet.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+                <img
+                  src={`data:image/png;base64,${generatedImage}`}
+                  alt="Generated tabletop asset"
+                  className="w-full rounded-2xl border border-slate-800 bg-slate-950 object-cover"
+                />
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-fuchsia-300">
+                    Image Details
+                  </p>
+
+                  <p className="mt-3 text-lg font-bold text-white">{imageType}</p>
+
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    {imagePrompt}
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white"
+                    >
+                      Download Image
+                    </button>
+
+                    <button
+                      type="button"
+                      className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15"
+                    >
+                      Save Image to Workspace
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {relatedContentWarning && (
+            <section
+              className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.14)] sm:p-6"
+              data-testid="related-content-warning"
+            >
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-amber-400">
+                    Related Content May Need Updating
+                  </p>
+
+                  <h3 className="mt-1 text-2xl font-bold text-white">
+                    {CONTENT_LABELS[relatedContentWarning.source]} was regenerated
+                  </h3>
+
+                  <p className="mt-2 max-w-3xl text-slate-300">
+                    Some content you already generated may no longer match the new
+                    version. Choose anything you want Tanio to regenerate, or keep
+                    the existing content as is.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {relatedContentWarning.related.map((contentKey) => {
+                    const isSelected = selectedRelatedContent.includes(contentKey);
+
+                    return (
+                      <label
+                        key={contentKey}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition ${
+                          isSelected
+                            ? "border-amber-500 bg-amber-950/60"
+                            : "border-slate-700 bg-slate-950/60 hover:border-slate-600"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleRelatedContentToggle(contentKey)}
+                          disabled={isAnyGenerationInProgress}
+                          className="h-4 w-4 accent-amber-500"
+                        />
+
+                        <span className="font-semibold text-white">
+                          {CONTENT_LABELS[contentKey]}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleUpdateSelectedRelatedContent}
+                    disabled={
+                      selectedRelatedContent.length === 0 ||
+                      isAnyGenerationInProgress
+                    }
+                    className="rounded-lg bg-amber-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isAnyGenerationInProgress
+                      ? "Updating..."
+                      : "Update Selected"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleKeepRelatedContentAsIs}
+                    disabled={isAnyGenerationInProgress}
+                    className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Keep As Is
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {(generateError || generatedCampaignContent) && (
+            <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+              <h3 className="text-2xl font-bold">Generated Campaign Content</h3>
+              {generatedCampaignContent && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("campaign", -1, setGeneratedCampaignContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.campaign <= 0
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Previous
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("campaign", 1, setGeneratedCampaignContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.campaign >=
+                        generationHistory.campaign.length - 1
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next →
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRegenerate("campaign")}
+                    disabled={isAnyGenerationInProgress}
+                    className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {generating ? "Regenerating..." : "Regenerate Campaign"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSaveWorkspace("campaign")}
+                    disabled={isAnyGenerationInProgress || savingToWorkspace}
+                    className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Save to Workspace
+                  </button>
+                </div>
+              )}
+              
+              {generateError && (
+                <div
+                  className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+                  role="alert"
+                  data-testid="campaign-generate-error"
+                >
+                  <p>{generateError}</p>
+
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateCampaign(false)}
+                    disabled={isAnyGenerationInProgress}
+                    className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Retry Campaign
+                  </button>
+                </div>
+              )}
+
+              {generatedCampaignContent && generationHistory.campaign.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                  <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                    Version {currentVersionIndex.campaign + 1} of {generationHistory.campaign.length}
+                  </span>
+
+                  <span
+                    className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                      currentVersionIndex.campaign ===
+                      generationHistory.campaign.length - 1
+                        ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                        : "border-slate-700 bg-slate-800 text-slate-400"
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => handleRelatedContentToggle(contentKey)}
-                      disabled={isAnyGenerationInProgress}
-                      className="h-4 w-4 accent-amber-500"
-                    />
+                    {currentVersionIndex.campaign ===
+                    generationHistory.campaign.length - 1
+                      ? "Current Version"
+                      : "Previous Version"}
+                  </span>
+                </div>
+              )}
 
-                    <span className="font-semibold text-white">
-                      {CONTENT_LABELS[contentKey]}
-                    </span>
-                  </label>
-                );
-              })}
+              {getCurrentRegenerationInstructions("campaign") && (
+                <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                    Regeneration Instructions
+                  </p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {getCurrentRegenerationInstructions("campaign")}
+                  </p>
+                </div>
+              )}
+
+              {generatedCampaignContent && (
+                <div
+                  className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
+                  data-testid="generated-campaign-content"
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {cleanGeneratedMarkdown(generatedCampaignContent)}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </section>
+          )}
+
+          {(npcError || generatedNPCContent) && (
+            <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+              <h3 className="text-2xl font-bold">Generated NPCs</h3>
+              {generatedNPCContent && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("npc", -1, setGeneratedNPCContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.npc <= 0
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Previous
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("npc", 1, setGeneratedNPCContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.npc >=
+                        generationHistory.npc.length - 1
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next →
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRegenerate("npc")}
+                    disabled={isAnyGenerationInProgress}
+                    className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {generatingNPCs ? "Regenerating..." : "Regenerate NPCs"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSaveWorkspace("npc")}
+                    disabled={isAnyGenerationInProgress || savingToWorkspace}
+                    className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Save to Workspace
+                  </button>
+                </div>
+              )}
+
+              {npcError && (
+                <div
+                  className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+                  role="alert"
+                  data-testid="npc-generate-error"
+                >
+                  <p>{npcError}</p>
+
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateNPCs(false)}
+                    disabled={isAnyGenerationInProgress}
+                    className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Retry NPCs
+                  </button>
+                </div>
+              )}
+
+              {generatedNPCContent && generationHistory.npc.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                  <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                    Version {currentVersionIndex.npc + 1} of {generationHistory.npc.length}
+                  </span>
+
+                  <span
+                    className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                      currentVersionIndex.npc ===
+                      generationHistory.npc.length - 1
+                        ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                        : "border-slate-700 bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {currentVersionIndex.npc ===
+                    generationHistory.npc.length - 1
+                      ? "Current Version"
+                      : "Previous Version"}
+                  </span>
+                </div>
+              )}
+
+              {getCurrentRegenerationInstructions("npc") && (
+                <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                    Regeneration Instructions
+                  </p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {getCurrentRegenerationInstructions("npc")}
+                  </p>
+                </div>
+              )}
+
+              {generatedNPCContent && (
+                <div
+                  className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
+                  data-testid="generated-npc-content"
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {cleanGeneratedMarkdown(generatedNPCContent)}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </section>
+          )}
+
+          {(questError || generatedQuestContent) && (
+            <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+              <h3 className="text-2xl font-bold">Generated Quests</h3>
+              {generatedQuestContent && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("quest", -1, setGeneratedQuestContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.quest <= 0
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Previous
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("quest", 1, setGeneratedQuestContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.quest >=
+                        generationHistory.quest.length - 1
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next →
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRegenerate("quest")}
+                    disabled={isAnyGenerationInProgress}
+                    className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {generatingQuests ? "Regenerating..." : "Regenerate Quests"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSaveWorkspace("quest")}
+                    disabled={isAnyGenerationInProgress || savingToWorkspace}
+                    className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Save to Workspace
+                  </button>
+                </div>
+              )}
+
+              {questError && (
+                <div
+                  className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+                  role="alert"
+                  data-testid="quest-generate-error"
+                >
+                  <p>{questError}</p>
+
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateQuests(false)}
+                    disabled={isAnyGenerationInProgress}
+                    className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Retry Quests
+                  </button>
+                </div>
+              )}
+
+              {generatedQuestContent && generationHistory.quest.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                  <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                    Version {currentVersionIndex.quest + 1} of {generationHistory.quest.length}
+                  </span>
+
+                  <span
+                    className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                      currentVersionIndex.quest ===
+                      generationHistory.quest.length - 1
+                        ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                        : "border-slate-700 bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {currentVersionIndex.quest ===
+                    generationHistory.quest.length - 1
+                      ? "Current Version"
+                      : "Previous Version"}
+                  </span>
+                </div>
+              )}
+
+              {getCurrentRegenerationInstructions("quest") && (
+                <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                    Regeneration Instructions
+                  </p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {getCurrentRegenerationInstructions("quest")}
+                  </p>
+                </div>
+              )}
+
+              {generatedQuestContent && (
+                <div
+                  className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
+                  data-testid="generated-quest-content"
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {cleanGeneratedMarkdown(generatedQuestContent)}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </section>
+          )}
+
+          {(encounterError || generatedEncounterContent) && (
+            <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+              <h3 className="text-2xl font-bold">Generated Encounters</h3>
+              {generatedEncounterContent && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("encounter", -1, setGeneratedEncounterContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.encounter <= 0
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Previous
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("encounter", 1, setGeneratedEncounterContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.encounter >=
+                        generationHistory.encounter.length - 1
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next →
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRegenerate("encounter")}
+                    disabled={isAnyGenerationInProgress}
+                    className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {generatingEncounters ? "Regenerating..." : "Regenerate Encounters"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSaveWorkspace("encounter")}
+                    disabled={isAnyGenerationInProgress || savingToWorkspace}
+                    className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Save to Workspace
+                  </button>
+                </div>
+              )}
+
+              {encounterError && (
+                <div
+                  className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+                  role="alert"
+                  data-testid="encounter-generate-error"
+                >
+                  <p>{encounterError}</p>
+
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateEncounters(false)}
+                    disabled={isAnyGenerationInProgress}
+                    className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Retry Encounters
+                  </button>
+                </div>
+              )}
+
+              {generatedEncounterContent && generationHistory.encounter.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                  <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                    Version {currentVersionIndex.encounter + 1} of {generationHistory.encounter.length}
+                  </span>
+
+                  <span
+                    className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                      currentVersionIndex.encounter ===
+                      generationHistory.encounter.length - 1
+                        ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                        : "border-slate-700 bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {currentVersionIndex.encounter ===
+                    generationHistory.encounter.length - 1
+                      ? "Current Version"
+                      : "Previous Version"}
+                  </span>
+                </div>
+              )}
+
+              {getCurrentRegenerationInstructions("encounter") && (
+                <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                    Regeneration Instructions
+                  </p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {getCurrentRegenerationInstructions("encounter")}
+                  </p>
+                </div>
+              )}
+
+              {generatedEncounterContent && (
+                <div
+                  className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
+                  data-testid="generated-encounter-content"
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {cleanGeneratedMarkdown(generatedEncounterContent)}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </section>
+          )}
+
+          {(locationError || generatedLocationContent) && (
+            <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+              <h3 className="text-2xl font-bold">Generated Locations</h3>
+              {generatedLocationContent && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("location", -1, setGeneratedLocationContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.location <= 0
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Previous
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionChange("location", 1, setGeneratedLocationContent)
+                    }
+                    disabled={
+                      isAnyGenerationInProgress ||
+                      currentVersionIndex.location >=
+                        generationHistory.location.length - 1
+                    }
+                    className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next →
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRegenerate("location")}
+                    disabled={isAnyGenerationInProgress}
+                    className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {generatingLocations ? "Regenerating..." : "Regenerate Locations"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSaveWorkspace("location")}
+                    disabled={isAnyGenerationInProgress || savingToWorkspace}
+                    className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Save to Workspace
+                  </button>
+                </div>
+              )}
+
+              {locationError && (
+                <div
+                  className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
+                  role="alert"
+                  data-testid="location-generate-error"
+                >
+                  <p>{locationError}</p>
+
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateLocations(false)}
+                    disabled={isAnyGenerationInProgress}
+                    className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Retry Locations
+                  </button>
+                </div>
+              )}
+
+              {generatedLocationContent && generationHistory.location.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                  <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                    Version {currentVersionIndex.location + 1} of {generationHistory.location.length}
+                  </span>
+
+                  <span
+                    className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                      currentVersionIndex.location ===
+                      generationHistory.location.length - 1
+                        ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                        : "border-slate-700 bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {currentVersionIndex.location ===
+                    generationHistory.location.length - 1
+                      ? "Current Version"
+                      : "Previous Version"}
+                  </span>
+                </div>
+              )}
+
+              {getCurrentRegenerationInstructions("location") && (
+                <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                    Regeneration Instructions
+                  </p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {getCurrentRegenerationInstructions("location")}
+                  </p>
+                </div>
+              )}
+
+              {generatedLocationContent && (
+                <div
+                  className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
+                  data-testid="generated-location-content"
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {cleanGeneratedMarkdown(generatedLocationContent)}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </section>
+          )}
+        </>
+      )}
+
+      {activeTab === "image" && (
+        <section className="relative mb-5 overflow-hidden rounded-2xl border border-fuchsia-500/15 bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.055),transparent_25%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
+          <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-fuchsia-400/20 bg-gradient-to-br from-fuchsia-500/15 to-slate-900 text-xl text-fuchsia-300 shadow-[0_0_24px_rgba(217,70,239,0.08)]">
+              ✧
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handleUpdateSelectedRelatedContent}
-                disabled={
-                  selectedRelatedContent.length === 0 ||
-                  isAnyGenerationInProgress
-                }
-                className="rounded-lg bg-amber-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isAnyGenerationInProgress
-                  ? "Updating..."
-                  : "Update Selected"}
-              </button>
+            <div>
+              <h2 className="text-xl font-bold text-white">Image Generator</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Create visual assets for campaigns, NPCs, locations, encounters, items, maps, and scenes.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+            <div className="rounded-2xl border border-slate-800/90 bg-slate-950/60 p-5">
+              <div className="mb-5">
+                <label
+                  htmlFor="tabletop-image-type"
+                  className="block text-sm text-slate-300 mb-2"
+                >
+                  Image Type
+                </label>
+
+                <select
+                  id="tabletop-image-type"
+                  value={imageType}
+                  onChange={(event) => {
+                    setImageType(event.target.value);
+                    setImageGenerateError("");
+                    setImageGenerateSuccess("");
+                  }}
+                  disabled={generatingImage}
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-fuchsia-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-fuchsia-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {IMAGE_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mb-5">
+                <label
+                  htmlFor="tabletop-image-prompt"
+                  className="block text-sm text-slate-300 mb-2"
+                >
+                  Image Prompt
+                </label>
+
+                <textarea
+                  id="tabletop-image-prompt"
+                  value={imagePrompt}
+                  onChange={(event) => {
+                    setImagePrompt(event.target.value);
+                    setImageGenerateError("");
+                    setImageGenerateSuccess("");
+                  }}
+                  rows="7"
+                  maxLength={1500}
+                  disabled={generatingImage}
+                  placeholder="Describe the image you want Tanio to create..."
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all placeholder:text-slate-600 focus:border-fuchsia-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-fuchsia-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+
+                <div className="mt-2 flex items-center justify-between gap-4 text-xs text-slate-500">
+                  <span>Required</span>
+                  <span>{imagePrompt.length}/1500</span>
+                </div>
+              </div>
+
+              <label className="mb-5 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+                <input
+                  type="checkbox"
+                  checked={useCampaignContextForImage}
+                  onChange={(event) =>
+                    setUseCampaignContextForImage(event.target.checked)
+                  }
+                  disabled={generatingImage}
+                  className="mt-1 h-4 w-4 accent-fuchsia-500"
+                />
+
+                <span>
+                  <span className="block font-semibold text-white">
+                    Use campaign name and description as image context
+                  </span>
+                  <span className="mt-1 block text-sm text-slate-400">
+                    This helps the image match the current campaign details when available.
+                  </span>
+                </span>
+              </label>
 
               <button
                 type="button"
-                onClick={handleKeepRelatedContentAsIs}
-                disabled={isAnyGenerationInProgress}
-                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleGenerateImage}
+                disabled={generatingImage}
+                className="rounded-xl border border-fuchsia-300/40 bg-gradient-to-r from-fuchsia-400 to-violet-400 px-5 py-3 font-bold text-slate-950 shadow-[0_12px_28px_rgba(217,70,239,0.14)] transition-all hover:-translate-y-0.5 hover:from-fuchsia-300 hover:to-violet-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Keep As Is
+                {generatingImage ? "Generating Image..." : "Generate Image"}
               </button>
+
+              {generatingImage && (
+                <div
+                  className="mt-4 flex items-center gap-3 text-sm text-fuchsia-300"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div
+                    className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-fuchsia-400 animate-spin"
+                    aria-hidden="true"
+                  />
+
+                  <p>Tanio AI is generating your image. Please wait...</p>
+                </div>
+              )}
+
+              {imageGenerateSuccess && (
+                <p
+                  className="mt-4 rounded-lg border border-emerald-800 bg-emerald-950 p-3 text-emerald-300"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {imageGenerateSuccess}
+                </p>
+              )}
+
+              {imageGenerateError && (
+                <p
+                  className="mt-4 rounded-lg border border-red-800 bg-red-950 p-3 text-red-300"
+                  role="alert"
+                >
+                  {imageGenerateError}
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-800/90 bg-slate-950/60 p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-fuchsia-300">
+                Image Preview
+              </p>
+
+              {generatedImage ? (
+                <div className="mt-4">
+                  <img
+                    src={`data:image/png;base64,${generatedImage}`}
+                    alt="Generated tabletop asset"
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-950 object-cover"
+                  />
+
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white"
+                    >
+                      Download Image
+                    </button>
+
+                    <button
+                      type="button"
+                      className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15"
+                    >
+                      Save Image to Workspace
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 flex min-h-[320px] items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-center">
+                  <div>
+                    <p className="text-lg font-bold text-white">No image generated yet</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      Choose an image type, write a prompt, and generate a visual asset.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
-      )}
-
-      {(generateError || generatedCampaignContent) && (
-        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-          <h3 className="text-2xl font-bold">Generated Campaign Content</h3>
-          {generatedCampaignContent && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("campaign", -1, setGeneratedCampaignContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.campaign <= 0
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                ← Previous
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("campaign", 1, setGeneratedCampaignContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.campaign >=
-                    generationHistory.campaign.length - 1
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next →
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenRegenerate("campaign")}
-                disabled={isAnyGenerationInProgress}
-                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {generating ? "Regenerating..." : "Regenerate Campaign"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenSaveWorkspace("campaign")}
-                disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Save to Workspace
-              </button>
-            </div>
-          )}
-          
-          {generateError && (
-            <div
-              className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
-              role="alert"
-              data-testid="campaign-generate-error"
-            >
-              <p>{generateError}</p>
-
-              <button
-                type="button"
-                onClick={() => handleGenerateCampaign(false)}
-                disabled={isAnyGenerationInProgress}
-                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retry Campaign
-              </button>
-            </div>
-          )}
-
-          {generatedCampaignContent && generationHistory.campaign.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
-                Version {currentVersionIndex.campaign + 1} of {generationHistory.campaign.length}
-              </span>
-
-              <span
-                className={`rounded-lg border px-3 py-1.5 font-semibold ${
-                  currentVersionIndex.campaign ===
-                  generationHistory.campaign.length - 1
-                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
-                    : "border-slate-700 bg-slate-800 text-slate-400"
-                }`}
-              >
-                {currentVersionIndex.campaign ===
-                generationHistory.campaign.length - 1
-                  ? "Current Version"
-                  : "Previous Version"}
-              </span>
-            </div>
-          )}
-
-          {getCurrentRegenerationInstructions("campaign") && (
-            <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
-                Regeneration Instructions
-              </p>
-              <p className="mt-2 text-sm text-slate-300">
-                {getCurrentRegenerationInstructions("campaign")}
-              </p>
-            </div>
-          )}
-
-          {generatedCampaignContent && (
-            <div
-              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
-              data-testid="generated-campaign-content"
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {cleanGeneratedMarkdown(generatedCampaignContent)}
-              </ReactMarkdown>
-            </div>
-          )}
-        </section>
-      )}
-
-      {(npcError || generatedNPCContent) && (
-        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-          <h3 className="text-2xl font-bold">Generated NPCs</h3>
-          {generatedNPCContent && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("npc", -1, setGeneratedNPCContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.npc <= 0
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                ← Previous
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("npc", 1, setGeneratedNPCContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.npc >=
-                    generationHistory.npc.length - 1
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next →
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenRegenerate("npc")}
-                disabled={isAnyGenerationInProgress}
-                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {generatingNPCs ? "Regenerating..." : "Regenerate NPCs"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenSaveWorkspace("npc")}
-                disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Save to Workspace
-              </button>
-            </div>
-          )}
-
-          {npcError && (
-            <div
-              className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
-              role="alert"
-              data-testid="npc-generate-error"
-            >
-              <p>{npcError}</p>
-
-              <button
-                type="button"
-                onClick={() => handleGenerateNPCs(false)}
-                disabled={isAnyGenerationInProgress}
-                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retry NPCs
-              </button>
-            </div>
-          )}
-
-          {generatedNPCContent && generationHistory.npc.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
-                Version {currentVersionIndex.npc + 1} of {generationHistory.npc.length}
-              </span>
-
-              <span
-                className={`rounded-lg border px-3 py-1.5 font-semibold ${
-                  currentVersionIndex.npc ===
-                  generationHistory.npc.length - 1
-                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
-                    : "border-slate-700 bg-slate-800 text-slate-400"
-                }`}
-              >
-                {currentVersionIndex.npc ===
-                generationHistory.npc.length - 1
-                  ? "Current Version"
-                  : "Previous Version"}
-              </span>
-            </div>
-          )}
-
-          {getCurrentRegenerationInstructions("npc") && (
-            <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
-                Regeneration Instructions
-              </p>
-              <p className="mt-2 text-sm text-slate-300">
-                {getCurrentRegenerationInstructions("npc")}
-              </p>
-            </div>
-          )}
-
-          {generatedNPCContent && (
-            <div
-              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
-              data-testid="generated-npc-content"
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {cleanGeneratedMarkdown(generatedNPCContent)}
-              </ReactMarkdown>
-            </div>
-          )}
-        </section>
-      )}
-
-      {(questError || generatedQuestContent) && (
-        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-          <h3 className="text-2xl font-bold">Generated Quests</h3>
-          {generatedQuestContent && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("quest", -1, setGeneratedQuestContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.quest <= 0
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                ← Previous
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("quest", 1, setGeneratedQuestContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.quest >=
-                    generationHistory.quest.length - 1
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next →
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenRegenerate("quest")}
-                disabled={isAnyGenerationInProgress}
-                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {generatingQuests ? "Regenerating..." : "Regenerate Quests"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenSaveWorkspace("quest")}
-                disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Save to Workspace
-              </button>
-            </div>
-          )}
-
-          {questError && (
-            <div
-              className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
-              role="alert"
-              data-testid="quest-generate-error"
-            >
-              <p>{questError}</p>
-
-              <button
-                type="button"
-                onClick={() => handleGenerateQuests(false)}
-                disabled={isAnyGenerationInProgress}
-                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retry Quests
-              </button>
-            </div>
-          )}
-
-          {generatedQuestContent && generationHistory.quest.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
-                Version {currentVersionIndex.quest + 1} of {generationHistory.quest.length}
-              </span>
-
-              <span
-                className={`rounded-lg border px-3 py-1.5 font-semibold ${
-                  currentVersionIndex.quest ===
-                  generationHistory.quest.length - 1
-                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
-                    : "border-slate-700 bg-slate-800 text-slate-400"
-                }`}
-              >
-                {currentVersionIndex.quest ===
-                generationHistory.quest.length - 1
-                  ? "Current Version"
-                  : "Previous Version"}
-              </span>
-            </div>
-          )}
-
-          {getCurrentRegenerationInstructions("quest") && (
-            <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
-                Regeneration Instructions
-              </p>
-              <p className="mt-2 text-sm text-slate-300">
-                {getCurrentRegenerationInstructions("quest")}
-              </p>
-            </div>
-          )}
-
-          {generatedQuestContent && (
-            <div
-              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
-              data-testid="generated-quest-content"
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {cleanGeneratedMarkdown(generatedQuestContent)}
-              </ReactMarkdown>
-            </div>
-          )}
-        </section>
-      )}
-
-      {(encounterError || generatedEncounterContent) && (
-        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-          <h3 className="text-2xl font-bold">Generated Encounters</h3>
-          {generatedEncounterContent && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("encounter", -1, setGeneratedEncounterContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.encounter <= 0
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                ← Previous
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("encounter", 1, setGeneratedEncounterContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.encounter >=
-                    generationHistory.encounter.length - 1
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next →
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenRegenerate("encounter")}
-                disabled={isAnyGenerationInProgress}
-                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {generatingEncounters ? "Regenerating..." : "Regenerate Encounters"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenSaveWorkspace("encounter")}
-                disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Save to Workspace
-              </button>
-            </div>
-          )}
-
-          {encounterError && (
-            <div
-              className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
-              role="alert"
-              data-testid="encounter-generate-error"
-            >
-              <p>{encounterError}</p>
-
-              <button
-                type="button"
-                onClick={() => handleGenerateEncounters(false)}
-                disabled={isAnyGenerationInProgress}
-                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retry Encounters
-              </button>
-            </div>
-          )}
-
-          {generatedEncounterContent && generationHistory.encounter.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
-                Version {currentVersionIndex.encounter + 1} of {generationHistory.encounter.length}
-              </span>
-
-              <span
-                className={`rounded-lg border px-3 py-1.5 font-semibold ${
-                  currentVersionIndex.encounter ===
-                  generationHistory.encounter.length - 1
-                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
-                    : "border-slate-700 bg-slate-800 text-slate-400"
-                }`}
-              >
-                {currentVersionIndex.encounter ===
-                generationHistory.encounter.length - 1
-                  ? "Current Version"
-                  : "Previous Version"}
-              </span>
-            </div>
-          )}
-
-          {getCurrentRegenerationInstructions("encounter") && (
-            <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
-                Regeneration Instructions
-              </p>
-              <p className="mt-2 text-sm text-slate-300">
-                {getCurrentRegenerationInstructions("encounter")}
-              </p>
-            </div>
-          )}
-
-          {generatedEncounterContent && (
-            <div
-              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
-              data-testid="generated-encounter-content"
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {cleanGeneratedMarkdown(generatedEncounterContent)}
-              </ReactMarkdown>
-            </div>
-          )}
-        </section>
-      )}
-
-      {(locationError || generatedLocationContent) && (
-        <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-          <h3 className="text-2xl font-bold">Generated Locations</h3>
-          {generatedLocationContent && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("location", -1, setGeneratedLocationContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.location <= 0
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                ← Previous
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleVersionChange("location", 1, setGeneratedLocationContent)
-                }
-                disabled={
-                  isAnyGenerationInProgress ||
-                  currentVersionIndex.location >=
-                    generationHistory.location.length - 1
-                }
-                className="rounded-xl border border-slate-700 bg-slate-950/65 px-4 py-2 font-semibold text-slate-200 transition hover:border-slate-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next →
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenRegenerate("location")}
-                disabled={isAnyGenerationInProgress}
-                className="rounded-xl border border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/15 px-4 py-2 font-semibold text-violet-100 transition hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {generatingLocations ? "Regenerating..." : "Regenerate Locations"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenSaveWorkspace("location")}
-                disabled={isAnyGenerationInProgress || savingToWorkspace}
-                className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Save to Workspace
-              </button>
-            </div>
-          )}
-
-          {locationError && (
-            <div
-              className="mt-4 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3"
-              role="alert"
-              data-testid="location-generate-error"
-            >
-              <p>{locationError}</p>
-
-              <button
-                type="button"
-                onClick={() => handleGenerateLocations(false)}
-                disabled={isAnyGenerationInProgress}
-                className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retry Locations
-              </button>
-            </div>
-          )}
-
-          {generatedLocationContent && generationHistory.location.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
-                Version {currentVersionIndex.location + 1} of {generationHistory.location.length}
-              </span>
-
-              <span
-                className={`rounded-lg border px-3 py-1.5 font-semibold ${
-                  currentVersionIndex.location ===
-                  generationHistory.location.length - 1
-                    ? "border-emerald-800 bg-emerald-950 text-emerald-300"
-                    : "border-slate-700 bg-slate-800 text-slate-400"
-                }`}
-              >
-                {currentVersionIndex.location ===
-                generationHistory.location.length - 1
-                  ? "Current Version"
-                  : "Previous Version"}
-              </span>
-            </div>
-          )}
-
-          {getCurrentRegenerationInstructions("location") && (
-            <div className="mt-4 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
-                Regeneration Instructions
-              </p>
-              <p className="mt-2 text-sm text-slate-300">
-                {getCurrentRegenerationInstructions("location")}
-              </p>
-            </div>
-          )}
-
-          {generatedLocationContent && (
-            <div
-              className={`${generatedMarkdownClasses} rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7`}
-              data-testid="generated-location-content"
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {cleanGeneratedMarkdown(generatedLocationContent)}
-              </ReactMarkdown>
-            </div>
-          )}
-        </section>
-      )}
+      )}      
 
       {regenerateModalOpen && (
         <div

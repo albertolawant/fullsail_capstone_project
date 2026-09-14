@@ -21,6 +21,8 @@ from app.schemas.tabletop_creator import (
     NPCGenerateResponse,
     QuestGenerateRequest,
     QuestGenerateResponse,
+    TabletopImageGenerateRequest,
+    TabletopImageGenerateResponse,
 )
 from app.services.ai_response_validation import validate_ai_response
 from app.services.ai_usage_service import log_ai_usage
@@ -328,6 +330,12 @@ def create_openai_client() -> OpenAI:
         max_retries=1,
     )
 
+def create_openai_image_client() -> OpenAI:
+    return OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        timeout=120.0,
+        max_retries=1,
+    )
 
 @router.post(
     "/generate-campaign",
@@ -805,4 +813,140 @@ For each location, include:
         raise HTTPException(
             status_code=500,
             detail="Unable to generate location content.",
+        )
+
+@router.post(
+    "/generate-image",
+    response_model=TabletopImageGenerateResponse,
+)
+def generate_tabletop_image(
+    request: TabletopImageGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="The AI image service is temporarily unavailable.",
+        )
+
+    project = get_selected_project(
+        db=db,
+        current_user=current_user,
+        project_id=request.project_id,
+    )
+
+    cleaned_image_type = request.image_type.strip()
+    cleaned_prompt = request.image_prompt.strip()
+    cleaned_campaign_name = (
+        request.campaign_name.strip()
+        if request.campaign_name
+        else ""
+    )
+    cleaned_campaign_description = (
+        request.campaign_description.strip()
+        if request.campaign_description
+        else ""
+    )
+
+    if not cleaned_prompt:
+        raise HTTPException(
+            status_code=400,
+            detail="Image prompt is required.",
+        )
+
+    context_text = ""
+
+    if request.use_campaign_context:
+        if cleaned_campaign_name:
+            context_text += f"Campaign name: {cleaned_campaign_name}\n"
+
+        if cleaned_campaign_description:
+            context_text += (
+                f"Campaign description: {cleaned_campaign_description}\n"
+            )
+
+    final_prompt = f"""
+Create a high-quality tabletop RPG visual asset.
+
+Image Type:
+{cleaned_image_type}
+
+User Image Prompt:
+{cleaned_prompt}
+
+{context_text}
+
+Style Requirements:
+- Cinematic fantasy tabletop RPG concept art
+- Detailed, polished, atmospheric
+- Useful as a campaign visual asset
+- No text, no logos, no watermarks, no UI elements
+""".strip()
+
+    client = create_openai_image_client()
+
+    try:
+        response = client.images.generate(
+            model="gpt-image-1",
+            prompt=final_prompt,
+            size="1024x1024",
+        )
+
+        image_base64 = response.data[0].b64_json
+
+        if not image_base64:
+            raise HTTPException(
+                status_code=500,
+                detail="The image service did not return an image.",
+            )
+
+        log_ai_usage(
+            db=db,
+            user_id=current_user.id,
+            project_id=project.id if project else None,
+            feature_type="Tabletop Image Generator",
+            content_type=cleaned_image_type,
+            status="success",
+        )
+
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Image Generated",
+            item_type="Image",
+            item_id=None,
+            title=f"{cleaned_image_type} image generated",
+            description="A tabletop image was generated but not saved yet.",
+            project_id=project.id if project else None,
+            project_name=project.title if project else None,
+        )
+
+        db.commit()
+
+        return {
+            "image_base64": image_base64,
+            "image_type": cleaned_image_type,
+            "prompt": cleaned_prompt,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        print("Tabletop image generation failed:", error)
+
+        log_ai_usage(
+            db=db,
+            user_id=current_user.id,
+            project_id=project.id if project else None,
+            feature_type="Tabletop Image Generator",
+            content_type=cleaned_image_type,
+            status="failed",
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to generate tabletop image.",
         )
