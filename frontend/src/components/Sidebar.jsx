@@ -21,8 +21,9 @@ import {
 
 const SIDEBAR_KEY = "tanioSidebarCollapsed";
 
-function Sidebar() {
+function Sidebar({ dashboardMode = "basic" }) {
   const navigate = useNavigate();
+  const isBasicMode = dashboardMode === "basic";
 
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem(SIDEBAR_KEY) === "true";
@@ -95,6 +96,16 @@ function Sidebar() {
       icon: FaCog,
     },
   ];
+
+  const visibleMainNavigation = isBasicMode
+    ? mainNavigation.filter(({ to }) =>
+        ["/", "/projects"].includes(to)
+      )
+    : mainNavigation;
+
+  const visibleSupportNavigation = isBasicMode
+    ? []
+    : supportNavigation;
 
   const handleLogout = async () => {
     const token =
@@ -457,7 +468,7 @@ function Sidebar() {
                 : "space-y-1"
             }
           >
-            {mainNavigation.map(renderStandardNavItem)}
+            {visibleMainNavigation.map(renderStandardNavItem)}
           </nav>
         </div>
 
@@ -497,31 +508,33 @@ function Sidebar() {
           </nav>
         </div>
 
-        {/* Support */}
-        <div
-          className={`
-            mt-7
-            ${
-              collapsed
-                ? ""
-                : "w-full"
-            }
-          `}
-        >
-          {!collapsed && (
-            <div className="mb-2 flex items-center gap-2 px-3">
-              <span className="h-1 w-1 rounded-full bg-slate-500" />
+        {/* Support is available in Advanced Mode. */}
+        {visibleSupportNavigation.length > 0 && (
+          <div
+            className={`
+              mt-7
+              ${
+                collapsed
+                  ? ""
+                  : "w-full"
+              }
+            `}
+          >
+            {!collapsed && (
+              <div className="mb-2 flex items-center gap-2 px-3">
+                <span className="h-1 w-1 rounded-full bg-slate-500" />
 
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
-                Support
-              </p>
-            </div>
-          )}
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
+                  Support
+                </p>
+              </div>
+            )}
 
-          <nav className="space-y-1">
-            {supportNavigation.map(renderStandardNavItem)}
-          </nav>
-        </div>
+            <nav className="space-y-1">
+              {visibleSupportNavigation.map(renderStandardNavItem)}
+            </nav>
+          </div>
+        )}
 
         <div className="flex-1" />
       </div>

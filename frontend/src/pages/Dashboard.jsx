@@ -4,14 +4,11 @@ import { useNavigate } from "react-router-dom";
 import RecentContent from "../components/RecentContent";
 import { notifyProjectCreated } from "../utils/notifications";
 
-function Dashboard() {
+function Dashboard({
+  dashboardMode = "basic",
+  onDashboardModeChange,
+}) {
   const navigate = useNavigate();
-
-  const [dashboardMode, setDashboardMode] = useState(() =>
-    localStorage.getItem("tanioDashboardMode") === "advanced"
-      ? "advanced"
-      : "basic"
-  );
 
   const [dashboardStats, setDashboardStats] = useState({
     project_count: 0,
@@ -132,8 +129,7 @@ function Dashboard() {
   };
 
   const handleDashboardModeChange = (mode) => {
-    setDashboardMode(mode);
-    localStorage.setItem("tanioDashboardMode", mode);
+    onDashboardModeChange?.(mode);
   };
 
   const scrollToRecentActivity = () => {
