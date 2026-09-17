@@ -452,18 +452,18 @@ function Dashboard({
   return (
     <main className="flex-1 bg-slate-950/30 p-6 md:p-8 lg:p-10">
       {/* Dashboard mode selector */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
             Dashboard View
           </p>
           <p className="mt-1 text-sm text-slate-400">
-            Choose a simplified view or show every dashboard feature.
+            Choose the experience that best matches how you want to work.
           </p>
         </div>
 
         <div
-          className="inline-flex w-fit rounded-xl border border-slate-800 bg-slate-900/80 p-1"
+          className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-2xl"
           role="group"
           aria-label="Dashboard mode"
         >
@@ -471,25 +471,47 @@ function Dashboard({
             type="button"
             onClick={() => handleDashboardModeChange("basic")}
             aria-pressed={dashboardMode === "basic"}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            className={`rounded-xl border p-4 text-left transition ${
               dashboardMode === "basic"
-                ? "bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-950/30"
-                : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                ? "border-cyan-400 bg-cyan-500/10 shadow-lg shadow-cyan-950/20"
+                : "border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900"
             }`}
           >
-            Basic
+            <span
+              className={`block text-sm font-semibold ${
+                dashboardMode === "basic"
+                  ? "text-cyan-300"
+                  : "text-white"
+              }`}
+            >
+              Basic Mode
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">
+              A simplified workspace with essential tools and navigation for a focused experience.
+            </span>
           </button>
           <button
             type="button"
             onClick={() => handleDashboardModeChange("advanced")}
             aria-pressed={dashboardMode === "advanced"}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            className={`rounded-xl border p-4 text-left transition ${
               dashboardMode === "advanced"
-                ? "bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-950/30"
-                : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                ? "border-purple-400 bg-purple-500/10 shadow-lg shadow-purple-950/20"
+                : "border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900"
             }`}
           >
-            Advanced
+            <span
+              className={`block text-sm font-semibold ${
+                dashboardMode === "advanced"
+                  ? "text-purple-300"
+                  : "text-white"
+              }`}
+            >
+              Advanced Mode
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">
+              The complete dashboard with statistics, search, shortcuts, and recent activity.
+            </span>
           </button>
         </div>
       </div>
