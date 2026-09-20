@@ -451,7 +451,7 @@ function Dashboard({
 
   return (
     <main className="flex-1 bg-slate-950/30 p-6 md:p-8 lg:p-10">
-      {/* Dashboard mode selector */}
+      {}
       <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -518,7 +518,7 @@ function Dashboard({
 
       {dashboardMode === "basic" ? (
         <>
-          {/* Basic Mode Hero */}
+          {}
           <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-6 shadow-2xl shadow-black/10 md:p-8">
             <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
 
@@ -546,7 +546,7 @@ function Dashboard({
             </div>
           </section>
 
-          {/* Essential AI tools */}
+          {}
           <section className="mt-8">
             <div className="mb-4">
               <h2 className="text-xl font-bold text-white">Choose an AI Tool</h2>
@@ -621,7 +621,7 @@ function Dashboard({
             </div>
           </section>
 
-          {/* Essential navigation */}
+          {}
           <section className="mt-8">
             <h2 className="mb-4 text-xl font-bold text-white">Your Work</h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -651,7 +651,7 @@ function Dashboard({
         </>
       ) : (
         <>
-      {/* Hero / Command Area */}
+      {}
       <section className="relative rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-6 shadow-2xl shadow-black/10 md:p-7 lg:p-8">
         <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl" />
@@ -757,7 +757,7 @@ function Dashboard({
         </div>
       </section>
 
-      {/* Stats */}
+      {}
       <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <button
           type="button"
@@ -995,7 +995,7 @@ function Dashboard({
         </div>
       </section>
 
-      {/* Quick Actions */}
+      {}
       <section className="mt-10">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -1071,7 +1071,7 @@ function Dashboard({
         </div>
       </section>
 
-      {/* Recent Activity */}
+      {}
       <div id="recent-activity" className="scroll-mt-24">
         <RecentContent
           refreshKey={activityRefreshKey}
@@ -1082,7 +1082,7 @@ function Dashboard({
         </>
       )}
 
-      {/* New Project Modal */}
+      {}
       {newProjectOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"

@@ -371,12 +371,12 @@ function Sidebar({ dashboardMode = "basic" }) {
         }
       `}
     >
-      {/* Background effects */}
+      {}
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-cyan-500/[0.06] blur-3xl" />
 
       <div className="pointer-events-none absolute -bottom-32 -right-24 h-72 w-72 rounded-full bg-purple-500/[0.04] blur-3xl" />
 
-      {/* Logo */}
+      {}
       <div
         className={`
           relative z-10 flex h-[72px] shrink-0 items-center
@@ -405,7 +405,7 @@ function Sidebar({ dashboardMode = "basic" }) {
           draggable={false}
         />
 
-        {/* Collapse button */}
+        {}
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
@@ -437,7 +437,7 @@ function Sidebar({ dashboardMode = "basic" }) {
         </button>
       </div>
 
-      {/* Navigation */}
+      {}
       <div
         className={`
           relative z-10 flex flex-1 flex-col overflow-y-auto
@@ -449,7 +449,7 @@ function Sidebar({ dashboardMode = "basic" }) {
           }
         `}
       >
-        {/* Workspace */}
+        {}
         <div className={collapsed ? "" : "w-full"}>
           {!collapsed && (
             <div className="mb-2 flex items-center gap-2 px-3">
@@ -472,7 +472,7 @@ function Sidebar({ dashboardMode = "basic" }) {
           </nav>
         </div>
 
-        {/* Divider */}
+        {}
         <div
           className={`
             my-6 h-px bg-gradient-to-r
@@ -485,7 +485,7 @@ function Sidebar({ dashboardMode = "basic" }) {
           `}
         />
 
-        {/* AI Tools */}
+        {}
         <div className={collapsed ? "" : "w-full"}>
           {!collapsed && (
             <div className="mb-2 flex items-center justify-between px-3">
@@ -508,7 +508,7 @@ function Sidebar({ dashboardMode = "basic" }) {
           </nav>
         </div>
 
-        {/* Support is available in Advanced Mode. */}
+        {}
         {visibleSupportNavigation.length > 0 && (
           <div
             className={`
