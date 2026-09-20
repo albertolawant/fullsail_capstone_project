@@ -539,7 +539,7 @@ function Sidebar({ dashboardMode = "basic" }) {
         <div className="flex-1" />
       </div>
 
-      {/* Footer */}
+      {}
       <div
         className={`
           relative z-10 border-t border-slate-800/80
