@@ -923,7 +923,7 @@ function ProblemSolver() {
     setSaveSuccess("");
 
     try {
-      // Step 1: create a brand-new project in the selected workspace.
+      
       const projectResponse = await fetch(`${API_BASE_URL}/projects/`, {
         method: "POST",
         headers: {
@@ -961,7 +961,7 @@ function ProblemSolver() {
         );
       }
 
-      // Step 2: save the selected version as the main Content Library item.
+      
       const contentResponse = await fetch(`${API_BASE_URL}/content/`, {
         method: "POST",
         headers: {
@@ -1000,8 +1000,7 @@ function ProblemSolver() {
         );
       }
 
-      // Step 3: persist Version 1 and every regenerated version.
-      for (const version of solutionVersions) {
+            for (const version of solutionVersions) {
         const versionResponse = await fetch(
           `${API_BASE_URL}/content/${savedContent.id}/versions`,
           {

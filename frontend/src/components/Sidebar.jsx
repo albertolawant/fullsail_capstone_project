@@ -21,8 +21,9 @@ import {
 
 const SIDEBAR_KEY = "tanioSidebarCollapsed";
 
-function Sidebar() {
+function Sidebar({ dashboardMode = "basic" }) {
   const navigate = useNavigate();
+  const isBasicMode = dashboardMode === "basic";
 
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem(SIDEBAR_KEY) === "true";
@@ -95,6 +96,16 @@ function Sidebar() {
       icon: FaCog,
     },
   ];
+
+  const visibleMainNavigation = isBasicMode
+    ? mainNavigation.filter(({ to }) =>
+        ["/", "/projects"].includes(to)
+      )
+    : mainNavigation;
+
+  const visibleSupportNavigation = isBasicMode
+    ? []
+    : supportNavigation;
 
   const handleLogout = async () => {
     const token =
@@ -360,12 +371,12 @@ function Sidebar() {
         }
       `}
     >
-      {/* Background effects */}
+      {}
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-cyan-500/[0.06] blur-3xl" />
 
       <div className="pointer-events-none absolute -bottom-32 -right-24 h-72 w-72 rounded-full bg-purple-500/[0.04] blur-3xl" />
 
-      {/* Logo */}
+      {}
       <div
         className={`
           relative z-10 flex h-[72px] shrink-0 items-center
@@ -394,7 +405,7 @@ function Sidebar() {
           draggable={false}
         />
 
-        {/* Collapse button */}
+        {}
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
@@ -426,7 +437,7 @@ function Sidebar() {
         </button>
       </div>
 
-      {/* Navigation */}
+      {}
       <div
         className={`
           relative z-10 flex flex-1 flex-col overflow-y-auto
@@ -438,7 +449,7 @@ function Sidebar() {
           }
         `}
       >
-        {/* Workspace */}
+        {}
         <div className={collapsed ? "" : "w-full"}>
           {!collapsed && (
             <div className="mb-2 flex items-center gap-2 px-3">
@@ -457,11 +468,11 @@ function Sidebar() {
                 : "space-y-1"
             }
           >
-            {mainNavigation.map(renderStandardNavItem)}
+            {visibleMainNavigation.map(renderStandardNavItem)}
           </nav>
         </div>
 
-        {/* Divider */}
+        {}
         <div
           className={`
             my-6 h-px bg-gradient-to-r
@@ -474,7 +485,7 @@ function Sidebar() {
           `}
         />
 
-        {/* AI Tools */}
+        {}
         <div className={collapsed ? "" : "w-full"}>
           {!collapsed && (
             <div className="mb-2 flex items-center justify-between px-3">
@@ -497,36 +508,38 @@ function Sidebar() {
           </nav>
         </div>
 
-        {/* Support */}
-        <div
-          className={`
-            mt-7
-            ${
-              collapsed
-                ? ""
-                : "w-full"
-            }
-          `}
-        >
-          {!collapsed && (
-            <div className="mb-2 flex items-center gap-2 px-3">
-              <span className="h-1 w-1 rounded-full bg-slate-500" />
+        {}
+        {visibleSupportNavigation.length > 0 && (
+          <div
+            className={`
+              mt-7
+              ${
+                collapsed
+                  ? ""
+                  : "w-full"
+              }
+            `}
+          >
+            {!collapsed && (
+              <div className="mb-2 flex items-center gap-2 px-3">
+                <span className="h-1 w-1 rounded-full bg-slate-500" />
 
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
-                Support
-              </p>
-            </div>
-          )}
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
+                  Support
+                </p>
+              </div>
+            )}
 
-          <nav className="space-y-1">
-            {supportNavigation.map(renderStandardNavItem)}
-          </nav>
-        </div>
+            <nav className="space-y-1">
+              {visibleSupportNavigation.map(renderStandardNavItem)}
+            </nav>
+          </div>
+        )}
 
         <div className="flex-1" />
       </div>
 
-      {/* Footer */}
+      {}
       <div
         className={`
           relative z-10 border-t border-slate-800/80

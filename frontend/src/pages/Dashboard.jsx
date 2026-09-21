@@ -4,7 +4,10 @@ import { useNavigate } from "react-router-dom";
 import RecentContent from "../components/RecentContent";
 import { notifyProjectCreated } from "../utils/notifications";
 
-function Dashboard() {
+function Dashboard({
+  dashboardMode = "basic",
+  onDashboardModeChange,
+}) {
   const navigate = useNavigate();
 
   const [dashboardStats, setDashboardStats] = useState({
@@ -123,6 +126,10 @@ function Dashboard() {
       setSearchQuery("");
       setSearchFocused(false);
     }
+  };
+
+  const handleDashboardModeChange = (mode) => {
+    onDashboardModeChange?.(mode);
   };
 
   const scrollToRecentActivity = () => {
@@ -444,7 +451,207 @@ function Dashboard() {
 
   return (
     <main className="flex-1 bg-slate-950/30 p-6 md:p-8 lg:p-10">
-      {/* Hero / Command Area */}
+      {}
+      <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Dashboard View
+          </p>
+          <p className="mt-1 text-sm text-slate-400">
+            Choose the experience that best matches how you want to work.
+          </p>
+        </div>
+
+        <div
+          className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-2xl"
+          role="group"
+          aria-label="Dashboard mode"
+        >
+          <button
+            type="button"
+            onClick={() => handleDashboardModeChange("basic")}
+            aria-pressed={dashboardMode === "basic"}
+            className={`rounded-xl border p-4 text-left transition ${
+              dashboardMode === "basic"
+                ? "border-cyan-400 bg-cyan-500/10 shadow-lg shadow-cyan-950/20"
+                : "border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900"
+            }`}
+          >
+            <span
+              className={`block text-sm font-semibold ${
+                dashboardMode === "basic"
+                  ? "text-cyan-300"
+                  : "text-white"
+              }`}
+            >
+              Basic Mode
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">
+              A simplified workspace with essential tools and navigation for a focused experience.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDashboardModeChange("advanced")}
+            aria-pressed={dashboardMode === "advanced"}
+            className={`rounded-xl border p-4 text-left transition ${
+              dashboardMode === "advanced"
+                ? "border-purple-400 bg-purple-500/10 shadow-lg shadow-purple-950/20"
+                : "border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900"
+            }`}
+          >
+            <span
+              className={`block text-sm font-semibold ${
+                dashboardMode === "advanced"
+                  ? "text-purple-300"
+                  : "text-white"
+              }`}
+            >
+              Advanced Mode
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-slate-400">
+              The complete dashboard with statistics, search, shortcuts, and recent activity.
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {dashboardMode === "basic" ? (
+        <>
+          {}
+          <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-6 shadow-2xl shadow-black/10 md:p-8">
+            <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
+
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-2xl">
+                <span className="rounded-full border border-cyan-800/80 bg-cyan-950/50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
+                  Tanio AI
+                </span>
+                <h1 className="mt-5 text-3xl font-bold tracking-tight text-white md:text-4xl">
+                  What would you like to create?
+                </h1>
+                <p className="mt-3 text-sm leading-6 text-slate-400 md:text-base">
+                  Start a new project or choose one of Tanio&apos;s AI tools below.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleOpenNewProject}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:bg-cyan-400"
+              >
+                <span className="text-lg leading-none">+</span>
+                New Project
+              </button>
+            </div>
+          </section>
+
+          {}
+          <section className="mt-8">
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-white">Choose an AI Tool</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Pick the tool that best matches what you want to accomplish.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {modules.map((module) => {
+                const basicAccentClasses = {
+                  cyan: {
+                    card: "hover:border-cyan-700",
+                    icon: "border-cyan-800 bg-cyan-950/70",
+                    arrow: "group-hover:text-cyan-400",
+                  },
+                  purple: {
+                    card: "hover:border-purple-700",
+                    icon: "border-purple-800 bg-purple-950/70",
+                    arrow: "group-hover:text-purple-400",
+                  },
+                  emerald: {
+                    card: "hover:border-emerald-700",
+                    icon: "border-emerald-800 bg-emerald-950/70",
+                    arrow: "group-hover:text-emerald-400",
+                  },
+                };
+
+                const accent =
+                  basicAccentClasses[module.accent] || basicAccentClasses.cyan;
+
+                return (
+                  <button
+                    key={module.name}
+                    type="button"
+                    onClick={() => navigate(module.route)}
+                    className={`group rounded-2xl border border-slate-800 bg-slate-900/80 p-5 text-left transition hover:-translate-y-0.5 hover:bg-slate-900 ${accent.card}`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <span
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-2xl ${accent.icon}`}
+                      >
+                        {module.icon}
+                      </span>
+
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="text-lg font-bold text-white">
+                            {module.name}
+                          </span>
+                          {module.beta && (
+                            <span className="rounded-full border border-emerald-800 bg-emerald-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                              Beta
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-1 block text-sm leading-5 text-slate-400">
+                          {module.subtitle}
+                        </span>
+                      </span>
+
+                      <span
+                        className={`text-lg text-slate-600 transition group-hover:translate-x-1 ${accent.arrow}`}
+                        aria-hidden="true"
+                      >
+                        →
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {}
+          <section className="mt-8">
+            <h2 className="mb-4 text-xl font-bold text-white">Your Work</h2>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              {quickActions.map((action) => (
+                <button
+                  key={action.title}
+                  type="button"
+                  onClick={action.action}
+                  className="group flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-800 hover:bg-slate-900"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-lg">
+                    {action.icon}
+                  </span>
+                  <span className="min-w-0 flex-1 font-semibold text-white">
+                    {action.title}
+                  </span>
+                  <span
+                    className="text-slate-600 transition group-hover:translate-x-1 group-hover:text-cyan-400"
+                    aria-hidden="true"
+                  >
+                    →
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+      {}
       <section className="relative rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-6 shadow-2xl shadow-black/10 md:p-7 lg:p-8">
         <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl" />
@@ -550,7 +757,7 @@ function Dashboard() {
         </div>
       </section>
 
-      {/* Stats */}
+      {}
       <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <button
           type="button"
@@ -788,7 +995,7 @@ function Dashboard() {
         </div>
       </section>
 
-      {/* Quick Actions */}
+      {}
       <section className="mt-10">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -864,7 +1071,7 @@ function Dashboard() {
         </div>
       </section>
 
-      {/* Recent Activity */}
+      {}
       <div id="recent-activity" className="scroll-mt-24">
         <RecentContent
           refreshKey={activityRefreshKey}
@@ -872,8 +1079,10 @@ function Dashboard() {
           refreshing={refreshing}
         />
       </div>
+        </>
+      )}
 
-      {/* New Project Modal */}
+      {}
       {newProjectOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"

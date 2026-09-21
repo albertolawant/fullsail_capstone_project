@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+
 import SignIn from "./pages/SignIn";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
@@ -15,6 +16,7 @@ import ProblemSolver from "./pages/ProblemSolver";
 import HelpGuide from "./pages/HelpGuide";
 
 const SETTINGS_KEY = "tanioSettings";
+const DASHBOARD_MODE_KEY = "tanioDashboardMode";
 
 function getStoredAppearance() {
   try {
@@ -42,15 +44,20 @@ function getStoredAppearance() {
   }
 }
 
+function getStoredDashboardMode() {
+  return localStorage.getItem(DASHBOARD_MODE_KEY) === "advanced"
+    ? "advanced"
+    : "basic";
+}
+
 function App() {
   const location = useLocation();
-
-  const [appearance, setAppearance] = useState(
-    getStoredAppearance
+  const [appearance, setAppearance] = useState(getStoredAppearance);
+  const [dashboardMode, setDashboardMode] = useState(
+    getStoredDashboardMode
   );
 
   const isSignInPage = location.pathname === "/signin";
-
   const isSignedIn =
     localStorage.getItem("tanioSession") === "true";
 
@@ -63,7 +70,6 @@ function App() {
       "tanio-settings-updated",
       updateAppearance
     );
-
     window.addEventListener("storage", updateAppearance);
 
     return () => {
@@ -71,11 +77,7 @@ function App() {
         "tanio-settings-updated",
         updateAppearance
       );
-
-      window.removeEventListener(
-        "storage",
-        updateAppearance
-      );
+      window.removeEventListener("storage", updateAppearance);
     };
   }, []);
 
@@ -90,6 +92,11 @@ function App() {
       root.classList.remove("tanio-compact");
     }
   }, [appearance]);
+
+  const handleDashboardModeChange = (mode) => {
+    setDashboardMode(mode);
+    localStorage.setItem(DASHBOARD_MODE_KEY, mode);
+  };
 
   if (!isSignedIn && !isSignInPage) {
     return <Navigate to="/signin" replace />;
@@ -109,64 +116,47 @@ function App() {
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-white">
-      <Sidebar />
+      <Sidebar dashboardMode={dashboardMode} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
 
         <div className="flex flex-1 overflow-auto">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-
             <Route
-              path="/workspaces"
-              element={<Workspaces />}
+              path="/"
+              element={
+                <Dashboard
+                  dashboardMode={dashboardMode}
+                  onDashboardModeChange={handleDashboardModeChange}
+                />
+              }
             />
-
+            <Route path="/workspaces" element={<Workspaces />} />
             <Route
               path="/workspaces/:workspaceId"
               element={<Workspaces />}
             />
-
-            <Route
-              path="/projects"
-              element={<Projects />}
-            />
-
+            <Route path="/projects" element={<Projects />} />
             <Route
               path="/projects/:projectId"
               element={<ProjectDetail />}
             />
-
-            <Route
-              path="/content"
-              element={<Content />}
-            />
-
+            <Route path="/content" element={<Content />} />
             <Route
               path="/product-architect"
               element={<ProductArchitect />}
             />
-
             <Route
               path="/tabletop-creator"
               element={<TabletopCreator />}
             />
-
             <Route
               path="/problem-solver"
               element={<ProblemSolver />}
             />
-
-            <Route
-              path="/help"
-              element={<HelpGuide />}
-            />
-
-            <Route
-              path="/settings"
-              element={<Settings />}
-            />
+            <Route path="/help" element={<HelpGuide />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </div>
       </div>
