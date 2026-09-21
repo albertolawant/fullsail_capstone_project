@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from openai import (
@@ -673,13 +674,68 @@ def generate_product_logo(
     cleaned_project_name = request.project_name.strip()
     cleaned_description = request.description.strip()
 
-    project = get_or_create_user_project(
-        db=db,
-        current_user=current_user,
-        project_name=cleaned_project_name,
-        description=cleaned_description,
-        project_id=request.project_id,
-    )
+    project = None
+
+    if request.save_generated_logo:
+        project = get_or_create_user_project(
+            db=db,
+            current_user=current_user,
+            project_name=cleaned_project_name,
+            description=cleaned_description,
+            project_id=request.project_id,
+        )
+
+    logo_context_text = ""
+
+    if request.context_content_id is not None:
+        selected_content = (
+            db.query(GeneratedContent)
+            .filter(
+                GeneratedContent.id == request.context_content_id,
+            )
+            .first()
+        )
+
+        if not selected_content:
+            raise HTTPException(
+                status_code=404,
+                detail="The selected logo context could not be found.",
+            )
+
+        context_project = (
+            db.query(Project)
+            .filter(
+                Project.id == selected_content.project_id,
+                Project.owner_id == current_user.id,
+            )
+            .first()
+        )
+
+        if not context_project:
+            raise HTTPException(
+                status_code=403,
+                detail="You are not authorized to use that content for logo generation.",
+            )
+
+        cleaned_context_body = (selected_content.body or "").strip()
+
+        if cleaned_context_body:
+            logo_context_text = f"""
+    Additional Product Context:
+
+    Content Title: {selected_content.title}
+    Content Type: {selected_content.content_type}
+
+    --- BEGIN SAVED PRODUCT CONTENT ---
+    {cleaned_context_body}
+    --- END SAVED PRODUCT CONTENT ---
+
+    Use this saved product content to better understand the product's purpose,
+    audience, features, personality, and branding needs.
+
+    Do not attempt to reproduce the document visually.
+    Use it only as creative context for the logo.
+    """
 
     customization_instructions = []
 
@@ -734,6 +790,8 @@ Requirements:
 - Include the product name only if it improves the logo
 - Square composition
 
+{logo_context_text}
+
 {customization_text}
 """
 
@@ -763,6 +821,27 @@ Requirements:
                 status_code=502,
                 detail="The AI did not return a valid logo. Please try again.",
             )
+
+        if not request.save_generated_logo:
+            log_ai_usage(
+                db=db,
+                user_id=current_user.id,
+                project_id=None,
+                feature_type="Logo Generator",
+                content_type="Product Logo",
+                status="success",
+            )
+
+            return ProductLogoResponse(
+                id=None,
+                project_id=None,
+                image_base64=image_base64,
+                style=request.style,
+                preferred_colors=request.preferred_colors.strip(),
+                logo_ideas=request.logo_ideas.strip(),
+                branding_direction=request.branding_direction.strip(),
+                created_at=datetime.now(timezone.utc),
+            )        
 
         saved_logo = ProductLogo(
             project_id=project.id,

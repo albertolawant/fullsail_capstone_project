@@ -46,6 +46,22 @@ function getAiGenerationSettings() {
   }
 }
 
+function getAutoSaveEnabled() {
+  try {
+    const storedSettings = localStorage.getItem(SETTINGS_KEY);
+
+    if (!storedSettings) {
+      return false;
+    }
+
+    const parsedSettings = JSON.parse(storedSettings);
+
+    return Boolean(parsedSettings?.autoSave?.enabled);
+  } catch {
+    return false;
+  }
+}
+
 function buildAiPreferenceInstructions(aiSettings) {
   const creativityInstructions = {
     focused:
@@ -156,9 +172,28 @@ function ProductArchitect() {
   const [logoGalleryError, setLogoGalleryError] = useState("");
   const [moveLogoOpen, setMoveLogoOpen] = useState(false);
   const [moveLogoTarget, setMoveLogoTarget] = useState(null);
+  const [moveLogoWorkspaceId, setMoveLogoWorkspaceId] = useState("");
   const [moveLogoProjectId, setMoveLogoProjectId] = useState("");
+  const [moveLogoOptionsLoading, setMoveLogoOptionsLoading] = useState(false);
   const [moveLogoLoading, setMoveLogoLoading] = useState(false);
   const [moveLogoError, setMoveLogoError] = useState("");
+  const [availableProjectContent, setAvailableProjectContent] = useState([]);
+  const [selectedLogoContentId, setSelectedLogoContentId] = useState("");
+
+  const [showMoveLogoCreateWorkspace, setShowMoveLogoCreateWorkspace] =
+    useState(false);
+  const [moveLogoNewWorkspaceName, setMoveLogoNewWorkspaceName] = useState("");
+  const [moveLogoNewWorkspaceDescription, setMoveLogoNewWorkspaceDescription] =
+    useState("");
+  const [creatingMoveLogoWorkspace, setCreatingMoveLogoWorkspace] =
+    useState(false);
+
+  const [showMoveLogoCreateProject, setShowMoveLogoCreateProject] =
+    useState(false);
+  const [moveLogoNewProjectTitle, setMoveLogoNewProjectTitle] = useState("");
+  const [moveLogoNewProjectDescription, setMoveLogoNewProjectDescription] =
+    useState("");
+  const [creatingMoveLogoProject, setCreatingMoveLogoProject] = useState(false);
 
   const [saveWorkspaceOpen, setSaveWorkspaceOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState([]);
@@ -169,6 +204,19 @@ function ProductArchitect() {
   const [savingToWorkspace, setSavingToWorkspace] = useState(false);
   const [saveWorkspaceError, setSaveWorkspaceError] = useState("");
   const [saveWorkspaceSuccess, setSaveWorkspaceSuccess] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState("");
+  const [autoSaveError, setAutoSaveError] = useState("");
+
+  const [showSaveCreateWorkspace, setShowSaveCreateWorkspace] = useState(false);
+  const [saveNewWorkspaceName, setSaveNewWorkspaceName] = useState("");
+  const [saveNewWorkspaceDescription, setSaveNewWorkspaceDescription] =
+    useState("");
+  const [creatingSaveWorkspace, setCreatingSaveWorkspace] = useState(false);
+
+  const [showSaveCreateProject, setShowSaveCreateProject] = useState(false);
+  const [saveNewProjectTitle, setSaveNewProjectTitle] = useState("");
+  const [saveNewProjectDescription, setSaveNewProjectDescription] = useState("");
+  const [creatingSaveProject, setCreatingSaveProject] = useState(false);
 
   const [projectContentLoading, setProjectContentLoading] = useState(false);
   const [projectContentError, setProjectContentError] = useState("");
@@ -332,7 +380,211 @@ function ProductArchitect() {
 
     setRegenerateInstructions("");
   };
+  
+  const findOrCreateAutoSaveWorkspace = async (token) => {
+    const workspaceResponse = await fetch("http://127.0.0.1:8000/workspaces/", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
+    if (!workspaceResponse.ok) {
+      throw new Error("Auto-Save could not load your workspaces.");
+    }
+
+    const workspaceData = await workspaceResponse.json();
+    const loadedWorkspaces = Array.isArray(workspaceData) ? workspaceData : [];
+
+    const existingWorkspace = loadedWorkspaces.find(
+      (workspace) =>
+        String(workspace.name || workspace.title || "").trim().toLowerCase() ===
+        "auto-saved content"
+    );
+
+    if (existingWorkspace) {
+      return existingWorkspace;
+    }
+
+    const createWorkspaceResponse = await fetch(
+      "http://127.0.0.1:8000/workspaces/",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: "Auto-Saved Content",
+          description:
+            "Automatically generated workspace for saved AI module outputs.",
+        }),
+      }
+    );
+
+    if (!createWorkspaceResponse.ok) {
+      const errorData = await createWorkspaceResponse.json().catch(() => null);
+
+      throw new Error(
+        typeof errorData?.detail === "string"
+          ? errorData.detail
+          : "Auto-Save could not create the Auto-Saved Content workspace."
+      );
+    }
+
+    const createdWorkspace = await createWorkspaceResponse.json();
+
+    setWorkspaces((currentWorkspaces) => [
+      createdWorkspace,
+      ...currentWorkspaces,
+    ]);
+
+    return createdWorkspace;
+  };
+
+  const findOrCreateAutoSaveProject = async ({
+    token,
+    workspaceId,
+    projectTitle,
+    projectDescription,
+  }) => {
+    const projectResponse = await fetch("http://127.0.0.1:8000/projects/", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!projectResponse.ok) {
+      throw new Error("Auto-Save could not load your projects.");
+    }
+
+    const projectData = await projectResponse.json();
+    const loadedProjects = Array.isArray(projectData) ? projectData : [];
+
+    const existingProject = loadedProjects.find(
+      (project) =>
+        String(project.workspace_id) === String(workspaceId) &&
+        String(project.title || "").trim().toLowerCase() ===
+          projectTitle.trim().toLowerCase()
+    );
+
+    if (existingProject) {
+      return existingProject;
+    }
+
+    const createProjectResponse = await fetch("http://127.0.0.1:8000/projects/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        title: projectTitle,
+        description: projectDescription,
+        workspace_id: Number(workspaceId),
+      }),
+    });
+
+    if (!createProjectResponse.ok) {
+      const errorData = await createProjectResponse.json().catch(() => null);
+
+      let message = "Auto-Save could not create the module auto-save project.";
+
+      if (typeof errorData?.detail === "string") {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData?.detail)) {
+        message = errorData.detail
+          .map((item) => item.msg)
+          .filter(Boolean)
+          .join(" ");
+      }
+
+      throw new Error(message);
+    }
+
+    const createdProject = await createProjectResponse.json();
+
+    setProjects((currentProjects) => [
+      createdProject,
+      ...currentProjects,
+    ]);
+
+    return createdProject;
+  };
+
+  const autoSaveGeneratedProductContent = async ({
+    token,
+    generatedBody,
+    documentType,
+    cleanedProjectName,
+  }) => {
+    if (!getAutoSaveEnabled()) {
+      return;
+    }
+
+    const documentLabel =
+      documentTypeLabels[documentType] || "Generated Content";
+
+    setAutoSaveStatus("Auto-saving generated content...");
+    setAutoSaveError("");
+
+    try {
+      const autoSaveWorkspace = await findOrCreateAutoSaveWorkspace(token);
+
+      const autoSaveProject = await findOrCreateAutoSaveProject({
+        token,
+        workspaceId: autoSaveWorkspace.id,
+        projectTitle: "Product Architect Auto-Saves",
+        projectDescription:
+          "Automatically saved Product Architect generations.",
+      });
+
+      const response = await fetch("http://127.0.0.1:8000/content/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: `${cleanedProjectName} - ${documentLabel}`,
+          content_type: documentType,
+          body: generatedBody,
+          project_id: Number(autoSaveProject.id),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Auto-Save could not save the generated content."
+        );
+      }
+
+      setAutoSaveStatus(
+        `${documentLabel} auto-saved to Auto-Saved Content → Product Architect Auto-Saves.`
+      );
+
+      notifyContentSaved(documentLabel);
+
+      addRecentActivity({
+        type: "Content Auto-Saved",
+        title: `${cleanedProjectName} content auto-saved`,
+        description: `Auto-saved the ${documentLabel} to Product Architect Auto-Saves.`,
+        projectName: cleanedProjectName,
+      });
+    } catch (err) {
+      console.error("Product Architect auto-save error:", err);
+
+      setAutoSaveStatus("");
+      setAutoSaveError(
+        err instanceof Error
+          ? err.message
+          : "Auto-Save could not save the generated content."
+      );
+    }
+  };  
 
   const handleGenerate = async (
     isRegeneration = false,
@@ -347,6 +599,9 @@ function ProductArchitect() {
 
     setError("");
     setSuccessMessage("");
+    setAutoSaveStatus("");
+    setAutoSaveError("");
+
     if (!isRegeneration) {
       setGeneratedContent("");
       setGenerationHistory([]);
@@ -496,6 +751,13 @@ ${aiPreferenceInstructions}`;
         } successfully.`
       );
 
+      await autoSaveGeneratedProductContent({
+        token,
+        generatedBody: data.body,
+        documentType: contentType,
+        cleanedProjectName,
+      });
+
       notifyGenerationComplete(
         "Product Architect",
         cleanedProjectName
@@ -548,6 +810,59 @@ ${aiPreferenceInstructions}`;
     }
   };
 
+  const loadAvailableLogoContextContent = async (existingToken = null) => {
+    try {
+      const token = existingToken || localStorage.getItem("token");
+
+      if (!token) {
+        return [];
+      }
+
+      const response = await fetch("http://127.0.0.1:8000/content/", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      const savedContent = Array.isArray(data) ? data : [];
+
+      const productArchitectContent = savedContent
+        .map((item) => ({
+          ...item,
+          productArchitectType: normalizeProductArchitectContentType(
+            item.content_type
+          ),
+        }))
+        .filter(
+          (item) => item.productArchitectType && item.body?.trim()
+        );
+
+      setAvailableProjectContent(productArchitectContent);
+
+      setSelectedLogoContentId((currentValue) => {
+        if (
+          currentValue &&
+          productArchitectContent.some(
+            (item) => String(item.id) === String(currentValue)
+          )
+        ) {
+          return currentValue;
+        }
+
+        return "";
+      });
+
+      return productArchitectContent;
+    } catch (err) {
+      console.error("Logo context content load error:", err);
+      return [];
+    }
+  };
 
   const loadProjectContent = async (projectId, existingToken = null) => {
     if (!projectId) {
@@ -599,7 +914,9 @@ ${aiPreferenceInstructions}`;
             item.content_type
           ),
         }))
-        .filter((item) => item.productArchitectType && item.body?.trim());
+        .filter(
+          (item) => item.productArchitectType && item.body?.trim()
+        );
 
       if (productArchitectContent.length === 0) {
         setGeneratedContent("");
@@ -765,6 +1082,7 @@ ${aiPreferenceInstructions}`;
     };
 
     loadProjectsForSelection();
+    loadAvailableLogoContextContent();
   }, []);
 
   useEffect(() => {
@@ -832,11 +1150,39 @@ ${aiPreferenceInstructions}`;
       return;
     }
 
-    const cleanedProjectName = projectName.trim();
-    const cleanedDescription = description.trim();
+  const selectedLogoContext = availableProjectContent.find(
+    (item) => String(item.id) === String(selectedLogoContentId)
+  );
+
+  const contextProject = projects.find(
+    (project) =>
+      selectedLogoContext?.project_id &&
+      String(project.id) === String(selectedLogoContext.project_id)
+  );
+
+  const contextProjectName =
+    contextProject?.title ||
+    selectedLogoContext?.title ||
+    "";
+
+  const contextProjectDescription =
+    contextProject?.description?.trim() ||
+    selectedLogoContext?.body?.trim() ||
+    "";
+
+  const cleanedProjectName = (
+    projectName.trim() || contextProjectName.trim()
+  ).slice(0, 100);
+
+  const cleanedDescription = (
+    description.trim() || contextProjectDescription
+  ).slice(0, 5000);
 
     setLogoError("");
     setLogoGalleryError("");
+    setAutoSaveStatus("");
+    setAutoSaveError("");
+    setSaveWorkspaceSuccess("");
 
     if (cleanedProjectName.length < 2) {
       setLogoError("Project name must contain at least 2 characters.");
@@ -882,6 +1228,37 @@ ${aiPreferenceInstructions}`;
         throw new Error("Your session has expired. Please sign in again.");
       }
 
+      const autoSaveEnabled = getAutoSaveEnabled();
+      let logoSaveProjectId = null;
+      let autoSaveLogoProject = null;
+
+      if (autoSaveEnabled) {
+        setAutoSaveStatus("Preparing Auto-Save logo destination...");
+
+        try {
+          const autoSaveWorkspace = await findOrCreateAutoSaveWorkspace(token);
+
+          autoSaveLogoProject = await findOrCreateAutoSaveProject({
+            token,
+            workspaceId: autoSaveWorkspace.id,
+            projectTitle: "Product Architect Auto-Saves",
+            projectDescription:
+              "Automatically saved Product Architect generations.",
+          });
+
+          logoSaveProjectId = autoSaveLogoProject.id;
+        } catch (autoSaveErr) {
+          console.error("Product Architect logo auto-save setup error:", autoSaveErr);
+
+          setAutoSaveStatus("");
+          setAutoSaveError(
+            autoSaveErr instanceof Error
+              ? autoSaveErr.message
+              : "Auto-Save could not prepare the logo destination. The logo will still generate normally."
+          );
+        }
+      }      
+
       const response = await fetch(
         "http://127.0.0.1:8000/product-architect/logo",
         {
@@ -891,7 +1268,11 @@ ${aiPreferenceInstructions}`;
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            project_id: selectedProjectId,
+            project_id: logoSaveProjectId,
+            context_content_id: selectedLogoContentId
+              ? Number(selectedLogoContentId)
+              : null,
+            save_generated_logo: autoSaveEnabled,
             project_name: cleanedProjectName,
             description: cleanedDescription,
             style: logoStyle,
@@ -940,17 +1321,28 @@ ${aiPreferenceInstructions}`;
 
       setLogoBase64(data.image_base64);
 
-      if (data?.project_id) {
-        setSelectedProjectId(data.project_id);
-        setLogoProjectId(data.project_id);
+      if (!autoSaveEnabled) {
+        setLogoGallery([]);
+        setSelectedLogoIndex(-1);
+        setLogoProjectId(null);
+      }
+
+      const savedLogoProjectId = data?.project_id || logoSaveProjectId;
+
+      if (savedLogoProjectId) {
+        if (!autoSaveEnabled) {
+          setSelectedProjectId(savedLogoProjectId);
+        }
+
+        setLogoProjectId(savedLogoProjectId);
         localStorage.removeItem("tanioLogoProjectId");
-        
-        const refreshedLogos = await loadLogoGallery(data.project_id, token);
+
+        const refreshedLogos = await loadLogoGallery(savedLogoProjectId, token);
 
         if (refreshedLogos.length === 0) {
           const generatedLogo = {
             id: data.id,
-            project_id: data.project_id,
+            project_id: savedLogoProjectId,
             image_base64: data.image_base64,
             style: data.style || logoStyle,
             preferred_colors: data.preferred_colors || preferredColors.trim(),
@@ -963,6 +1355,22 @@ ${aiPreferenceInstructions}`;
           setLogoGallery([generatedLogo]);
           setSelectedLogoIndex(0);
         }
+      }
+
+      if (autoSaveEnabled && autoSaveLogoProject) {
+        setAutoSaveStatus(
+          "Logo auto-saved to Auto-Saved Content → Product Architect Auto-Saves."
+        );
+
+        notifyContentSaved(`${cleanedProjectName} Logo`);
+
+        addRecentActivity({
+          type: "Logo Auto-Saved",
+          title: `${cleanedProjectName} logo auto-saved`,
+          description:
+            "Auto-saved the generated logo to Product Architect Auto-Saves.",
+          projectName: cleanedProjectName,
+        });
       }
 
       notifyLogoGenerated(cleanedProjectName);
@@ -1032,32 +1440,121 @@ ${aiPreferenceInstructions}`;
     }
   };
 
-  const handleOpenMoveLogo = (logo) => {
+  const handleOpenMoveLogo = async (logo) => {
     if (!logo?.id) {
       setLogoGalleryError("This logo cannot be moved because it does not have a saved ID.");
       return;
     }
 
     setMoveLogoTarget(logo);
+    setMoveLogoWorkspaceId("");
     setMoveLogoProjectId(String(logo.project_id || selectedProjectId || ""));
     setMoveLogoError("");
+    setShowMoveLogoCreateWorkspace(false);
+    setMoveLogoNewWorkspaceName("");
+    setMoveLogoNewWorkspaceDescription("");
+    setShowMoveLogoCreateProject(false);
+    setMoveLogoNewProjectTitle(projectName.trim());
+    setMoveLogoNewProjectDescription(description.trim());
     setMoveLogoOpen(true);
+    setMoveLogoOptionsLoading(true);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      const [workspaceResponse, projectResponse] = await Promise.all([
+        fetch("http://127.0.0.1:8000/workspaces/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch("http://127.0.0.1:8000/projects/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
+
+      if (!workspaceResponse.ok) {
+        throw new Error("Could not load your workspaces.");
+      }
+
+      if (!projectResponse.ok) {
+        throw new Error("Could not load your projects.");
+      }
+
+      const workspaceData = await workspaceResponse.json();
+      const projectData = await projectResponse.json();
+
+      const loadedWorkspaces = Array.isArray(workspaceData)
+        ? workspaceData
+        : [];
+      const loadedProjects = Array.isArray(projectData) ? projectData : [];
+
+      setWorkspaces(loadedWorkspaces);
+      setProjects(loadedProjects);
+
+      const currentLogoProject = loadedProjects.find(
+        (project) => String(project.id) === String(logo.project_id || selectedProjectId)
+      );
+
+      const preferredWorkspaceId =
+        currentLogoProject?.workspace_id ||
+        loadedWorkspaces[0]?.id ||
+        "";
+
+      setMoveLogoWorkspaceId(preferredWorkspaceId ? String(preferredWorkspaceId) : "");
+
+      const preferredProject =
+        currentLogoProject ||
+        loadedProjects.find(
+          (project) => String(project.workspace_id) === String(preferredWorkspaceId)
+        );
+
+      setMoveLogoProjectId(preferredProject ? String(preferredProject.id) : "");
+    } catch (err) {
+      console.error("Logo move options load error:", err);
+
+      setMoveLogoError(
+        err instanceof Error
+          ? err.message
+          : "Could not load your workspaces and projects."
+      );
+    } finally {
+      setMoveLogoOptionsLoading(false);
+    }
   };
 
   const handleCloseMoveLogo = () => {
-    if (moveLogoLoading) {
+    if (
+      moveLogoLoading ||
+      moveLogoOptionsLoading ||
+      creatingMoveLogoWorkspace ||
+      creatingMoveLogoProject
+    ) {
       return;
     }
 
     setMoveLogoOpen(false);
     setMoveLogoTarget(null);
+    setMoveLogoWorkspaceId("");
     setMoveLogoProjectId("");
     setMoveLogoError("");
+    setShowMoveLogoCreateWorkspace(false);
+    setMoveLogoNewWorkspaceName("");
+    setMoveLogoNewWorkspaceDescription("");
+    setShowMoveLogoCreateProject(false);
+    setMoveLogoNewProjectTitle("");
+    setMoveLogoNewProjectDescription("");
   };
 
   const handleMoveLogo = async () => {
-    if (!moveLogoTarget || !moveLogoProjectId) {
-      setMoveLogoError("Please choose a project.");
+    if (!moveLogoTarget || !moveLogoWorkspaceId || !moveLogoProjectId) {
+      setMoveLogoError("Please choose a workspace and project.");
       return;
     }
 
@@ -1136,8 +1633,15 @@ ${aiPreferenceInstructions}`;
 
       setMoveLogoOpen(false);
       setMoveLogoTarget(null);
+      setMoveLogoWorkspaceId("");
       setMoveLogoProjectId("");
       setMoveLogoError("");
+      setShowMoveLogoCreateWorkspace(false);
+      setMoveLogoNewWorkspaceName("");
+      setMoveLogoNewWorkspaceDescription("");
+      setShowMoveLogoCreateProject(false);
+      setMoveLogoNewProjectTitle("");
+      setMoveLogoNewProjectDescription("");
     } catch (err) {
       console.error("Save logo to project error:", err);
 
@@ -1148,6 +1652,195 @@ ${aiPreferenceInstructions}`;
       );
     } finally {
       setMoveLogoLoading(false);
+    }
+  };  
+
+  const handleMoveLogoWorkspaceSelection = (workspaceId) => {
+    setMoveLogoWorkspaceId(workspaceId);
+    setMoveLogoError("");
+    setShowMoveLogoCreateWorkspace(false);
+    setShowMoveLogoCreateProject(false);
+
+    const firstProject = projects.find(
+      (project) => String(project.workspace_id) === String(workspaceId)
+    );
+
+    setMoveLogoProjectId(firstProject ? String(firstProject.id) : "");
+  };
+
+  const handleCreateMoveLogoWorkspace = async () => {
+    const cleanedName = moveLogoNewWorkspaceName.trim();
+    const cleanedDescription = moveLogoNewWorkspaceDescription.trim();
+
+    if (!cleanedName) {
+      setMoveLogoError("Workspace name is required.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setMoveLogoError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setCreatingMoveLogoWorkspace(true);
+    setMoveLogoError("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/workspaces/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: cleanedName,
+          description: cleanedDescription || null,
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Workspace could not be created."
+        );
+      }
+
+      const createdWorkspace = await response.json();
+
+      setWorkspaces((currentWorkspaces) => [
+        createdWorkspace,
+        ...currentWorkspaces,
+      ]);
+
+      setMoveLogoWorkspaceId(String(createdWorkspace.id));
+      setMoveLogoProjectId("");
+      setShowMoveLogoCreateWorkspace(false);
+      setMoveLogoNewWorkspaceName("");
+      setMoveLogoNewWorkspaceDescription("");
+      setShowMoveLogoCreateProject(true);
+    } catch (err) {
+      console.error("Create move logo workspace error:", err);
+
+      setMoveLogoError(
+        err instanceof Error
+          ? err.message
+          : "Workspace could not be created."
+      );
+    } finally {
+      setCreatingMoveLogoWorkspace(false);
+    }
+  };
+
+  const handleCreateMoveLogoProject = async () => {
+    const cleanedTitle = moveLogoNewProjectTitle.trim();
+    const cleanedDescription = moveLogoNewProjectDescription.trim();
+
+    if (cleanedTitle.length < 2) {
+      setMoveLogoError("Project name must be at least 2 characters.");
+      return;
+    }
+
+    if (cleanedTitle.length > 100) {
+      setMoveLogoError("Project name must be 100 characters or fewer.");
+      return;
+    }
+
+    if (cleanedDescription.length < 10) {
+      setMoveLogoError("Project description must be at least 10 characters.");
+      return;
+    }
+
+    if (cleanedDescription.length > 5000) {
+      setMoveLogoError("Project description must be 5000 characters or fewer.");
+      return;
+    }
+
+    if (!moveLogoWorkspaceId) {
+      setMoveLogoError("Please choose a workspace first.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setMoveLogoError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setCreatingMoveLogoProject(true);
+    setMoveLogoError("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/projects/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: cleanedTitle,
+          description: cleanedDescription,
+          workspace_id: Number(moveLogoWorkspaceId),
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message = "Project could not be created.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (Array.isArray(errorData?.detail)) {
+          message = errorData.detail
+            .map((item) => item.msg)
+            .filter(Boolean)
+            .join(" ");
+        }
+
+        throw new Error(message);
+      }
+
+      const createdProject = await response.json();
+
+      setProjects((currentProjects) => [
+        createdProject,
+        ...currentProjects,
+      ]);
+
+      setMoveLogoProjectId(String(createdProject.id));
+      setShowMoveLogoCreateProject(false);
+      setMoveLogoNewProjectTitle("");
+      setMoveLogoNewProjectDescription("");
+    } catch (err) {
+      console.error("Create move logo project error:", err);
+
+      setMoveLogoError(
+        err instanceof Error ? err.message : "Project could not be created."
+      );
+    } finally {
+      setCreatingMoveLogoProject(false);
     }
   };  
 
@@ -1169,6 +1862,10 @@ ${aiPreferenceInstructions}`;
       setSelectedLogoIndex(-1);
       setLogoBase64("");
       setProjectContentError("");
+
+      setProjectName("");
+      setDescription("");
+
       return;
     }
 
@@ -1302,22 +1999,37 @@ ${aiPreferenceInstructions}`;
 
     setSaveWorkspaceError("");
     setSaveWorkspaceSuccess("");
+    setShowSaveCreateWorkspace(false);
+    setSaveNewWorkspaceName("");
+    setSaveNewWorkspaceDescription("");
+    setShowSaveCreateProject(false);
+    setSaveNewProjectTitle(projectName.trim());
+    setSaveNewProjectDescription(description.trim());
     setSaveWorkspaceOpen(true);
+
     await loadWorkspaceOptions();
   };
 
   const handleCloseSaveWorkspace = () => {
-    if (savingToWorkspace) {
+    if (savingToWorkspace || creatingSaveWorkspace || creatingSaveProject) {
       return;
     }
 
     setSaveWorkspaceOpen(false);
     setSaveWorkspaceError("");
+    setShowSaveCreateWorkspace(false);
+    setSaveNewWorkspaceName("");
+    setSaveNewWorkspaceDescription("");
+    setShowSaveCreateProject(false);
+    setSaveNewProjectTitle("");
+    setSaveNewProjectDescription("");
   };
 
   const handleWorkspaceSelection = (workspaceId) => {
     setSelectedWorkspaceId(workspaceId);
     setSaveWorkspaceError("");
+    setShowSaveCreateWorkspace(false);
+    setShowSaveCreateProject(false);
 
     const firstProject = projects.find(
       (project) => String(project.workspace_id) === String(workspaceId)
@@ -1326,6 +2038,182 @@ ${aiPreferenceInstructions}`;
     setSelectedSaveProjectId(firstProject ? String(firstProject.id) : "");
   };
 
+  const handleCreateSaveWorkspace = async () => {
+    const cleanedName = saveNewWorkspaceName.trim();
+    const cleanedDescription = saveNewWorkspaceDescription.trim();
+
+    if (!cleanedName) {
+      setSaveWorkspaceError("Workspace name is required.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setSaveWorkspaceError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setCreatingSaveWorkspace(true);
+    setSaveWorkspaceError("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/workspaces/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: cleanedName,
+          description: cleanedDescription || null,
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Workspace could not be created."
+        );
+      }
+
+      const createdWorkspace = await response.json();
+
+      setWorkspaces((currentWorkspaces) => [
+        createdWorkspace,
+        ...currentWorkspaces,
+      ]);
+
+      setSelectedWorkspaceId(String(createdWorkspace.id));
+      setSelectedSaveProjectId("");
+      setShowSaveCreateWorkspace(false);
+      setSaveNewWorkspaceName("");
+      setSaveNewWorkspaceDescription("");
+      setShowSaveCreateProject(true);
+    } catch (err) {
+      console.error("Create save workspace error:", err);
+
+      setSaveWorkspaceError(
+        err instanceof Error
+          ? err.message
+          : "Workspace could not be created."
+      );
+    } finally {
+      setCreatingSaveWorkspace(false);
+    }
+  };
+
+  const handleCreateSaveProject = async () => {
+    const cleanedTitle = saveNewProjectTitle.trim();
+    const cleanedDescription = saveNewProjectDescription.trim();
+
+    if (cleanedTitle.length < 2) {
+      setSaveWorkspaceError("Project name must be at least 2 characters.");
+      return;
+    }
+
+    if (cleanedTitle.length > 100) {
+      setSaveWorkspaceError("Project name must be 100 characters or fewer.");
+      return;
+    }
+
+    if (cleanedDescription.length < 10) {
+      setSaveWorkspaceError("Project description must be at least 10 characters.");
+      return;
+    }
+
+    if (cleanedDescription.length > 5000) {
+      setSaveWorkspaceError("Project description must be 5000 characters or fewer.");
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      setSaveWorkspaceError("Please choose a workspace first.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setSaveWorkspaceError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setCreatingSaveProject(true);
+    setSaveWorkspaceError("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/projects/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: cleanedTitle,
+          description: cleanedDescription,
+          workspace_id: Number(selectedWorkspaceId),
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        let message = "Project could not be created.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (Array.isArray(errorData?.detail)) {
+          message = errorData.detail
+            .map((item) => item.msg)
+            .filter(Boolean)
+            .join(" ");
+        }
+
+        throw new Error(message);
+      }
+
+      const createdProject = await response.json();
+
+      setProjects((currentProjects) => [
+        createdProject,
+        ...currentProjects,
+      ]);
+
+      setSelectedSaveProjectId(String(createdProject.id));
+      setShowSaveCreateProject(false);
+      setSaveNewProjectTitle("");
+      setSaveNewProjectDescription("");
+    } catch (err) {
+      console.error("Create save project error:", err);
+
+      setSaveWorkspaceError(
+        err instanceof Error ? err.message : "Project could not be created."
+      );
+    } finally {
+      setCreatingSaveProject(false);
+    }
+  };
+  
   const handleSaveToWorkspace = async () => {
     if (savingToWorkspace) {
       return;
@@ -2089,6 +2977,32 @@ ${aiPreferenceInstructions}`;
           </div>
         )}
 
+        {autoSaveStatus && (
+          <div
+            className="mb-6 rounded-lg border border-cyan-800 bg-cyan-950/50 p-4"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-cyan-300">Auto-Save</p>
+            <p className="mt-1 text-sm text-cyan-300">
+              {autoSaveStatus}
+            </p>
+          </div>
+        )}
+
+        {autoSaveError && (
+          <div
+            className="mb-6 rounded-lg border border-amber-800 bg-amber-950/50 p-4"
+            role="alert"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-amber-300">Auto-Save issue</p>
+            <p className="mt-1 text-sm text-amber-300">
+              {autoSaveError}
+            </p>
+          </div>
+        )}        
+
         {saveWorkspaceSuccess && (
           <div
             className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/50 p-4"
@@ -2219,8 +3133,13 @@ ${aiPreferenceInstructions}`;
               onClick={handleGenerateLogo}
               disabled={
                 logoLoading ||
-                projectName.trim().length < 2 ||
-                description.trim().length < 10
+                (
+                  !selectedLogoContentId &&
+                  (
+                    projectName.trim().length < 2 ||
+                    description.trim().length < 10
+                  )
+                )
               }
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/35 bg-gradient-to-r from-violet-500/80 to-fuchsia-500/75 px-5 py-2.5 font-bold text-white shadow-[0_12px_30px_rgba(139,92,246,0.20)] transition-all hover:-translate-y-0.5 hover:from-violet-400 hover:to-fuchsia-400 hover:shadow-[0_16px_36px_rgba(139,92,246,0.28)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -2245,7 +3164,12 @@ ${aiPreferenceInstructions}`;
               <button
                 type="button"
                 onClick={() => handleOpenMoveLogo(logoGallery[selectedLogoIndex])}
-                disabled={moveLogoLoading}
+                disabled={
+                  moveLogoLoading ||
+                  moveLogoOptionsLoading ||
+                  creatingMoveLogoWorkspace ||
+                  creatingMoveLogoProject
+                }
                 className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Save Logo to Project
@@ -2262,6 +3186,43 @@ ${aiPreferenceInstructions}`;
               Leave these fields unchanged to use the default prompt.
             </p>
           </div>
+
+          <div className="mb-5">
+            <label
+              htmlFor="logo-context-content"
+              className="mb-2 block text-sm text-slate-400"
+            >
+              Use Saved Content as Logo Context
+            </label>
+
+            <select
+              id="logo-context-content"
+              value={selectedLogoContentId}
+              onChange={(e) => {
+                setSelectedLogoContentId(e.target.value);
+                setLogoError("");
+              }}
+              disabled={logoLoading || availableProjectContent.length === 0}
+              className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">
+                {availableProjectContent.length === 0
+                  ? "No saved content available"
+                  : "Choose previous saved content"}
+              </option>
+
+              {availableProjectContent.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title} ({item.content_type})
+                </option>
+              ))}
+            </select>
+
+            <p className="mt-2 text-xs text-slate-500">
+              Optional. Select previously saved content to give Tanio more
+              context about the product before generating the logo.
+            </p>
+          </div>          
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -2355,6 +3316,32 @@ ${aiPreferenceInstructions}`;
             </div>
           </div>
         </div>
+
+        {autoSaveStatus && (
+          <div
+            className="mb-4 rounded-lg border border-cyan-800 bg-cyan-950/50 p-4"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-cyan-300">Auto-Save</p>
+            <p className="mt-1 text-sm text-cyan-300">
+              {autoSaveStatus}
+            </p>
+          </div>
+        )}
+
+        {autoSaveError && (
+          <div
+            className="mb-4 rounded-lg border border-amber-800 bg-amber-950/50 p-4"
+            role="alert"
+            aria-live="polite"
+          >
+            <p className="font-semibold text-amber-300">Auto-Save issue</p>
+            <p className="mt-1 text-sm text-amber-300">
+              {autoSaveError}
+            </p>
+          </div>
+        )}        
 
         {logoError && (
           <div
@@ -2825,33 +3812,258 @@ ${aiPreferenceInstructions}`;
               </p>
             </div>
 
-            <div className="mt-5">
-              <label
-                htmlFor="move-logo-project"
-                className="mb-2 block text-sm font-medium text-slate-300"
+            {moveLogoOptionsLoading ? (
+              <div
+                className="mt-6 flex items-center gap-3 text-slate-400"
+                role="status"
+                aria-live="polite"
               >
-                Save to Project
-              </label>
+                <div
+                  className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-violet-400 animate-spin"
+                  aria-hidden="true"
+                />
+                <p>Loading your workspaces and projects...</p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-5">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <label
+                      htmlFor="move-logo-workspace"
+                      className="block text-sm font-medium text-slate-300"
+                    >
+                      Workspace
+                    </label>
 
-              <select
-                id="move-logo-project"
-                value={moveLogoProjectId}
-                onChange={(e) => {
-                  setMoveLogoProjectId(e.target.value);
-                  setMoveLogoError("");
-                }}
-                disabled={moveLogoLoading}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
-              >
-                <option value="">Choose a project</option>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMoveLogoCreateWorkspace((currentValue) => !currentValue);
+                        setMoveLogoError("");
+                      }}
+                      disabled={
+                        moveLogoLoading ||
+                        creatingMoveLogoWorkspace ||
+                        creatingMoveLogoProject
+                      }
+                      className="text-sm font-semibold text-violet-300 transition hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {showMoveLogoCreateWorkspace
+                        ? "Choose existing workspace"
+                        : "Create new workspace"}
+                    </button>
+                  </div>
 
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.title}
-                  </option>
-                ))}
-              </select>
-            </div>
+                  {!showMoveLogoCreateWorkspace ? (
+                    <select
+                      id="move-logo-workspace"
+                      value={moveLogoWorkspaceId}
+                      onChange={(e) => handleMoveLogoWorkspaceSelection(e.target.value)}
+                      disabled={
+                        moveLogoLoading ||
+                        creatingMoveLogoWorkspace ||
+                        creatingMoveLogoProject
+                      }
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">Choose a workspace</option>
+
+                      {workspaces.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+                      <div>
+                        <label
+                          htmlFor="move-logo-new-workspace-name"
+                          className="mb-2 block text-sm font-medium text-slate-300"
+                        >
+                          New Workspace Name
+                        </label>
+
+                        <input
+                          id="move-logo-new-workspace-name"
+                          type="text"
+                          value={moveLogoNewWorkspaceName}
+                          onChange={(e) => {
+                            setMoveLogoNewWorkspaceName(e.target.value);
+                            setMoveLogoError("");
+                          }}
+                          disabled={creatingMoveLogoWorkspace}
+                          placeholder="Example: Brand Assets"
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label
+                          htmlFor="move-logo-new-workspace-description"
+                          className="mb-2 block text-sm font-medium text-slate-300"
+                        >
+                          Workspace Description
+                        </label>
+
+                        <textarea
+                          id="move-logo-new-workspace-description"
+                          value={moveLogoNewWorkspaceDescription}
+                          onChange={(e) => {
+                            setMoveLogoNewWorkspaceDescription(e.target.value);
+                            setMoveLogoError("");
+                          }}
+                          disabled={creatingMoveLogoWorkspace}
+                          rows="3"
+                          placeholder="Describe what this workspace is for..."
+                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCreateMoveLogoWorkspace}
+                        disabled={
+                          creatingMoveLogoWorkspace ||
+                          !moveLogoNewWorkspaceName.trim()
+                        }
+                        className="mt-4 rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {creatingMoveLogoWorkspace
+                          ? "Creating Workspace..."
+                          : "Create Workspace"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <label
+                      htmlFor="move-logo-project"
+                      className="block text-sm font-medium text-slate-300"
+                    >
+                      Save to Project
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMoveLogoCreateProject((currentValue) => !currentValue);
+                        setMoveLogoNewProjectTitle(projectName.trim());
+                        setMoveLogoNewProjectDescription(description.trim());
+                        setMoveLogoError("");
+                      }}
+                      disabled={
+                        moveLogoLoading ||
+                        creatingMoveLogoWorkspace ||
+                        creatingMoveLogoProject ||
+                        !moveLogoWorkspaceId ||
+                        showMoveLogoCreateWorkspace
+                      }
+                      className="text-sm font-semibold text-violet-300 transition hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {showMoveLogoCreateProject ? "Choose existing project" : "Create new project"}
+                    </button>
+                  </div>
+
+                  {!showMoveLogoCreateProject ? (
+                    <select
+                      id="move-logo-project"
+                      value={moveLogoProjectId}
+                      onChange={(e) => {
+                        setMoveLogoProjectId(e.target.value);
+                        setMoveLogoError("");
+                      }}
+                      disabled={
+                        moveLogoLoading ||
+                        creatingMoveLogoWorkspace ||
+                        creatingMoveLogoProject ||
+                        !moveLogoWorkspaceId
+                      }
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">Choose a project</option>
+
+                      {getProjectsForWorkspace(moveLogoWorkspaceId).map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.title}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+                      <div>
+                        <label
+                          htmlFor="move-logo-new-project-title"
+                          className="mb-2 block text-sm font-medium text-slate-300"
+                        >
+                          New Project Name
+                        </label>
+
+                        <input
+                          id="move-logo-new-project-title"
+                          type="text"
+                          value={moveLogoNewProjectTitle}
+                          onChange={(e) => {
+                            setMoveLogoNewProjectTitle(e.target.value);
+                            setMoveLogoError("");
+                          }}
+                          disabled={creatingMoveLogoProject}
+                          maxLength={100}
+                          placeholder="Example: Logo Design Project"
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label
+                          htmlFor="move-logo-new-project-description"
+                          className="mb-2 block text-sm font-medium text-slate-300"
+                        >
+                          Project Description
+                        </label>
+
+                        <textarea
+                          id="move-logo-new-project-description"
+                          value={moveLogoNewProjectDescription}
+                          onChange={(e) => {
+                            setMoveLogoNewProjectDescription(e.target.value);
+                            setMoveLogoError("");
+                          }}
+                          disabled={creatingMoveLogoProject}
+                          rows="3"
+                          maxLength={5000}
+                          placeholder="Describe what this project is for..."
+                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCreateMoveLogoProject}
+                        disabled={
+                          creatingMoveLogoProject ||
+                          !moveLogoWorkspaceId ||
+                          !moveLogoNewProjectTitle.trim()
+                        }
+                        className="mt-4 rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {creatingMoveLogoProject ? "Creating Project..." : "Create Project"}
+                      </button>
+                    </div>
+                  )}
+
+                  {moveLogoWorkspaceId &&
+                    !showMoveLogoCreateProject &&
+                    getProjectsForWorkspace(moveLogoWorkspaceId).length === 0 && (
+                      <p className="mt-2 text-sm text-amber-300">
+                        This workspace does not have any projects yet. Create a new project here before saving.
+                      </p>
+                    )}
+                </div>
+              </>
+            )}
 
             {moveLogoError && (
               <div className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4">
@@ -2863,7 +4075,12 @@ ${aiPreferenceInstructions}`;
               <button
                 type="button"
                 onClick={handleCloseMoveLogo}
-                disabled={moveLogoLoading}
+                disabled={
+                  moveLogoLoading ||
+                  moveLogoOptionsLoading ||
+                  creatingMoveLogoWorkspace ||
+                  creatingMoveLogoProject
+                }
                 className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
@@ -2873,13 +4090,25 @@ ${aiPreferenceInstructions}`;
                 type="button"
                 onClick={handleMoveLogo}
                 disabled={
+                  moveLogoOptionsLoading ||
                   moveLogoLoading ||
+                  creatingMoveLogoWorkspace ||
+                  creatingMoveLogoProject ||
+                  showMoveLogoCreateWorkspace ||
+                  showMoveLogoCreateProject ||
+                  !moveLogoWorkspaceId ||
                   !moveLogoProjectId ||
                   String(moveLogoProjectId) === String(moveLogoTarget.project_id)
                 }
                 className="rounded-lg bg-violet-600 px-5 py-2.5 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {moveLogoLoading ? "Saving..." : "Save Logo"}
+                {moveLogoLoading
+                  ? "Saving..."
+                  : creatingMoveLogoWorkspace
+                    ? "Creating Workspace..."
+                    : creatingMoveLogoProject
+                      ? "Creating Project..."
+                      : "Save Logo"}
               </button>
             </div>
           </div>
@@ -2911,7 +4140,7 @@ ${aiPreferenceInstructions}`;
               <button
                 type="button"
                 onClick={handleCloseSaveWorkspace}
-                disabled={savingToWorkspace}
+                disabled={savingToWorkspace || creatingSaveWorkspace || creatingSaveProject}
                 className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Close save to workspace dialog"
               >
@@ -2934,74 +4163,229 @@ ${aiPreferenceInstructions}`;
             ) : (
               <>
                 <div className="mt-6">
-                  <label
-                    htmlFor="save-workspace"
-                    className="mb-2 block text-sm font-medium text-slate-300"
-                  >
-                    Workspace
-                  </label>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <label
+                      htmlFor="save-workspace"
+                      className="block text-sm font-medium text-slate-300"
+                    >
+                      Workspace
+                    </label>
 
-                  <select
-                    id="save-workspace"
-                    value={selectedWorkspaceId}
-                    onChange={(e) => handleWorkspaceSelection(e.target.value)}
-                    disabled={savingToWorkspace || workspaces.length === 0}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                  >
-                    {workspaces.length === 0 ? (
-                      <option value="">No workspaces available</option>
-                    ) : (
-                      workspaces.map((workspace) => (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSaveCreateWorkspace((currentValue) => !currentValue);
+                        setSaveWorkspaceError("");
+                      }}
+                      disabled={savingToWorkspace || creatingSaveWorkspace || creatingSaveProject}
+                      className="text-sm font-semibold text-indigo-300 transition hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {showSaveCreateWorkspace
+                        ? "Choose existing workspace"
+                        : "Create new workspace"}
+                    </button>
+                  </div>
+
+                  {!showSaveCreateWorkspace ? (
+                    <select
+                      id="save-workspace"
+                      value={selectedWorkspaceId}
+                      onChange={(e) => handleWorkspaceSelection(e.target.value)}
+                      disabled={
+                        savingToWorkspace ||
+                        creatingSaveWorkspace ||
+                        creatingSaveProject
+                      }
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">Choose a workspace</option>
+
+                      {workspaces.map((workspace) => (
                         <option key={workspace.id} value={workspace.id}>
                           {workspace.name}
                         </option>
-                      ))
-                    )}
-                  </select>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-4">
+                      <div>
+                        <label
+                          htmlFor="save-new-workspace-name"
+                          className="mb-2 block text-sm font-medium text-slate-300"
+                        >
+                          New Workspace Name
+                        </label>
+
+                        <input
+                          id="save-new-workspace-name"
+                          type="text"
+                          value={saveNewWorkspaceName}
+                          onChange={(e) => {
+                            setSaveNewWorkspaceName(e.target.value);
+                            setSaveWorkspaceError("");
+                          }}
+                          disabled={creatingSaveWorkspace}
+                          placeholder="Example: Client Projects"
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label
+                          htmlFor="save-new-workspace-description"
+                          className="mb-2 block text-sm font-medium text-slate-300"
+                        >
+                          Workspace Description
+                        </label>
+
+                        <textarea
+                          id="save-new-workspace-description"
+                          value={saveNewWorkspaceDescription}
+                          onChange={(e) => {
+                            setSaveNewWorkspaceDescription(e.target.value);
+                            setSaveWorkspaceError("");
+                          }}
+                          disabled={creatingSaveWorkspace}
+                          rows="3"
+                          placeholder="Describe what this workspace is for..."
+                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCreateSaveWorkspace}
+                        disabled={creatingSaveWorkspace || !saveNewWorkspaceName.trim()}
+                        className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {creatingSaveWorkspace ? "Creating Workspace..." : "Create Workspace"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-4">
-                  <label
-                    htmlFor="save-project"
-                    className="mb-2 block text-sm font-medium text-slate-300"
-                  >
-                    Project
-                  </label>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <label
+                      htmlFor="save-project"
+                      className="block text-sm font-medium text-slate-300"
+                    >
+                      Project
+                    </label>
 
-                  <select
-                    id="save-project"
-                    value={selectedSaveProjectId}
-                    onChange={(e) => {
-                      setSelectedSaveProjectId(e.target.value);
-                      setSaveWorkspaceError("");
-                    }}
-                    disabled={
-                      savingToWorkspace ||
-                      !selectedWorkspaceId ||
-                      getProjectsForWorkspace(selectedWorkspaceId).length === 0
-                    }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                  >
-                    {getProjectsForWorkspace(selectedWorkspaceId).length ===
-                    0 ? (
-                      <option value="">No projects in this workspace</option>
-                    ) : (
-                      getProjectsForWorkspace(selectedWorkspaceId).map(
-                        (project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.title}
-                          </option>
-                        )
-                      )
-                    )}
-                  </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSaveCreateProject((currentValue) => !currentValue);
+                        setSaveNewProjectTitle(projectName.trim());
+                        setSaveNewProjectDescription(description.trim());
+                        setSaveWorkspaceError("");
+                      }}
+                      disabled={
+                        savingToWorkspace ||
+                        creatingSaveWorkspace ||
+                        creatingSaveProject ||
+                        !selectedWorkspaceId ||
+                        showSaveCreateWorkspace
+                      }
+                      className="text-sm font-semibold text-indigo-300 transition hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {showSaveCreateProject ? "Choose existing project" : "Create new project"}
+                    </button>
+                  </div>
+
+                  {!showSaveCreateProject ? (
+                    <select
+                      id="save-project"
+                      value={selectedSaveProjectId}
+                      onChange={(e) => {
+                        setSelectedSaveProjectId(e.target.value);
+                        setSaveWorkspaceError("");
+                      }}
+                      disabled={
+                        savingToWorkspace ||
+                        creatingSaveWorkspace ||
+                        creatingSaveProject ||
+                        !selectedWorkspaceId
+                      }
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">Choose a project</option>
+
+                      {getProjectsForWorkspace(selectedWorkspaceId).map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.title}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-4">
+                      <div>
+                        <label
+                          htmlFor="save-new-project-title"
+                          className="mb-2 block text-sm font-medium text-slate-300"
+                        >
+                          New Project Name
+                        </label>
+
+                        <input
+                          id="save-new-project-title"
+                          type="text"
+                          value={saveNewProjectTitle}
+                          onChange={(e) => {
+                            setSaveNewProjectTitle(e.target.value);
+                            setSaveWorkspaceError("");
+                          }}
+                          disabled={creatingSaveProject}
+                          maxLength={100}
+                          placeholder="Example: Product Planning Project"
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label
+                          htmlFor="save-new-project-description"
+                          className="mb-2 block text-sm font-medium text-slate-300"
+                        >
+                          Project Description
+                        </label>
+
+                        <textarea
+                          id="save-new-project-description"
+                          value={saveNewProjectDescription}
+                          onChange={(e) => {
+                            setSaveNewProjectDescription(e.target.value);
+                            setSaveWorkspaceError("");
+                          }}
+                          disabled={creatingSaveProject}
+                          rows="3"
+                          maxLength={5000}
+                          placeholder="Describe what this project is for..."
+                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCreateSaveProject}
+                        disabled={
+                          creatingSaveProject ||
+                          !selectedWorkspaceId ||
+                          !saveNewProjectTitle.trim()
+                        }
+                        className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {creatingSaveProject ? "Creating Project..." : "Create Project"}
+                      </button>
+                    </div>
+                  )}
 
                   {selectedWorkspaceId &&
-                    getProjectsForWorkspace(selectedWorkspaceId).length ===
-                      0 && (
+                    !showSaveCreateProject &&
+                    getProjectsForWorkspace(selectedWorkspaceId).length === 0 && (
                       <p className="mt-2 text-sm text-amber-300">
-                        This workspace does not have any projects yet. Create a
-                        project there first, then try saving again.
+                        This workspace does not have any projects yet. Create a new project here before saving.
                       </p>
                     )}
                 </div>
@@ -3027,7 +4411,7 @@ ${aiPreferenceInstructions}`;
               <button
                 type="button"
                 onClick={handleCloseSaveWorkspace}
-                disabled={savingToWorkspace}
+                disabled={savingToWorkspace || creatingSaveWorkspace || creatingSaveProject}
                 className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
@@ -3039,12 +4423,22 @@ ${aiPreferenceInstructions}`;
                 disabled={
                   workspaceOptionsLoading ||
                   savingToWorkspace ||
+                  creatingSaveWorkspace ||
+                  creatingSaveProject ||
+                  showSaveCreateWorkspace ||
+                  showSaveCreateProject ||
                   !selectedWorkspaceId ||
                   !selectedSaveProjectId
                 }
                 className="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {savingToWorkspace ? "Saving..." : "Save Content"}
+                {savingToWorkspace
+                  ? "Saving..."
+                  : creatingSaveWorkspace
+                    ? "Creating Workspace..."
+                    : creatingSaveProject
+                      ? "Creating Project..."
+                      : "Save Content"}
               </button>
             </div>
           </div>

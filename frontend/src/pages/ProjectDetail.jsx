@@ -8,6 +8,7 @@ import {
   FaBrain,
   FaBolt,
   FaDiceD20,
+  FaDownload,
   FaExclamationTriangle,
   FaFileAlt,
   FaFolderOpen,
@@ -42,6 +43,72 @@ function createPreview(body = "", maximumLength = 220) {
   }
 
   return `${plainText.slice(0, maximumLength).trim()}...`;
+}
+
+function formatDisplayDate(dateValue) {
+  if (!dateValue) {
+    return "";
+  }
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function shouldShowModifiedDate(createdAt, updatedAt) {
+  if (!createdAt || !updatedAt) {
+    return false;
+  }
+
+  const createdDate = new Date(createdAt);
+  const updatedDate = new Date(updatedAt);
+
+  if (
+    Number.isNaN(createdDate.getTime()) ||
+    Number.isNaN(updatedDate.getTime())
+  ) {
+    return false;
+  }
+
+  return updatedDate.getTime() > createdDate.getTime();
+}
+
+function renderSavedDateMetadata(item) {
+  const createdDate = formatDisplayDate(item?.created_at || item?.createdAt);
+  const updatedDate = formatDisplayDate(item?.updated_at || item?.updatedAt);
+
+  if (!createdDate && !updatedDate) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+      {createdDate && (
+        <span className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-1.5">
+          Date Created: {createdDate}
+        </span>
+      )}
+
+      {shouldShowModifiedDate(
+        item?.created_at || item?.createdAt,
+        item?.updated_at || item?.updatedAt
+      ) && (
+        <span className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-violet-200">
+          Date Modified: {updatedDate}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function sortNewestFirst(items = []) {
@@ -682,6 +749,32 @@ function ProjectDetail() {
     }
   };  
 
+  const handleDownloadImage = (image) => {
+    if (!image?.image_base64) {
+      return;
+    }
+
+    try {
+      const safeProjectName =
+        String(project?.title || "tanio-project")
+          .replace(/[^a-zA-Z0-9-_ ]/g, "")
+          .trim()
+          .replace(/\s+/g, "-") || "tanio-project";
+
+      const imageId = image.id ? `-${image.id}` : "";
+
+      const link = document.createElement("a");
+      link.href = `data:image/png;base64,${image.image_base64}`;
+      link.download = `${safeProjectName}-image${imageId}.png`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Image download failed:", error);
+    }
+  };
+
   return (
     <main className="min-w-0 flex-1 px-4 py-5 sm:px-5 lg:px-6 xl:px-8">
       <div className="w-full max-w-none">
@@ -1102,6 +1195,8 @@ function ProjectDetail() {
                         <p className="mt-4 line-clamp-4 flex-1 text-sm leading-6 text-slate-400">
                           {createPreview(item.body)}
                         </p>
+
+                        {renderSavedDateMetadata(item)}
                       </div>
 
                       <div className="border-t border-slate-800 bg-slate-950/35 px-5 py-4">
@@ -1122,6 +1217,15 @@ function ProjectDetail() {
                           >
                             Edit
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadImage(logo)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                          >
+                            <FaDownload />
+                            Download
+                          </button>                          
 
                           <button
                             type="button"
@@ -1298,6 +1402,8 @@ function ProjectDetail() {
                     ? `${project.title} Image`
                     : viewingItem.title}
                 </h3>
+
+                {viewingItem.viewType !== "image" && renderSavedDateMetadata(viewingItem)}
               </div>
 
               <button
@@ -1318,7 +1424,7 @@ function ProjectDetail() {
                   className="mx-auto max-h-[65vh] rounded-xl border border-slate-700 bg-white object-contain"
                 />
               ) : (
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-6">
+                <div className="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7">
                   <div className={contentMarkdownClasses}>
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {viewingItem.body}
@@ -1328,7 +1434,18 @@ function ProjectDetail() {
               )}
             </div>
 
-            <footer className="flex justify-end border-t border-slate-800 p-5">
+            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
+              {viewingItem.viewType === "image" && (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadImage(viewingItem)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400"
+                >
+                  <FaDownload />
+                  Download Image
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={closeViewItem}

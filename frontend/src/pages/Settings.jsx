@@ -11,6 +11,9 @@ import {
 const SETTINGS_KEY = "tanioSettings";
 
 const DEFAULT_SETTINGS = {
+  autoSave: {
+    enabled: false,
+  },
   appearance: {
     theme: "dark",
     compactLayout: false,
@@ -74,6 +77,10 @@ function Settings() {
       const parsedSettings = JSON.parse(storedSettings);
 
       const mergedSettings = {
+        autoSave: {
+          ...DEFAULT_SETTINGS.autoSave,
+          ...parsedSettings.autoSave,
+        },
         appearance: {
           ...DEFAULT_SETTINGS.appearance,
           ...parsedSettings.appearance,
@@ -507,6 +514,38 @@ function Settings() {
       )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {/* Auto-Save */}
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-6 xl:col-span-2">
+          <div className="mb-6 flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
+              <FaSave />
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                Auto-Save
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-400">
+                Automatically save generated module content when it finishes.
+              </p>
+            </div>
+          </div>
+
+          <SettingToggle
+            title="Auto-Save"
+            description="When turned on, Product Architect, Tabletop Creator, and Problem Solver results will save automatically."
+            enabled={settings.autoSave.enabled}
+            onToggle={() =>
+              autoSaveSetting(
+                "autoSave",
+                "enabled",
+                !settings.autoSave.enabled
+              )
+            }
+          />
+        </section>
+
         {/* Appearance */}
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
           <div className="mb-6 flex items-start gap-4">
@@ -594,7 +633,7 @@ function Settings() {
           </div>
         </section>
 
-                {/* AI Generation Defaults */}
+        {/* AI Generation Defaults */}
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-6">
           <div className="mb-6 flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">

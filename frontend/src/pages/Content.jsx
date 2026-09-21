@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import {
   FaBrain,
   FaDiceD20,
+  FaDownload,
   FaExclamationTriangle,
   FaEye,
   FaFileAlt,
@@ -130,6 +131,72 @@ function createPreview(body = "", maximumLength = 220) {
   return `${plainText.slice(0, maximumLength).trim()}...`;
 }
 
+function formatDisplayDate(dateValue) {
+  if (!dateValue) {
+    return "";
+  }
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function shouldShowModifiedDate(createdAt, updatedAt) {
+  if (!createdAt || !updatedAt) {
+    return false;
+  }
+
+  const createdDate = new Date(createdAt);
+  const updatedDate = new Date(updatedAt);
+
+  if (
+    Number.isNaN(createdDate.getTime()) ||
+    Number.isNaN(updatedDate.getTime())
+  ) {
+    return false;
+  }
+
+  return updatedDate.getTime() > createdDate.getTime();
+}
+
+function renderSavedDateMetadata(item) {
+  const createdDate = formatDisplayDate(item?.created_at || item?.createdAt);
+  const updatedDate = formatDisplayDate(item?.updated_at || item?.updatedAt);
+
+  if (!createdDate && !updatedDate) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+      {createdDate && (
+        <span className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-1.5">
+          Date Created: {createdDate}
+        </span>
+      )}
+
+      {shouldShowModifiedDate(
+        item?.created_at || item?.createdAt,
+        item?.updated_at || item?.updatedAt
+      ) && (
+        <span className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-violet-200">
+          Date Modified: {updatedDate}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function sortNewestFirst(items = []) {
   return [...items].sort((firstItem, secondItem) => {
     const firstDate = new Date(
@@ -198,31 +265,35 @@ function sortContentItems(items = [], sortOption = SORT_NEWEST) {
 
 const contentMarkdownClasses = `
   text-slate-200 leading-relaxed
-  [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-2 [&_h1]:mb-4
-  [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-7 [&_h2]:mb-3
-  [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-cyan-300 [&_h3]:mt-6 [&_h3]:mb-3
-  [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-cyan-200 [&_h4]:mt-5 [&_h4]:mb-2
-  [&_p]:my-3
-  [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-3
-  [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-3
-  [&_li]:my-1
-  [&_strong]:font-bold [&_strong]:text-white
+  [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mb-6
+  [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-8 [&_h2]:mb-4
+  [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-cyan-400 [&_h3]:mt-6 [&_h3]:mb-3
+  [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-cyan-200 [&_h4]:mt-5 [&_h4]:mb-3
+  [&_p]:text-slate-200 [&_p]:leading-relaxed [&_p]:mb-4
+  [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:text-slate-200 [&_ul]:mb-4 [&_ul]:space-y-2
+  [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:text-slate-200 [&_ol]:mb-4 [&_ol]:space-y-2
+  [&_li]:leading-relaxed
+  [&_strong]:font-semibold [&_strong]:text-white
   [&_em]:italic
-  [&_hr]:border-slate-700 [&_hr]:my-6
-  [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-700
-  [&_blockquote]:pl-4 [&_blockquote]:text-slate-300
-  [&_code]:bg-slate-950 [&_code]:px-1 [&_code]:py-0.5
-  [&_code]:rounded [&_code]:text-cyan-300
-  [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-slate-950
-  [&_pre]:p-4 [&_pre]:my-4
-  [&_table]:w-full [&_table]:border-collapse [&_table]:my-5
-  [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:p-3 [&_th]:text-left
-  [&_td]:border [&_td]:border-slate-700 [&_td]:p-3
+  [&_hr]:border-slate-700 [&_hr]:my-8
+  [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-500
+  [&_blockquote]:pl-4 [&_blockquote]:my-4
+  [&_blockquote]:text-slate-300 [&_blockquote]:italic
+  [&_code]:rounded [&_code]:bg-slate-950
+  [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-cyan-300
+  [&_pre]:my-6 [&_pre]:overflow-x-auto [&_pre]:rounded-xl
+  [&_pre]:border [&_pre]:border-slate-800 [&_pre]:bg-slate-950 [&_pre]:p-4
+  [&_table]:my-6 [&_table]:w-full [&_table]:border-collapse
+  [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800
+  [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:text-white
+  [&_td]:border [&_td]:border-slate-700
+  [&_td]:px-4 [&_td]:py-3 [&_td]:text-slate-200
 `;
 
 function Content() {
   const [contentItems, setContentItems] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [workspaces, setWorkspaces] = useState([]);
   const [selectedContent, setSelectedContent] = useState(null);
   const [selectedContentVersions, setSelectedContentVersions] = useState([]);
   const [selectedVersionIndex, setSelectedVersionIndex] = useState(-1);
@@ -257,6 +328,13 @@ function Content() {
   const [moveProjectId, setMoveProjectId] = useState("");
   const [moveLoading, setMoveLoading] = useState(false);
   const [moveError, setMoveError] = useState("");
+  const [showMoveCreateProject, setShowMoveCreateProject] = useState(false);
+  const [moveNewProjectTitle, setMoveNewProjectTitle] = useState("");
+  const [moveNewProjectDescription, setMoveNewProjectDescription] = useState("");
+  const [moveNewProjectWorkspaceId, setMoveNewProjectWorkspaceId] = useState("");
+  const [showMoveCreateWorkspace, setShowMoveCreateWorkspace] = useState(false);
+  const [moveNewWorkspaceName, setMoveNewWorkspaceName] = useState("");
+  const [moveNewWorkspaceDescription, setMoveNewWorkspaceDescription] = useState("");
 
   const loadLibrary = useCallback(async (isRefresh = false) => {
     const token = localStorage.getItem("token");
@@ -284,16 +362,22 @@ function Content() {
         },
       };
 
-      const [contentResponse, projectsResponse, preservedLogosResponse] =
-        await Promise.all([
-          fetch(`${API_BASE_URL}/content/`, requestOptions),
-          fetch(`${API_BASE_URL}/projects/`, requestOptions),
-          fetch(`${API_BASE_URL}/projects/preserved-logos`, requestOptions),
-        ]);
+      const [
+        contentResponse,
+        projectsResponse,
+        workspacesResponse,
+        preservedLogosResponse,
+      ] = await Promise.all([
+        fetch(`${API_BASE_URL}/content/`, requestOptions),
+        fetch(`${API_BASE_URL}/projects/`, requestOptions),
+        fetch(`${API_BASE_URL}/workspaces/`, requestOptions),
+        fetch(`${API_BASE_URL}/projects/preserved-logos`, requestOptions),
+      ]);
 
       if (
         contentResponse.status === 401 ||
         projectsResponse.status === 401 ||
+        workspacesResponse.status === 401 ||
         preservedLogosResponse.status === 401
       ) {
         localStorage.removeItem("token");
@@ -319,6 +403,14 @@ function Content() {
         );
       }
 
+      if (!workspacesResponse.ok) {
+        const errorData = await workspacesResponse.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Unable to load workspace information."
+        );
+      }      
+
       if (!preservedLogosResponse.ok) {
         const errorData = await preservedLogosResponse.json().catch(() => null);
 
@@ -327,13 +419,16 @@ function Content() {
         );
       }
 
-      const [contentData, projectData, preservedLogosData] = await Promise.all([
-        contentResponse.json(),
-        projectsResponse.json(),
-        preservedLogosResponse.json(),
-      ]);
+      const [contentData, projectData, workspaceData, preservedLogosData] =
+        await Promise.all([
+          contentResponse.json(),
+          projectsResponse.json(),
+          workspacesResponse.json(),
+          preservedLogosResponse.json(),
+        ]);
 
       const safeProjects = Array.isArray(projectData) ? projectData : [];
+      const safeWorkspaces = Array.isArray(workspaceData) ? workspaceData : [];
 
       const logoRequests = await Promise.all(
         safeProjects.map(async (project) => {
@@ -407,6 +502,7 @@ function Content() {
       );
 
       setProjects(safeProjects);
+      setWorkspaces(safeWorkspaces);
     } catch (requestError) {
       console.error("Content Library request failed:", requestError);
 
@@ -756,6 +852,13 @@ function Content() {
   const openMoveContent = (item) => {
     setMoveTarget(item);
     setMoveProjectId(String(item.project_id || ""));
+    setShowMoveCreateProject(false);
+    setMoveNewProjectTitle("");
+    setMoveNewProjectDescription("");
+    setMoveNewProjectWorkspaceId("");
+    setShowMoveCreateWorkspace(false);
+    setMoveNewWorkspaceName("");
+    setMoveNewWorkspaceDescription("");
     setMoveError("");
   };
 
@@ -766,8 +869,176 @@ function Content() {
 
     setMoveTarget(null);
     setMoveProjectId("");
+    setShowMoveCreateProject(false);
+    setMoveNewProjectTitle("");
+    setMoveNewProjectDescription("");
+    setMoveNewProjectWorkspaceId("");
+    setShowMoveCreateWorkspace(false);
+    setMoveNewWorkspaceName("");
+    setMoveNewWorkspaceDescription("");
     setMoveError("");
   };
+
+  const handleCreateMoveWorkspace = async () => {
+    const cleanedName = moveNewWorkspaceName.trim();
+    const cleanedDescription = moveNewWorkspaceDescription.trim();
+
+    if (!cleanedName) {
+      setMoveError("Workspace name is required.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setMoveError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setMoveLoading(true);
+    setMoveError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/workspaces/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          name: cleanedName,
+          description: cleanedDescription || null,
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "This workspace could not be created. Please try again."
+        );
+      }
+
+      const newWorkspace = await response.json();
+
+      setWorkspaces((currentWorkspaces) =>
+        sortNewestFirst([newWorkspace, ...currentWorkspaces])
+      );
+
+      setMoveNewProjectWorkspaceId(String(newWorkspace.id));
+      setShowMoveCreateWorkspace(false);
+      setMoveNewWorkspaceName("");
+      setMoveNewWorkspaceDescription("");
+    } catch (requestError) {
+      console.error("Create move workspace failed:", requestError);
+
+      setMoveError(
+        requestError instanceof Error
+          ? requestError.message
+          : "This workspace could not be created. Please try again."
+      );
+    } finally {
+      setMoveLoading(false);
+    }
+  };  
+
+  const handleCreateMoveProject = async () => {
+    const cleanedTitle = moveNewProjectTitle.trim();
+    const cleanedDescription = moveNewProjectDescription.trim();
+
+    if (cleanedTitle.length < 2) {
+      setMoveError("Project name must be at least 2 characters.");
+      return;
+    }
+
+    if (cleanedTitle.length > 100) {
+      setMoveError("Project name must be 100 characters or fewer.");
+      return;
+    }
+
+    if (cleanedDescription.length > 5000) {
+      setMoveError("Project description must be 5000 characters or fewer.");
+      return;
+    }
+
+    if (!moveNewProjectWorkspaceId) {
+      setMoveError("Please choose a workspace for the new project.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setMoveError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setMoveLoading(true);
+    setMoveError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          title: cleanedTitle,
+          description: cleanedDescription,
+          workspace_id: Number(moveNewProjectWorkspaceId),
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "This project could not be created. Please try again."
+        );
+      }
+
+      const newProject = await response.json();
+
+      setProjects((currentProjects) =>
+        sortNewestFirst([newProject, ...currentProjects])
+      );
+
+      setMoveProjectId(String(newProject.id));
+      setShowMoveCreateProject(false);
+      setMoveNewProjectTitle("");
+      setMoveNewProjectDescription("");
+      setMoveNewProjectWorkspaceId("");
+    } catch (requestError) {
+      console.error("Create move project failed:", requestError);
+
+      setMoveError(
+        requestError instanceof Error
+          ? requestError.message
+          : "This project could not be created. Please try again."
+      );
+    } finally {
+      setMoveLoading(false);
+    }
+  };  
 
   const handleMoveContent = async () => {
     if (!moveTarget || !moveProjectId) {
@@ -995,6 +1266,30 @@ function Content() {
       setDeleteLoading(false);
     }
   };
+
+  const handleDownloadImage = (item) => {
+    if (!item?.image_base64) {
+      return;
+    }
+
+    try {
+      const safeTitle =
+        String(item.title || item.projectName || "tanio-image")
+          .replace(/[^a-zA-Z0-9-_ ]/g, "")
+          .trim()
+          .replace(/\s+/g, "-") || "tanio-image";
+
+      const link = document.createElement("a");
+      link.href = `data:image/png;base64,${item.image_base64}`;
+      link.download = `${safeTitle}.png`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Image download failed:", error);
+    }
+  };  
 
   return (
     <main className="flex-1 p-6 md:p-10">
@@ -1236,6 +1531,8 @@ function Content() {
                 </span>
               </div>
 
+              {renderSavedDateMetadata(item)}
+
               {item.isLogo ? (
                 <div className="mt-4 flex-1">
                   <img
@@ -1288,6 +1585,17 @@ function Content() {
                       Edit
                     </button>
                   )}
+
+                  {item.isLogo && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadImage(item)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                    >
+                      <FaDownload />
+                      Download
+                    </button>
+                  )}                  
 
                   <button
                     type="button"
@@ -1357,6 +1665,8 @@ function Content() {
                 >
                   {selectedContent.title}
                 </h3>
+
+                {renderSavedDateMetadata(selectedContent)}
               </div>
 
               <button
@@ -1370,7 +1680,7 @@ function Content() {
             </header>
 
             <div className="overflow-y-auto p-6">
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-6">
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7">
                 {selectedContent.isLogo ? (
                   <div>
                     <img
@@ -1496,7 +1806,18 @@ function Content() {
               </div>
             </div>
 
-            <footer className="flex justify-end border-t border-slate-800 p-5">
+            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
+              {selectedContent.isLogo && (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadImage(selectedContent)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400"
+                >
+                  <FaDownload />
+                  Download Image
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => closeSelectedContent()}
@@ -1687,31 +2008,208 @@ function Content() {
               </div>
 
               <div>
-                <label
-                  htmlFor="move-project-select"
-                  className="block text-sm font-semibold text-slate-300"
-                >
-                  Move to project
-                </label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="move-project-select"
+                    className="block text-sm font-semibold text-slate-300"
+                  >
+                    Move to project
+                  </label>
 
-                <select
-                  id="move-project-select"
-                  value={moveProjectId}
-                  onChange={(event) => {
-                    setMoveProjectId(event.target.value);
-                    setMoveError("");
-                  }}
-                  disabled={moveLoading}
-                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
-                >
-                  <option value="">Choose a project</option>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMoveCreateProject((currentValue) => !currentValue);
+                      setMoveError("");
+                    }}
+                    disabled={moveLoading}
+                    className="text-sm font-semibold text-cyan-400 transition hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {showMoveCreateProject ? "Choose existing project" : "Create new project"}
+                  </button>
+                </div>
 
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.title} — Workspace {project.workspace_id}
-                    </option>
-                  ))}
-                </select>
+                {!showMoveCreateProject ? (
+                  <select
+                    id="move-project-select"
+                    value={moveProjectId}
+                    onChange={(event) => {
+                      setMoveProjectId(event.target.value);
+                      setMoveError("");
+                    }}
+                    disabled={moveLoading}
+                    className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                  >
+                    <option value="">Choose a project</option>
+
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.title} — Workspace {project.workspace_id}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="mt-3 space-y-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
+                    <div>
+                      <label
+                        htmlFor="move-new-project-title"
+                        className="block text-sm font-semibold text-slate-300"
+                      >
+                        New project name
+                      </label>
+
+                      <input
+                        id="move-new-project-title"
+                        type="text"
+                        value={moveNewProjectTitle}
+                        onChange={(event) => {
+                          setMoveNewProjectTitle(event.target.value);
+                          setMoveError("");
+                        }}
+                        disabled={moveLoading}
+                        maxLength={100}
+                        className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                        placeholder="Example: Campaign Forge AI"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="move-new-project-description"
+                        className="block text-sm font-semibold text-slate-300"
+                      >
+                        Description
+                      </label>
+
+                      <textarea
+                        id="move-new-project-description"
+                        value={moveNewProjectDescription}
+                        onChange={(event) => {
+                          setMoveNewProjectDescription(event.target.value);
+                          setMoveError("");
+                        }}
+                        disabled={moveLoading}
+                        rows={3}
+                        maxLength={5000}
+                        className="mt-2 w-full resize-y rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                        placeholder="Describe what this project is for..."
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label
+                          htmlFor="move-new-project-workspace"
+                          className="block text-sm font-semibold text-slate-300"
+                        >
+                          Workspace
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowMoveCreateWorkspace((currentValue) => !currentValue);
+                            setMoveError("");
+                          }}
+                          disabled={moveLoading}
+                          className="text-sm font-semibold text-cyan-400 transition hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {showMoveCreateWorkspace ? "Choose existing workspace" : "Create new workspace"}
+                        </button>
+                      </div>
+
+                      {!showMoveCreateWorkspace ? (
+                        <select
+                          id="move-new-project-workspace"
+                          value={moveNewProjectWorkspaceId}
+                          onChange={(event) => {
+                            setMoveNewProjectWorkspaceId(event.target.value);
+                            setMoveError("");
+                          }}
+                          disabled={moveLoading}
+                          className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                        >
+                          <option value="">Choose a workspace</option>
+
+                          {workspaces.map((workspace) => (
+                            <option key={workspace.id} value={workspace.id}>
+                              {workspace.name || `Workspace #${workspace.id}`}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="mt-3 space-y-4 rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+                          <div>
+                            <label
+                              htmlFor="move-new-workspace-name"
+                              className="block text-sm font-semibold text-slate-300"
+                            >
+                              New workspace name
+                            </label>
+
+                            <input
+                              id="move-new-workspace-name"
+                              type="text"
+                              value={moveNewWorkspaceName}
+                              onChange={(event) => {
+                                setMoveNewWorkspaceName(event.target.value);
+                                setMoveError("");
+                              }}
+                              disabled={moveLoading}
+                              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                              placeholder="Example: Client Projects"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor="move-new-workspace-description"
+                              className="block text-sm font-semibold text-slate-300"
+                            >
+                              Workspace description
+                            </label>
+
+                            <textarea
+                              id="move-new-workspace-description"
+                              value={moveNewWorkspaceDescription}
+                              onChange={(event) => {
+                                setMoveNewWorkspaceDescription(event.target.value);
+                                setMoveError("");
+                              }}
+                              disabled={moveLoading}
+                              rows={3}
+                              className="mt-2 w-full resize-y rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                              placeholder="Describe what this workspace is for..."
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleCreateMoveWorkspace}
+                            disabled={moveLoading || !moveNewWorkspaceName.trim()}
+                            className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {moveLoading ? "Creating..." : "Create Workspace"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleCreateMoveProject}
+                      disabled={
+                        moveLoading ||
+                        showMoveCreateWorkspace ||
+                        !moveNewProjectTitle.trim() ||
+                        !moveNewProjectWorkspaceId
+                      }
+                      className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {moveLoading ? "Creating..." : "Create Project"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {moveError && (
@@ -1734,7 +2232,7 @@ function Content() {
               <button
                 type="button"
                 onClick={handleMoveContent}
-                disabled={moveLoading || !moveProjectId}
+                disabled={moveLoading || !moveProjectId || showMoveCreateProject}
                 className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {moveLoading ? "Moving..." : "Move Content"}

@@ -10,6 +10,24 @@ import {
 const API_BASE_URL = "http://127.0.0.1:8000";
 const AI_REQUEST_TIMEOUT_MS = 35000;
 
+const SETTINGS_KEY = "tanioSettings";
+
+function getAutoSaveEnabled() {
+  try {
+    const storedSettings = localStorage.getItem(SETTINGS_KEY);
+
+    if (!storedSettings) {
+      return false;
+    }
+
+    const parsedSettings = JSON.parse(storedSettings);
+
+    return Boolean(parsedSettings?.autoSave?.enabled);
+  } catch {
+    return false;
+  }
+}
+
 function ProblemSolver() {
   const [problemTitle, setProblemTitle] = useState("");
   const [problemDescription, setProblemDescription] = useState("");
@@ -42,6 +60,15 @@ function ProblemSolver() {
   const [savingSolution, setSavingSolution] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState("");
+  const [autoSaveError, setAutoSaveError] = useState("");
+
+  const [showCreateWorkspaceForSave, setShowCreateWorkspaceForSave] =
+    useState(false);
+  const [newSaveWorkspaceName, setNewSaveWorkspaceName] = useState("");
+  const [newSaveWorkspaceDescription, setNewSaveWorkspaceDescription] =
+    useState("");
+  const [creatingSaveWorkspace, setCreatingSaveWorkspace] = useState(false);
 
   const markdownComponents = {
     h1: ({ children }) => (
@@ -149,6 +176,229 @@ function ProblemSolver() {
     ),
   };
 
+  const findOrCreateAutoSaveWorkspace = async (token) => {
+    const response = await fetch(`${API_BASE_URL}/workspaces/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Auto-Save could not load your workspaces.");
+    }
+
+    const data = await response.json();
+    const loadedWorkspaces = Array.isArray(data) ? data : [];
+
+    const existingWorkspace = loadedWorkspaces.find(
+      (workspace) =>
+        String(workspace.name || workspace.title || "").trim().toLowerCase() ===
+        "auto-saved content"
+    );
+
+    if (existingWorkspace) {
+      return existingWorkspace;
+    }
+
+    const createResponse = await fetch(`${API_BASE_URL}/workspaces/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        name: "Auto-Saved Content",
+        description:
+          "Automatically generated workspace for saved AI module outputs.",
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const errorData = await createResponse.json().catch(() => null);
+
+      throw new Error(
+        typeof errorData?.detail === "string"
+          ? errorData.detail
+          : "Auto-Save could not create the Auto-Saved Content workspace."
+      );
+    }
+
+    const createdWorkspace = await createResponse.json();
+
+    setWorkspaces((currentWorkspaces) => [
+      createdWorkspace,
+      ...currentWorkspaces,
+    ]);
+
+    return createdWorkspace;
+  };
+
+  const findOrCreateAutoSaveProject = async ({
+    token,
+    workspaceId,
+    projectTitle,
+    projectDescription,
+  }) => {
+    const response = await fetch(`${API_BASE_URL}/projects/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Auto-Save could not load your projects.");
+    }
+
+    const data = await response.json();
+    const loadedProjects = Array.isArray(data) ? data : [];
+
+    const existingProject = loadedProjects.find(
+      (project) =>
+        String(project.workspace_id) === String(workspaceId) &&
+        String(project.title || "").trim().toLowerCase() ===
+          projectTitle.trim().toLowerCase()
+    );
+
+    if (existingProject) {
+      return existingProject;
+    }
+
+    const createResponse = await fetch(`${API_BASE_URL}/projects/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        title: projectTitle,
+        description: projectDescription,
+        workspace_id: Number(workspaceId),
+      }),
+    });
+
+    if (!createResponse.ok) {
+      const errorData = await createResponse.json().catch(() => null);
+
+      let message = "Auto-Save could not create the Problem Solver auto-save project.";
+
+      if (typeof errorData?.detail === "string") {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData?.detail)) {
+        message = errorData.detail
+          .map((item) => item.msg)
+          .filter(Boolean)
+          .join(" ");
+      }
+
+      throw new Error(message);
+    }
+
+    return createResponse.json();
+  };
+
+  const autoSaveGeneratedProblemSolution = async ({
+    token,
+    cleanedTitle,
+    solutionBody,
+    versions,
+  }) => {
+    if (!getAutoSaveEnabled()) {
+      return;
+    }
+
+    setAutoSaveStatus("Auto-saving Problem Solver result...");
+    setAutoSaveError("");
+
+    try {
+      const autoSaveWorkspace = await findOrCreateAutoSaveWorkspace(token);
+
+      const autoSaveProject = await findOrCreateAutoSaveProject({
+        token,
+        workspaceId: autoSaveWorkspace.id,
+        projectTitle: "Problem Solver Auto-Saves",
+        projectDescription:
+          "Automatically saved Problem Solver generations.",
+      });
+
+      const contentResponse = await fetch(`${API_BASE_URL}/content/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          project_id: Number(autoSaveProject.id),
+          title: `${cleanedTitle} - Problem Solver Result`,
+          content_type: "Problem Solver",
+          body: solutionBody,
+        }),
+      });
+
+      if (!contentResponse.ok) {
+        const errorData = await contentResponse.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Auto-Save could not save the Problem Solver result."
+        );
+      }
+
+      const savedContent = await contentResponse.json();
+
+      if (savedContent?.id && Array.isArray(versions)) {
+        for (const version of versions) {
+          const versionResponse = await fetch(
+            `${API_BASE_URL}/content/${savedContent.id}/versions`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+                Accept: "application/json",
+              },
+              body: JSON.stringify({
+                body: version.solution,
+                regeneration_instructions:
+                  version.instructions?.trim() || null,
+              }),
+            }
+          );
+
+          if (!versionResponse.ok) {
+            const errorData = await versionResponse.json().catch(() => null);
+
+            throw new Error(
+              typeof errorData?.detail === "string"
+                ? errorData.detail
+                : "The result was auto-saved, but its version history could not be saved completely."
+            );
+          }
+        }
+      }
+
+      setAutoSaveStatus(
+        "Problem Solver result auto-saved to Auto-Saved Content → Problem Solver Auto-Saves."
+      );
+
+      notifyProblemSaved(cleanedTitle);
+    } catch (err) {
+      console.error("Problem Solver auto-save error:", err);
+
+      setAutoSaveStatus("");
+      setAutoSaveError(
+        err instanceof Error
+          ? err.message
+          : "Auto-Save could not save the Problem Solver result."
+      );
+    }
+  };  
+
   const handleAnalyzeProblem = async () => {
     if (loading) {
       return;
@@ -169,6 +419,8 @@ function ProblemSolver() {
     setShowSaveModal(false);
     setSaveError("");
     setSaveSuccess("");
+    setAutoSaveStatus("");
+    setAutoSaveError("");
 
     if (cleanedTitle.length < 2) {
       setError("Problem title must contain at least 2 characters.");
@@ -293,17 +545,25 @@ function ProblemSolver() {
 
       setGeneratedSolution(initialSolution);
 
-      setSolutionVersions([
+      const initialVersions = [
         {
           solution: initialSolution,
           instructions: "",
           createdAt: new Date().toISOString(),
         },
-      ]);
+      ];
 
+      setSolutionVersions(initialVersions);
       setActiveVersionIndex(0);
       setRegenerationInstructions("");
       setRegenerationError("");
+
+      await autoSaveGeneratedProblemSolution({
+        token,
+        cleanedTitle,
+        solutionBody: initialSolution,
+        versions: initialVersions,
+      });
 
       notifyProblemAnalysisComplete(cleanedTitle);
     } catch (err) {
@@ -348,6 +608,8 @@ function ProblemSolver() {
     }
 
     setRegenerationError("");
+    setAutoSaveStatus("");
+    setAutoSaveError("");
     setRegenerating(true);
 
     const controller = new AbortController();
@@ -432,20 +694,20 @@ function ProblemSolver() {
         createdAt: new Date().toISOString(),
       };
 
-      setSolutionVersions((previousVersions) => {
-        const updatedVersions = [
-          ...previousVersions,
-          newVersion,
-        ];
+      const updatedVersions = [...solutionVersions, newVersion];
 
-        setActiveVersionIndex(updatedVersions.length - 1);
-
-        return updatedVersions;
-      });
-
+      setSolutionVersions(updatedVersions);
+      setActiveVersionIndex(updatedVersions.length - 1);
       setGeneratedSolution(regeneratedSolution);
       setRegenerationInstructions("");
       setShowRegenerateModal(false);
+
+      await autoSaveGeneratedProblemSolution({
+        token,
+        cleanedTitle: problemTitle.trim() || "Untitled Problem",
+        solutionBody: regeneratedSolution,
+        versions: updatedVersions,
+      });
 
       notifyProblemRegenerated(problemTitle.trim());
     } catch (err) {
@@ -492,6 +754,9 @@ function ProblemSolver() {
     setSaveError("");
     setSaveSuccess("");
     setSelectedWorkspaceId("");
+    setShowCreateWorkspaceForSave(false);
+    setNewSaveWorkspaceName("");
+    setNewSaveWorkspaceDescription("");
     setShowSaveModal(true);
 
     try {
@@ -535,14 +800,92 @@ function ProblemSolver() {
   };
 
   const closeSaveModal = () => {
-    if (savingSolution) {
+    if (savingSolution || creatingSaveWorkspace) {
       return;
     }
 
     setShowSaveModal(false);
     setSelectedWorkspaceId("");
     setSaveError("");
+    setShowCreateWorkspaceForSave(false);
+    setNewSaveWorkspaceName("");
+    setNewSaveWorkspaceDescription("");
   };
+
+  const handleCreateSaveWorkspace = async () => {
+    const cleanedName = newSaveWorkspaceName.trim();
+    const cleanedDescription = newSaveWorkspaceDescription.trim();
+
+    if (!cleanedName) {
+      setSaveError("Workspace name is required.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setSaveError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setCreatingSaveWorkspace(true);
+    setSaveError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/workspaces/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          name: cleanedName,
+          description: cleanedDescription || null,
+        }),
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Workspace could not be created."
+        );
+      }
+
+      const createdWorkspace = await response.json();
+
+      setWorkspaces((currentWorkspaces) => [
+        createdWorkspace,
+        ...currentWorkspaces,
+      ]);
+
+      setSelectedWorkspaceId(String(createdWorkspace.id));
+      setShowCreateWorkspaceForSave(false);
+      setNewSaveWorkspaceName("");
+      setNewSaveWorkspaceDescription("");
+    } catch (err) {
+      console.error("Problem Solver create workspace error:", err);
+
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : "Workspace could not be created."
+      );
+    } finally {
+      setCreatingSaveWorkspace(false);
+    }
+  };  
 
   const handleSaveSolution = async () => {
     if (savingSolution || !generatedSolution) {
@@ -1125,6 +1468,32 @@ function ProblemSolver() {
               </div>
             )}
 
+            {autoSaveStatus && (
+              <div
+                className="mb-5 rounded-xl border border-cyan-800 bg-cyan-950/50 p-4"
+                role="status"
+                aria-live="polite"
+              >
+                <p className="font-semibold text-cyan-300">Auto-Save</p>
+                <p className="mt-1 text-sm text-cyan-300">
+                  {autoSaveStatus}
+                </p>
+              </div>
+            )}
+
+            {autoSaveError && (
+              <div
+                className="mb-5 rounded-xl border border-amber-800 bg-amber-950/50 p-4"
+                role="alert"
+                aria-live="polite"
+              >
+                <p className="font-semibold text-amber-300">Auto-Save issue</p>
+                <p className="mt-1 text-sm text-amber-300">
+                  {autoSaveError}
+                </p>
+              </div>
+            )}            
+
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-cyan-500/10 bg-gradient-to-b from-slate-950/75 to-slate-950/55 shadow-inner shadow-black/25 ring-1 ring-white/[0.025]">
               {generatedSolution && !loading && (
                 <div className="flex items-center justify-between gap-3 border-b border-slate-800/80 bg-slate-900/70 px-4 py-2.5">
@@ -1499,7 +1868,11 @@ function ProblemSolver() {
           aria-modal="true"
           aria-labelledby="save-workspace-modal-title"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !savingSolution) {
+            if (
+              event.target === event.currentTarget &&
+              !savingSolution &&
+              !creatingSaveWorkspace
+            ) {
               closeSaveModal();
             }
           }}
@@ -1525,7 +1898,7 @@ function ProblemSolver() {
               <button
                 type="button"
                 onClick={closeSaveModal}
-                disabled={savingSolution}
+                disabled={savingSolution || creatingSaveWorkspace}
                 className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Close save modal"
               >
@@ -1562,32 +1935,116 @@ function ProblemSolver() {
             ) : (
               <div className="mt-6 space-y-5">
                 <div>
-                  <label
-                    htmlFor="save-workspace-select"
-                    className="mb-2 block text-sm font-semibold text-slate-300"
-                  >
-                    Workspace
-                  </label>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <label
+                      htmlFor="save-workspace-select"
+                      className="block text-sm font-semibold text-slate-300"
+                    >
+                      Workspace
+                    </label>
 
-                  <select
-                    id="save-workspace-select"
-                    value={selectedWorkspaceId}
-                    onChange={(event) => {
-                      setSelectedWorkspaceId(event.target.value);
-                      setSaveError("");
-                    }}
-                    disabled={savingSolution}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
-                  >
-                    <option value="">Choose a workspace</option>
-                    {workspaces.map((workspace) => (
-                      <option key={workspace.id} value={workspace.id}>
-                        {workspace.name || workspace.title || `Workspace #${workspace.id}`}
-                      </option>
-                    ))}
-                  </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreateWorkspaceForSave((currentValue) => !currentValue);
+                        setSaveError("");
+                      }}
+                      disabled={savingSolution || creatingSaveWorkspace}
+                      className="text-sm font-semibold text-cyan-300 transition hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {showCreateWorkspaceForSave
+                        ? "Choose existing workspace"
+                        : "Create new workspace"}
+                    </button>
+                  </div>
+
+                  {!showCreateWorkspaceForSave ? (
+                    <select
+                      id="save-workspace-select"
+                      value={selectedWorkspaceId}
+                      onChange={(event) => {
+                        setSelectedWorkspaceId(event.target.value);
+                        setSaveError("");
+                      }}
+                      disabled={savingSolution || creatingSaveWorkspace}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                    >
+                      <option value="">Choose a workspace</option>
+
+                      {workspaces.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name || workspace.title || `Workspace #${workspace.id}`}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+                      <div>
+                        <label
+                          htmlFor="problem-save-new-workspace-name"
+                          className="mb-2 block text-sm font-semibold text-slate-300"
+                        >
+                          New Workspace Name
+                        </label>
+
+                        <input
+                          id="problem-save-new-workspace-name"
+                          type="text"
+                          value={newSaveWorkspaceName}
+                          onChange={(event) => {
+                            setNewSaveWorkspaceName(event.target.value);
+                            setSaveError("");
+                          }}
+                          disabled={creatingSaveWorkspace}
+                          placeholder="Example: Business Problems"
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label
+                          htmlFor="problem-save-new-workspace-description"
+                          className="mb-2 block text-sm font-semibold text-slate-300"
+                        >
+                          Workspace Description
+                        </label>
+
+                        <textarea
+                          id="problem-save-new-workspace-description"
+                          value={newSaveWorkspaceDescription}
+                          onChange={(event) => {
+                            setNewSaveWorkspaceDescription(event.target.value);
+                            setSaveError("");
+                          }}
+                          disabled={creatingSaveWorkspace}
+                          rows="3"
+                          placeholder="Describe what this workspace is for..."
+                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCreateSaveWorkspace}
+                        disabled={
+                          creatingSaveWorkspace ||
+                          !newSaveWorkspaceName.trim()
+                        }
+                        className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {creatingSaveWorkspace
+                          ? "Creating Workspace..."
+                          : "Create Workspace"}
+                      </button>
+                    </div>
+                  )}
+
+                  {showCreateWorkspaceForSave && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Create the workspace first, then save the solution.
+                    </p>
+                  )}
                 </div>
-
               </div>
             )}
 
@@ -1606,7 +2063,7 @@ function ProblemSolver() {
               <button
                 type="button"
                 onClick={closeSaveModal}
-                disabled={savingSolution}
+                disabled={savingSolution || creatingSaveWorkspace}
                 className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
@@ -1618,12 +2075,18 @@ function ProblemSolver() {
                 disabled={
                   loadingSaveOptions ||
                   savingSolution ||
+                  creatingSaveWorkspace ||
+                  showCreateWorkspaceForSave ||
                   !selectedWorkspaceId ||
                   !generatedSolution
                 }
                 className="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {savingSolution ? "Saving..." : "Save Solution"}
+                {savingSolution
+                  ? "Saving..."
+                  : creatingSaveWorkspace
+                    ? "Creating Workspace..."
+                    : "Save Solution"}
               </button>
             </div>
           </div>

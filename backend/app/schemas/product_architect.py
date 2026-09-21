@@ -40,6 +40,8 @@ class ProductArchitectResponse(BaseModel):
 
 class ProductLogoRequest(BaseModel):
     project_id: Optional[int] = None
+    context_content_id: Optional[int] = None
+    save_generated_logo: bool = False
     
     project_name: str = Field(
         ...,
@@ -82,8 +84,8 @@ class ProductLogoUpdate(BaseModel):
     project_id: int
 
 class ProductLogoResponse(BaseModel):
-    id: int
-    project_id: int
+    id: Optional[int] = None
+    project_id: Optional[int] = None
     image_base64: str
     style: str
     preferred_colors: str
