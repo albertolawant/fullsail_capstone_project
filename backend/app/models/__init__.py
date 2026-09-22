@@ -4,3 +4,4 @@ from .project import Project
 from .content import GeneratedContent
 from .product_logo import ProductLogo
 from .activity_log import ActivityLog
+from .user_interest import UserInterest

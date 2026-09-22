@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 
-import SignIn from "./pages/SignIn";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
+import InterestSelectionModal from "./components/InterestSelectionModal";
+
+import SignIn from "./pages/SignIn";
 import Dashboard from "./pages/Dashboard";
 import Workspaces from "./pages/Workspaces";
 import Projects from "./pages/Projects";
@@ -17,6 +24,7 @@ import HelpGuide from "./pages/HelpGuide";
 
 const SETTINGS_KEY = "tanioSettings";
 const DASHBOARD_MODE_KEY = "tanioDashboardMode";
+const INTEREST_PROMPT_KEY = "tanioInterestPromptPending";
 
 function getStoredAppearance() {
   try {
@@ -52,12 +60,20 @@ function getStoredDashboardMode() {
 
 function App() {
   const location = useLocation();
-  const [appearance, setAppearance] = useState(getStoredAppearance);
+
+  const [appearance, setAppearance] = useState(
+    getStoredAppearance
+  );
+
   const [dashboardMode, setDashboardMode] = useState(
     getStoredDashboardMode
   );
 
+  const [showInterestModal, setShowInterestModal] =
+    useState(false);
+
   const isSignInPage = location.pathname === "/signin";
+
   const isSignedIn =
     localStorage.getItem("tanioSession") === "true";
 
@@ -70,6 +86,7 @@ function App() {
       "tanio-settings-updated",
       updateAppearance
     );
+
     window.addEventListener("storage", updateAppearance);
 
     return () => {
@@ -77,6 +94,7 @@ function App() {
         "tanio-settings-updated",
         updateAppearance
       );
+
       window.removeEventListener("storage", updateAppearance);
     };
   }, []);
@@ -84,7 +102,10 @@ function App() {
   useEffect(() => {
     const root = document.documentElement;
 
-    root.setAttribute("data-tanio-theme", appearance.theme);
+    root.setAttribute(
+      "data-tanio-theme",
+      appearance.theme
+    );
 
     if (appearance.compactLayout) {
       root.classList.add("tanio-compact");
@@ -93,9 +114,26 @@ function App() {
     }
   }, [appearance]);
 
+  useEffect(() => {
+    if (!isSignedIn || isSignInPage) {
+      setShowInterestModal(false);
+      return;
+    }
+
+    const shouldShowInterestModal =
+      localStorage.getItem(INTEREST_PROMPT_KEY) === "true";
+
+    setShowInterestModal(shouldShowInterestModal);
+  }, [isSignedIn, isSignInPage, location.pathname]);
+
   const handleDashboardModeChange = (mode) => {
     setDashboardMode(mode);
     localStorage.setItem(DASHBOARD_MODE_KEY, mode);
+  };
+
+  const handleInterestSelectionComplete = () => {
+    localStorage.removeItem(INTEREST_PROMPT_KEY);
+    setShowInterestModal(false);
   };
 
   if (!isSignedIn && !isSignInPage) {
@@ -128,38 +166,71 @@ function App() {
               element={
                 <Dashboard
                   dashboardMode={dashboardMode}
-                  onDashboardModeChange={handleDashboardModeChange}
+                  onDashboardModeChange={
+                    handleDashboardModeChange
+                  }
                 />
               }
             />
-            <Route path="/workspaces" element={<Workspaces />} />
+
+            <Route
+              path="/workspaces"
+              element={<Workspaces />}
+            />
+
             <Route
               path="/workspaces/:workspaceId"
               element={<Workspaces />}
             />
-            <Route path="/projects" element={<Projects />} />
+
+            <Route
+              path="/projects"
+              element={<Projects />}
+            />
+
             <Route
               path="/projects/:projectId"
               element={<ProjectDetail />}
             />
-            <Route path="/content" element={<Content />} />
+
+            <Route
+              path="/content"
+              element={<Content />}
+            />
+
             <Route
               path="/product-architect"
               element={<ProductArchitect />}
             />
+
             <Route
               path="/tabletop-creator"
               element={<TabletopCreator />}
             />
+
             <Route
               path="/problem-solver"
               element={<ProblemSolver />}
             />
-            <Route path="/help" element={<HelpGuide />} />
-            <Route path="/settings" element={<Settings />} />
+
+            <Route
+              path="/help"
+              element={<HelpGuide />}
+            />
+
+            <Route
+              path="/settings"
+              element={<Settings />}
+            />
           </Routes>
         </div>
       </div>
+
+      {showInterestModal && (
+        <InterestSelectionModal
+          onComplete={handleInterestSelectionComplete}
+        />
+      )}
     </div>
   );
 }
