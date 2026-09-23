@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+const SELECTED_MODULES_KEY = "tanioSelectedModules";
+
 const MODULES = [
   {
     id: "product-architect",
@@ -24,8 +26,30 @@ const MODULES = [
   },
 ];
 
+const VALID_MODULE_IDS = MODULES.map((module) => module.id);
+
+function getStoredModules() {
+  try {
+    const storedModules = JSON.parse(
+      localStorage.getItem(SELECTED_MODULES_KEY) || "[]"
+    );
+
+    if (!Array.isArray(storedModules)) {
+      return [];
+    }
+
+    return storedModules.filter((moduleId) =>
+      VALID_MODULE_IDS.includes(moduleId)
+    );
+  } catch {
+    return [];
+  }
+}
+
 function InterestSelectionModal({ onComplete }) {
-  const [selectedModules, setSelectedModules] = useState([]);
+  const [selectedModules, setSelectedModules] =
+    useState(getStoredModules);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -61,7 +85,9 @@ function InterestSelectionModal({ onComplete }) {
     const token = localStorage.getItem("token");
 
     if (!token) {
-      setError("Your session has expired. Please sign in again.");
+      setError(
+        "Your session has expired. Please sign in again."
+      );
       return;
     }
 
@@ -95,13 +121,14 @@ function InterestSelectionModal({ onComplete }) {
       }
 
       const data = await response.json();
+      const savedModules = data.selected_modules;
 
       localStorage.setItem(
-        "tanioSelectedModules",
-        JSON.stringify(data.selected_modules)
+        SELECTED_MODULES_KEY,
+        JSON.stringify(savedModules)
       );
 
-      onComplete();
+      onComplete(savedModules);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -193,10 +220,7 @@ function InterestSelectionModal({ onComplete }) {
 
         <div className="mt-6 min-h-6 text-center">
           {error && (
-            <p
-              className="text-sm text-red-300"
-              role="alert"
-            >
+            <p className="text-sm text-red-300" role="alert">
               {error}
             </p>
           )}

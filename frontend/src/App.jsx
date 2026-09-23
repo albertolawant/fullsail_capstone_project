@@ -25,6 +25,13 @@ import HelpGuide from "./pages/HelpGuide";
 const SETTINGS_KEY = "tanioSettings";
 const DASHBOARD_MODE_KEY = "tanioDashboardMode";
 const INTEREST_PROMPT_KEY = "tanioInterestPromptPending";
+const SELECTED_MODULES_KEY = "tanioSelectedModules";
+
+const VALID_MODULE_IDS = [
+  "product-architect",
+  "tabletop-creator",
+  "problem-solver",
+];
 
 function getStoredAppearance() {
   try {
@@ -58,6 +65,24 @@ function getStoredDashboardMode() {
     : "basic";
 }
 
+function getStoredSelectedModules() {
+  try {
+    const storedModules = JSON.parse(
+      localStorage.getItem(SELECTED_MODULES_KEY) || "[]"
+    );
+
+    if (!Array.isArray(storedModules)) {
+      return [];
+    }
+
+    return storedModules.filter((moduleId) =>
+      VALID_MODULE_IDS.includes(moduleId)
+    );
+  } catch {
+    return [];
+  }
+}
+
 function App() {
   const location = useLocation();
 
@@ -67,6 +92,10 @@ function App() {
 
   const [dashboardMode, setDashboardMode] = useState(
     getStoredDashboardMode
+  );
+
+  const [selectedModules, setSelectedModules] = useState(
+    getStoredSelectedModules
   );
 
   const [showInterestModal, setShowInterestModal] =
@@ -120,6 +149,8 @@ function App() {
       return;
     }
 
+    setSelectedModules(getStoredSelectedModules());
+
     const shouldShowInterestModal =
       localStorage.getItem(INTEREST_PROMPT_KEY) === "true";
 
@@ -131,10 +162,14 @@ function App() {
     localStorage.setItem(DASHBOARD_MODE_KEY, mode);
   };
 
-  const handleInterestSelectionComplete = () => {
+  const handleInterestSelectionComplete = (savedModules) => {
+    setSelectedModules(savedModules);
     localStorage.removeItem(INTEREST_PROMPT_KEY);
     setShowInterestModal(false);
   };
+
+  const isModuleEnabled = (moduleId) =>
+    selectedModules.includes(moduleId);
 
   if (!isSignedIn && !isSignInPage) {
     return <Navigate to="/signin" replace />;
@@ -154,7 +189,10 @@ function App() {
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-white">
-      <Sidebar dashboardMode={dashboardMode} />
+      <Sidebar
+        dashboardMode={dashboardMode}
+        selectedModules={selectedModules}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
@@ -169,6 +207,7 @@ function App() {
                   onDashboardModeChange={
                     handleDashboardModeChange
                   }
+                  selectedModules={selectedModules}
                 />
               }
             />
@@ -200,17 +239,35 @@ function App() {
 
             <Route
               path="/product-architect"
-              element={<ProductArchitect />}
+              element={
+                isModuleEnabled("product-architect") ? (
+                  <ProductArchitect />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
             />
 
             <Route
               path="/tabletop-creator"
-              element={<TabletopCreator />}
+              element={
+                isModuleEnabled("tabletop-creator") ? (
+                  <TabletopCreator />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
             />
 
             <Route
               path="/problem-solver"
-              element={<ProblemSolver />}
+              element={
+                isModuleEnabled("problem-solver") ? (
+                  <ProblemSolver />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
             />
 
             <Route
