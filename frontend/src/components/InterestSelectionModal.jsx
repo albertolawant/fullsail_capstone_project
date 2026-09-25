@@ -49,7 +49,6 @@ function getStoredModules() {
 function InterestSelectionModal({ onComplete }) {
   const [selectedModules, setSelectedModules] =
     useState(getStoredModules);
-
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -76,12 +75,7 @@ function InterestSelectionModal({ onComplete }) {
     });
   };
 
-  const handleContinue = async () => {
-    if (selectedModules.length === 0) {
-      setError("Select at least one module to continue.");
-      return;
-    }
-
+  const saveModules = async (modulesToSave) => {
     const token = localStorage.getItem("token");
 
     if (!token) {
@@ -104,7 +98,7 @@ function InterestSelectionModal({ onComplete }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            selected_modules: selectedModules,
+            selected_modules: modulesToSave,
           }),
         }
       );
@@ -121,7 +115,12 @@ function InterestSelectionModal({ onComplete }) {
       }
 
       const data = await response.json();
-      const savedModules = data.selected_modules;
+
+      const savedModules = Array.isArray(
+        data.selected_modules
+      )
+        ? data.selected_modules
+        : modulesToSave;
 
       localStorage.setItem(
         SELECTED_MODULES_KEY,
@@ -138,6 +137,20 @@ function InterestSelectionModal({ onComplete }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleContinue = () => {
+    if (selectedModules.length === 0) {
+      setError("Select at least one module to continue.");
+      return;
+    }
+
+    saveModules(selectedModules);
+  };
+
+  const handleShowEverything = () => {
+    setSelectedModules(VALID_MODULE_IDS);
+    saveModules(VALID_MODULE_IDS);
   };
 
   return (
@@ -161,8 +174,8 @@ function InterestSelectionModal({ onComplete }) {
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-slate-400 sm:text-base">
-            Select one or more Tanio AI modules. You can
-            choose everything that fits the way you work.
+            Select one or more Tanio AI modules, or choose
+            Show Me Everything to enable them all.
           </p>
         </div>
 
@@ -177,8 +190,9 @@ function InterestSelectionModal({ onComplete }) {
                 key={module.id}
                 type="button"
                 onClick={() => toggleModule(module.id)}
+                disabled={saving}
                 aria-pressed={isSelected}
-                className={`relative min-h-52 rounded-xl border p-5 text-left transition-all duration-200 ${
+                className={`relative min-h-52 rounded-xl border p-5 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
                   isSelected
                     ? "border-cyan-400 bg-cyan-400/10 shadow-lg shadow-cyan-950/30"
                     : "border-slate-700 bg-slate-900/60 hover:border-slate-500 hover:bg-slate-900"
@@ -218,7 +232,25 @@ function InterestSelectionModal({ onComplete }) {
           })}
         </div>
 
-        <div className="mt-6 min-h-6 text-center">
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={handleShowEverything}
+            disabled={saving}
+            className="w-full rounded-xl border border-cyan-400/50 bg-cyan-400/10 px-6 py-4 text-left transition hover:border-cyan-400 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50 sm:text-center"
+          >
+            <span className="block font-semibold text-cyan-300">
+              Show Me Everything
+            </span>
+
+            <span className="mt-1 block text-sm text-slate-400">
+              Enable Product Architect, Tabletop Creator, and
+              Problem Solver.
+            </span>
+          </button>
+        </div>
+
+        <div className="mt-5 min-h-6 text-center">
           {error && (
             <p className="text-sm text-red-300" role="alert">
               {error}

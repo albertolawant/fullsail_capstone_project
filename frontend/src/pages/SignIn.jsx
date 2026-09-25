@@ -43,7 +43,8 @@ function SignIn() {
           .catch(() => null);
 
         throw new Error(
-          errorData?.detail || "Invalid email or password."
+          errorData?.detail ||
+            "Invalid email or password."
         );
       }
 
@@ -68,7 +69,8 @@ function SignIn() {
         JSON.stringify({
           email: email.trim(),
           username:
-            email.trim().toLowerCase() === "demo@tanio.ai"
+            email.trim().toLowerCase() ===
+            "demo@tanio.ai"
               ? "Demo User"
               : email.trim(),
         })

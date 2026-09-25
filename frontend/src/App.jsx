@@ -24,8 +24,8 @@ import HelpGuide from "./pages/HelpGuide";
 
 const SETTINGS_KEY = "tanioSettings";
 const DASHBOARD_MODE_KEY = "tanioDashboardMode";
-const INTEREST_PROMPT_KEY = "tanioInterestPromptPending";
 const SELECTED_MODULES_KEY = "tanioSelectedModules";
+const INTEREST_PROMPT_KEY = "tanioInterestPromptPending";
 
 const VALID_MODULE_IDS = [
   "product-architect",
@@ -124,7 +124,10 @@ function App() {
         updateAppearance
       );
 
-      window.removeEventListener("storage", updateAppearance);
+      window.removeEventListener(
+        "storage",
+        updateAppearance
+      );
     };
   }, []);
 
@@ -144,27 +147,148 @@ function App() {
   }, [appearance]);
 
   useEffect(() => {
+    const handleModulesUpdated = (event) => {
+      const updatedModules = Array.isArray(event.detail)
+        ? event.detail.filter((moduleId) =>
+            VALID_MODULE_IDS.includes(moduleId)
+          )
+        : getStoredSelectedModules();
+
+      setSelectedModules(updatedModules);
+    };
+
+    const handleStorageUpdate = (event) => {
+      if (event.key === SELECTED_MODULES_KEY) {
+        setSelectedModules(getStoredSelectedModules());
+      }
+    };
+
+    window.addEventListener(
+      "tanio-modules-updated",
+      handleModulesUpdated
+    );
+
+    window.addEventListener(
+      "storage",
+      handleStorageUpdate
+    );
+
+    return () => {
+      window.removeEventListener(
+        "tanio-modules-updated",
+        handleModulesUpdated
+      );
+
+      window.removeEventListener(
+        "storage",
+        handleStorageUpdate
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isSignedIn || isSignInPage) {
       setShowInterestModal(false);
       return;
     }
 
-    setSelectedModules(getStoredSelectedModules());
-
     const shouldShowInterestModal =
       localStorage.getItem(INTEREST_PROMPT_KEY) === "true";
 
     setShowInterestModal(shouldShowInterestModal);
-  }, [isSignedIn, isSignInPage, location.pathname]);
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setShowInterestModal(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadInterestSelection = async () => {
+      try {
+        const response = await fetch(
+          "http://127.0.0.1:8000/auth/me/interests",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "Unable to load your module selections."
+          );
+        }
+
+        const data = await response.json();
+
+        const savedModules = Array.isArray(
+          data.selected_modules
+        )
+          ? data.selected_modules.filter((moduleId) =>
+              VALID_MODULE_IDS.includes(moduleId)
+            )
+          : [];
+
+        setSelectedModules(savedModules);
+
+        localStorage.setItem(
+          SELECTED_MODULES_KEY,
+          JSON.stringify(savedModules)
+        );
+
+        setShowInterestModal(
+          localStorage.getItem(INTEREST_PROMPT_KEY) ===
+            "true"
+        );
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error(error);
+
+          setSelectedModules(
+            getStoredSelectedModules()
+          );
+        }
+      }
+    };
+
+    loadInterestSelection();
+
+    return () => {
+      controller.abort();
+    };
+  }, [isSignedIn, isSignInPage]);
 
   const handleDashboardModeChange = (mode) => {
     setDashboardMode(mode);
-    localStorage.setItem(DASHBOARD_MODE_KEY, mode);
+
+    localStorage.setItem(
+      DASHBOARD_MODE_KEY,
+      mode
+    );
   };
 
-  const handleInterestSelectionComplete = (savedModules) => {
-    setSelectedModules(savedModules);
+  const handleInterestSelectionComplete = (
+    savedModules
+  ) => {
+    const validSavedModules = savedModules.filter(
+      (moduleId) =>
+        VALID_MODULE_IDS.includes(moduleId)
+    );
+
+    setSelectedModules(validSavedModules);
+
+    localStorage.setItem(
+      SELECTED_MODULES_KEY,
+      JSON.stringify(validSavedModules)
+    );
+
     localStorage.removeItem(INTEREST_PROMPT_KEY);
+
     setShowInterestModal(false);
   };
 
@@ -182,7 +306,10 @@ function App() {
   if (isSignInPage) {
     return (
       <Routes>
-        <Route path="/signin" element={<SignIn />} />
+        <Route
+          path="/signin"
+          element={<SignIn />}
+        />
       </Routes>
     );
   }
