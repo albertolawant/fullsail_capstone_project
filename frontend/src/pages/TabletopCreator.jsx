@@ -1139,7 +1139,7 @@ function TabletopCreator() {
       }
 
       const data = await response.json();
-      const generatedContent = data[responseField];
+      const generatedContent = cleanGeneratedMarkdown(data[responseField]);
 
       const newVersion = {
         content: generatedContent,
