@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import FormattingHelp from "../components/FormattingHelp";
 import {
   FaBrain,
   FaDiceD20,
@@ -1898,7 +1899,7 @@ function Content() {
               </div>
 
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <label
                     htmlFor="edit-content-body"
                     className="block text-sm font-semibold text-slate-300"
@@ -1906,9 +1907,7 @@ function Content() {
                     Content Body
                   </label>
 
-                  <span className="text-xs text-slate-500">
-                    Markdown formatting is supported.
-                  </span>
+                  <FormattingHelp />
                 </div>
 
                 <textarea

@@ -168,14 +168,73 @@ const IMAGE_TYPES = [
 
 const TABLETOP_TABS = [
   {
-    key: "content",
-    label: "Content Generator",
+    key: "campaign",
+    label: "Campaign",
+  },
+  {
+    key: "npc",
+    label: "NPC",
+  },
+  {
+    key: "quest",
+    label: "Quest",
+  },
+  {
+    key: "encounter",
+    label: "Encounter",
+  },
+  {
+    key: "location",
+    label: "Location",
   },
   {
     key: "image",
     label: "Image Generator",
   },
 ];
+
+const GENERATOR_PAGE_CONTENT = {
+  campaign: {
+    title: "Create Campaign",
+    description:
+      "Build the foundation of your tabletop campaign, including its setting, tone, story direction, and world.",
+    formHint:
+      "Enter the campaign details and world-building information Tanio should use.",
+    descriptionLabel: "Campaign Description / World-Building Notes",
+  },
+  npc: {
+    title: "Create NPCs",
+    description:
+      "Generate characters, allies, villains, merchants, quest givers, and other people for your campaign.",
+    formHint:
+      "Provide campaign context so Tanio can create NPCs that fit your world.",
+    descriptionLabel: "Campaign Context / NPC Notes",
+  },
+  quest: {
+    title: "Create Quests",
+    description:
+      "Generate quests, side missions, objectives, rewards, complications, and story hooks.",
+    formHint:
+      "Provide campaign context so Tanio can create quests that fit your story and setting.",
+    descriptionLabel: "Campaign Context / Quest Notes",
+  },
+  encounter: {
+    title: "Create Encounters",
+    description:
+      "Build combat, social, exploration, and story encounters for your tabletop campaign.",
+    formHint:
+      "Provide campaign context so Tanio can build encounters that match your world and tone.",
+    descriptionLabel: "Campaign Context / Encounter Notes",
+  },
+  location: {
+    title: "Create Locations",
+    description:
+      "Generate towns, landmarks, dungeons, buildings, regions, and other locations for your world.",
+    formHint:
+      "Provide campaign context so Tanio can create locations that belong naturally in your world.",
+    descriptionLabel: "Campaign Context / Location Notes",
+  },
+};
 
 const CONTENT_IMAGE_TYPE_MAP = {
   campaign: "Campaign Scene",
@@ -233,7 +292,7 @@ function downloadBase64Image(imageBase64, filename = "tabletop-image.png") {
 function TabletopCreator() {
   const location = useLocation();
   const selectedProject = location.state?.project;
-  const [activeTab, setActiveTab] = useState("content");
+  const [activeTab, setActiveTab] = useState("campaign");
   const [imageType, setImageType] = useState("Campaign Scene");
   const [imagePrompt, setImagePrompt] = useState("");
   const [useCampaignContextForImage, setUseCampaignContextForImage] =
@@ -256,6 +315,8 @@ function TabletopCreator() {
   const [saveImageOptionsLoading, setSaveImageOptionsLoading] = useState(false);
   const [saveImageLoading, setSaveImageLoading] = useState(false);
   const [saveImageError, setSaveImageError] = useState("");
+  const activeGeneratorPage =
+    GENERATOR_PAGE_CONTENT[activeTab] || GENERATOR_PAGE_CONTENT.campaign;
 
   const [showSaveImageCreateWorkspace, setShowSaveImageCreateWorkspace] =
     useState(false);
@@ -340,6 +401,12 @@ function TabletopCreator() {
   const [contentToSave, setContentToSave] = useState(null);
   const [workspaces, setWorkspaces] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [previousGeneratorContent, setPreviousGeneratorContent] = useState([]);
+  const [previousContentLoading, setPreviousContentLoading] = useState(false);
+  const [previousContentError, setPreviousContentError] = useState("");
+  const [expandedPreviousContentId, setExpandedPreviousContentId] =
+    useState(null);
+  const [previousContentRefreshKey, setPreviousContentRefreshKey] = useState(0);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedSaveProjectId, setSelectedSaveProjectId] = useState("");
   const [workspaceOptionsLoading, setWorkspaceOptionsLoading] = useState(false);
@@ -406,6 +473,77 @@ function TabletopCreator() {
     loadProjectsForSelection();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === "image") {
+      setPreviousGeneratorContent([]);
+      setPreviousContentError("");
+      setExpandedPreviousContentId(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPreviousGeneratorContent = async () => {
+      setPreviousContentLoading(true);
+      setPreviousContentError("");
+      setExpandedPreviousContentId(null);
+
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          throw new Error("Your session has expired. Please sign in again.");
+        }
+
+        const params = new URLSearchParams({
+          content_type: `tabletop_${activeTab}`,
+        });
+
+        if (selectedProjectId) {
+          params.set("project_id", String(selectedProjectId));
+        }
+
+        const response = await fetch(
+          `http://127.0.0.1:8000/content/?${params.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Previous saved content could not be loaded.");
+        }
+
+        const data = await response.json();
+
+        if (!cancelled) {
+          setPreviousGeneratorContent(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPreviousGeneratorContent([]);
+          setPreviousContentError(
+            error instanceof Error
+              ? error.message
+              : "Previous saved content could not be loaded."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setPreviousContentLoading(false);
+        }
+      }
+    };
+
+    loadPreviousGeneratorContent();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedProjectId, previousContentRefreshKey]);
+
   const isAnyGenerationInProgress =
     generating ||
     generatingNPCs ||
@@ -413,27 +551,6 @@ function TabletopCreator() {
     generatingEncounters ||
     generatingLocations ||
     generatingImage;
-
-  const tools = [
-    {
-      title: "Campaign Builder",
-      description:
-        "Create a new tabletop campaign with setting, tone, story hooks, and campaign structure.",
-      status: "Active",
-    },
-    {
-      title: "NPC Generator",
-      description:
-        "Generate characters, allies, villains, merchants, quest givers, and party contacts.",
-      status: "Active",
-    },
-    {
-      title: "Quest Generator",
-      description:
-        "Build quests, side missions, encounters, rewards, and story complications.",
-      status: "Active",
-    },
-  ];
 
   const handleVersionChange = (historyKey, direction, setContent) => {
     const history = generationHistory[historyKey] || [];
@@ -831,6 +948,8 @@ function TabletopCreator() {
       );
 
       notifyContentSaved(contentLabel);
+
+      setPreviousContentRefreshKey((currentValue) => currentValue + 1);
     } catch (error) {
       console.error("Tabletop Creator auto-save error:", error);
 
@@ -1523,6 +1642,60 @@ function TabletopCreator() {
       suppressRelatedWarning,
     });
   };
+
+  const handleGenerateActiveContent = () => {
+    if (activeTab === "campaign") {
+      handleGenerateCampaign(false);
+      return;
+    }
+
+    if (activeTab === "npc") {
+      handleGenerateNPCs(false);
+      return;
+    }
+
+    if (activeTab === "quest") {
+      handleGenerateQuests(false);
+      return;
+    }
+
+    if (activeTab === "encounter") {
+      handleGenerateEncounters(false);
+      return;
+    }
+
+    if (activeTab === "location") {
+      handleGenerateLocations(false);
+    }
+  };
+
+  const getActiveGeneratorButtonText = () => {
+    if (activeTab === "campaign") {
+      return generating ? "Generating..." : "Generate Campaign";
+    }
+
+    if (activeTab === "npc") {
+      return generatingNPCs ? "Generating NPCs..." : "Generate NPCs";
+    }
+
+    if (activeTab === "quest") {
+      return generatingQuests ? "Generating Quests..." : "Generate Quests";
+    }
+
+    if (activeTab === "encounter") {
+      return generatingEncounters
+        ? "Generating Encounters..."
+        : "Generate Encounters";
+    }
+
+    if (activeTab === "location") {
+      return generatingLocations
+        ? "Generating Locations..."
+        : "Generate Locations";
+    }
+
+    return "Generate";
+  };  
 
   const handleGenerateImage = async (imageFeedbackInstructions = "") => {
     const cleanedPrompt = imagePrompt.trim();
@@ -2644,6 +2817,8 @@ function TabletopCreator() {
 
       notifyContentSaved(`${cleanedCampaignName} - ${contentToSave.label}`);
 
+      setPreviousContentRefreshKey((currentValue) => currentValue + 1);
+
       setSaveWorkspaceSuccess(
         saveGeneratedImageWithContent && contentGeneratedImage
           ? `${contentToSave.label} and generated image saved to ${
@@ -2774,59 +2949,22 @@ function TabletopCreator() {
         })}
       </div>
 
-      {activeTab === "content" && (
+      {["campaign", "npc", "quest", "encounter", "location"].includes(
+        activeTab
+      ) && (
         <>
-
-          <section className="relative mb-5 overflow-hidden rounded-2xl border border-violet-500/15 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.055),transparent_25%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-            <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-500/15 to-slate-900 text-xl text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.10)]">
-                ✦
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white">Campaign Creation Tools</h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Choose a world-building tool and generate connected campaign content.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
-              {tools.map((tool) => (
-                <button
-                  key={tool.title}
-                  type="button"
-                  className="group rounded-2xl border border-slate-800/90 bg-gradient-to-br from-slate-950/80 to-violet-950/[0.10] p-5 text-left shadow-inner shadow-black/10 transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-400/30 hover:bg-violet-950/[0.16] hover:shadow-[0_16px_36px_rgba(0,0,0,0.18)]"
-                  data-testid={`tabletop-tool-${tool.title
-                    .toLowerCase()
-                    .replaceAll(" ", "-")}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <h4 className="text-lg font-semibold text-white">
-                      {tool.title}
-                    </h4>
-
-                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
-                      {tool.status}
-                    </span>
-                  </div>
-
-                  <p className="text-sm text-slate-400 mt-3">
-                    {tool.description}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </section>
-
           <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.05),transparent_24%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
             <div className="mb-5 flex items-start gap-3 border-b border-slate-800/70 pb-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
                 ◈
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">Create Campaign</h2>
+                <h2 className="text-xl font-bold text-white">
+                  {activeGeneratorPage.title}
+                </h2>
+
                 <p className="mt-1 text-sm text-slate-400">
-                  Define your campaign foundation, then generate the content you need.
+                  {activeGeneratorPage.description}
                 </p>
               </div>
             </div>
@@ -2862,7 +3000,7 @@ function TabletopCreator() {
             </div>
 
             <p className="text-slate-400 mt-2">
-              Enter campaign details and world-building information.
+              {activeGeneratorPage.formHint}
             </p>
 
             <form
@@ -2895,7 +3033,7 @@ function TabletopCreator() {
                   htmlFor="campaign-description"
                   className="block text-sm text-slate-300 mb-2"
                 >
-                  Campaign Description / World-Building Notes
+                  {activeGeneratorPage.descriptionLabel}
                 </label>
 
                 <textarea
@@ -2951,56 +3089,12 @@ function TabletopCreator() {
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={() => handleGenerateCampaign(false)}
+                  onClick={handleGenerateActiveContent}
                   disabled={isAnyGenerationInProgress}
                   className="rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-3 font-bold text-slate-950 shadow-[0_12px_28px_rgba(34,211,238,0.14)] transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-                  data-testid="generate-campaign"
+                  data-testid={`generate-${activeTab}`}
                 >
-                  {generating ? "Generating..." : "Generate Campaign Content"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleGenerateNPCs(false)}
-                  disabled={isAnyGenerationInProgress}
-                  className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-                  data-testid="generate-npcs"
-                >
-                  {generatingNPCs ? "Generating NPCs..." : "Generate NPCs"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleGenerateQuests(false)}
-                  disabled={isAnyGenerationInProgress}
-                  className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-                  data-testid="generate-quests"
-                >
-                  {generatingQuests ? "Generating Quests..." : "Generate Quests"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleGenerateEncounters(false)}
-                  disabled={isAnyGenerationInProgress}
-                  className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-                  data-testid="generate-encounters"
-                >
-                  {generatingEncounters
-                    ? "Generating Encounters..."
-                    : "Generate Encounters"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleGenerateLocations(false)}
-                  disabled={isAnyGenerationInProgress}
-                  className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] px-5 py-3 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/35 hover:bg-violet-500/[0.13] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-                  data-testid="generate-locations"
-                >
-                  {generatingLocations
-                    ? "Generating Locations..."
-                    : "Generate Locations"}
+                  {getActiveGeneratorButtonText()}
                 </button>
               </div>
 
@@ -3086,7 +3180,7 @@ function TabletopCreator() {
                     Content Image Preview
                   </h2>
                   <p className="mt-1 text-sm text-slate-400">
-                    This image is generated from the Content Generator page when the image option is turned on.
+                    This image is generated automatically from the active tabletop generator when the image option is turned on.
                   </p>
                 </div>
               </div>
@@ -3124,7 +3218,7 @@ function TabletopCreator() {
                         No content image generated yet
                       </p>
                       <p className="mt-2 text-sm leading-6 text-slate-400">
-                        Generate campaign content while Image On is enabled.
+                        Generate {CONTENT_LABELS[activeTab]?.toLowerCase() || "tabletop content"} while Image On is enabled.
                       </p>
                     </div>
                   </div>
@@ -3148,8 +3242,7 @@ function TabletopCreator() {
                     </p>
 
                     <p className="mt-3 text-sm leading-6 text-slate-400">
-                      Generated automatically from the campaign name, campaign description, and
-                      content output.
+                      Generated automatically from the campaign context and the active generator output.
                     </p>
 
                     <div className="mt-5 flex flex-wrap gap-3">
@@ -3281,7 +3374,8 @@ function TabletopCreator() {
             </section>
           )}
 
-          {(generateError || generatedCampaignContent) && (
+          {activeTab === "campaign" &&
+            (generateError || generatedCampaignContent) && (
             <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
               <h3 className="text-2xl font-bold">Generated Campaign Content</h3>
               {generatedCampaignContent && (
@@ -3400,7 +3494,8 @@ function TabletopCreator() {
             </section>
           )}
 
-          {(npcError || generatedNPCContent) && (
+          {activeTab === "npc" &&
+            (npcError || generatedNPCContent) && (
             <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
               <h3 className="text-2xl font-bold">Generated NPCs</h3>
               {generatedNPCContent && (
@@ -3519,7 +3614,8 @@ function TabletopCreator() {
             </section>
           )}
 
-          {(questError || generatedQuestContent) && (
+          {activeTab === "quest" &&
+            (questError || generatedQuestContent) && (
             <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
               <h3 className="text-2xl font-bold">Generated Quests</h3>
               {generatedQuestContent && (
@@ -3638,7 +3734,8 @@ function TabletopCreator() {
             </section>
           )}
 
-          {(encounterError || generatedEncounterContent) && (
+          {activeTab === "encounter" &&
+            (encounterError || generatedEncounterContent) && (
             <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
               <h3 className="text-2xl font-bold">Generated Encounters</h3>
               {generatedEncounterContent && (
@@ -3757,7 +3854,8 @@ function TabletopCreator() {
             </section>
           )}
 
-          {(locationError || generatedLocationContent) && (
+          {activeTab === "location" &&
+            (locationError || generatedLocationContent) && (
             <section className="relative mb-5 overflow-hidden rounded-2xl border border-cyan-500/12 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.045),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.97),rgba(15,23,42,0.84))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.20)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
               <h3 className="text-2xl font-bold">Generated Locations</h3>
               {generatedLocationContent && (
@@ -3875,6 +3973,108 @@ function TabletopCreator() {
               )}
             </section>
           )}
+
+          <section className="relative mb-5 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-950/55 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-6">
+            <div className="mb-5 border-b border-slate-800 pb-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-400">
+                Saved Content
+              </p>
+
+              <h2 className="mt-1 text-xl font-bold text-white">
+                Previous {CONTENT_LABELS[activeTab]}
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-400">
+                View previously saved {CONTENT_LABELS[activeTab]?.toLowerCase()}.
+              </p>
+            </div>
+
+            {previousContentLoading && (
+              <div
+                className="flex items-center gap-3 py-6 text-sm text-cyan-300"
+                role="status"
+              >
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-400" />
+                <p>Loading previous content...</p>
+              </div>
+            )}
+
+            {previousContentError && (
+              <div className="rounded-xl border border-red-800 bg-red-950/50 p-4 text-sm text-red-300">
+                {previousContentError}
+              </div>
+            )}
+
+            {!previousContentLoading &&
+              !previousContentError &&
+              previousGeneratorContent.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-center">
+                  <p className="font-semibold text-white">
+                    No previous {CONTENT_LABELS[activeTab]?.toLowerCase()} found
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    Saved content from this generator will appear here.
+                  </p>
+                </div>
+              )}
+
+            {!previousContentLoading &&
+              previousGeneratorContent.length > 0 && (
+                <div className="space-y-3">
+                  {previousGeneratorContent.map((item) => {
+                    const isExpanded = expandedPreviousContentId === item.id;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <h3 className="truncate font-bold text-white">
+                              {item.title || `Saved ${CONTENT_LABELS[activeTab]}`}
+                            </h3>
+
+                            {!isExpanded && (
+                              <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">
+                                {String(item.body || "")
+                                  .replace(/[#*_>`~-]/g, "")
+                                  .replace(/\s+/g, " ")
+                                  .trim()
+                                  .slice(0, 220) || "No preview available."}
+                              </p>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedPreviousContentId(
+                                isExpanded ? null : item.id
+                              )
+                            }
+                            className="shrink-0 rounded-xl border border-cyan-400/25 bg-cyan-500/[0.08] px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-400/45 hover:bg-cyan-500/[0.13]"
+                          >
+                            {isExpanded ? "Hide" : "View"}
+                          </button>
+                        </div>
+
+                        {isExpanded && (
+                          <div
+                            className={`${generatedMarkdownClasses} mt-4 rounded-xl border border-slate-800 bg-slate-950/70 p-5`}
+                          >
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {cleanGeneratedMarkdown(item.body || "")}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+          </section>          
         </>
       )}
 

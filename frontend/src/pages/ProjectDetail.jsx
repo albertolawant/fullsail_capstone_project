@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import FormattingHelp from "../components/FormattingHelp";
 import {
   FaArrowLeft,
   FaArrowRight,
@@ -1512,12 +1513,16 @@ function ProjectDetail() {
               </div>
 
               <div>
-                <label
-                  htmlFor="edit-content-body"
-                  className="block text-sm font-semibold text-slate-300"
-                >
-                  Content
-                </label>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label
+                    htmlFor="edit-content-body"
+                    className="block text-sm font-semibold text-slate-300"
+                  >
+                    Content
+                  </label>
+
+                  <FormattingHelp />
+                </div>
 
                 <textarea
                   id="edit-content-body"
