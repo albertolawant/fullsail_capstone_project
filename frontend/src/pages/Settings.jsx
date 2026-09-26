@@ -9,6 +9,45 @@ import {
 } from "react-icons/fa";
 
 const SETTINGS_KEY = "tanioSettings";
+const SELECTED_MODULES_KEY = "tanioSelectedModules";
+
+const TANIO_MODULES = [
+  {
+    id: "product-architect",
+    name: "Product Architect",
+    description: "Product planning, personas, roadmaps, and technical documents.",
+  },
+  {
+    id: "tabletop-creator",
+    name: "Tabletop Creator",
+    description: "Characters, quests, encounters, locations, and tabletop worlds.",
+  },
+  {
+    id: "problem-solver",
+    name: "Problem Solver",
+    description: "Structured analysis and practical solutions for complex problems.",
+  },
+];
+
+const VALID_MODULE_IDS = TANIO_MODULES.map((module) => module.id);
+
+function getStoredModules() {
+  try {
+    const storedModules = JSON.parse(
+      localStorage.getItem(SELECTED_MODULES_KEY) || "[]"
+    );
+
+    if (!Array.isArray(storedModules)) {
+      return [];
+    }
+
+    return storedModules.filter((moduleId) =>
+      VALID_MODULE_IDS.includes(moduleId)
+    );
+  } catch {
+    return [];
+  }
+}
 
 const DEFAULT_SETTINGS = {
   autoSave: {
@@ -43,6 +82,13 @@ function Settings() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [selectedModules, setSelectedModules] = useState(
+    getStoredModules
+  );
+  const [moduleSaving, setModuleSaving] = useState(false);
+  const [moduleError, setModuleError] = useState("");
+  const [moduleSuccess, setModuleSuccess] = useState("");
 
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailSaving, setEmailSaving] = useState(false);
@@ -106,6 +152,139 @@ function Settings() {
       setSavedSettings(DEFAULT_SETTINGS);
     }
   }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadSelectedModules = async () => {
+      try {
+        const response = await fetch(
+          "http://127.0.0.1:8000/auth/me/interests",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Unable to load your modules.");
+        }
+
+        const data = await response.json();
+        const savedModules = Array.isArray(data.selected_modules)
+          ? data.selected_modules.filter((moduleId) =>
+              VALID_MODULE_IDS.includes(moduleId)
+            )
+          : [];
+
+        setSelectedModules(savedModules);
+        localStorage.setItem(
+          SELECTED_MODULES_KEY,
+          JSON.stringify(savedModules)
+        );
+      } catch (requestError) {
+        if (requestError.name !== "AbortError") {
+          setModuleError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Unable to load your modules."
+          );
+        }
+      }
+    };
+
+    loadSelectedModules();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  const saveSelectedModules = async (modulesToSave) => {
+    if (modulesToSave.length === 0) {
+      setModuleError("Keep at least one module enabled.");
+      setModuleSuccess("");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setModuleError("You must be signed in to update your modules.");
+      setModuleSuccess("");
+      return;
+    }
+
+    setModuleSaving(true);
+    setModuleError("");
+    setModuleSuccess("");
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/auth/me/interests",
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            selected_modules: modulesToSave,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.detail || "Unable to update your modules."
+        );
+      }
+
+      const data = await response.json();
+      const savedModules = Array.isArray(data.selected_modules)
+        ? data.selected_modules.filter((moduleId) =>
+            VALID_MODULE_IDS.includes(moduleId)
+          )
+        : modulesToSave;
+
+      setSelectedModules(savedModules);
+      localStorage.setItem(
+        SELECTED_MODULES_KEY,
+        JSON.stringify(savedModules)
+      );
+      window.dispatchEvent(
+        new CustomEvent("tanio-modules-updated", {
+          detail: savedModules,
+        })
+      );
+      setModuleSuccess("Your enabled modules were updated.");
+    } catch (requestError) {
+      setModuleError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to update your modules."
+      );
+    } finally {
+      setModuleSaving(false);
+    }
+  };
+
+  const handleModuleToggle = (moduleId) => {
+    const nextModules = selectedModules.includes(moduleId)
+      ? selectedModules.filter((selectedId) => selectedId !== moduleId)
+      : [...selectedModules, moduleId];
+
+    saveSelectedModules(nextModules);
+  };
 
   const updateSetting = (section, key, value) => {
     setSettings((currentSettings) => ({
@@ -544,6 +723,50 @@ function Settings() {
               )
             }
           />
+        </section>
+
+        {/* Enabled Modules */}
+        <section className="rounded-xl border border-slate-800 bg-slate-900 p-6 xl:col-span-2">
+          <div className="mb-6 flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
+              <FaRobot />
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                Enabled Modules
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-400">
+                Choose which Tanio AI tools appear on your dashboard and sidebar.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {TANIO_MODULES.map((module) => (
+              <SettingToggle
+                key={module.id}
+                title={module.name}
+                description={module.description}
+                enabled={selectedModules.includes(module.id)}
+                onToggle={() => handleModuleToggle(module.id)}
+                disabled={moduleSaving}
+              />
+            ))}
+          </div>
+
+          {moduleError && (
+            <p className="mt-4 text-sm text-red-300" role="alert">
+              {moduleError}
+            </p>
+          )}
+
+          {moduleSuccess && (
+            <p className="mt-4 text-sm text-emerald-300" role="status">
+              {moduleSuccess}
+            </p>
+          )}
         </section>
 
         {/* Appearance */}
@@ -1288,6 +1511,7 @@ function SettingToggle({
   description,
   enabled,
   onToggle,
+  disabled = false,
 }) {
   return (
     <div className="flex items-center justify-between gap-6 rounded-lg border border-slate-800 bg-slate-950/50 p-4">
@@ -1306,7 +1530,8 @@ function SettingToggle({
         role="switch"
         aria-checked={enabled}
         onClick={onToggle}
-        className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+        disabled={disabled}
+        className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${
           enabled ? "bg-cyan-500" : "bg-slate-700"
         }`}
       >

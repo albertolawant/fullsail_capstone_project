@@ -4,9 +4,23 @@ import { useNavigate } from "react-router-dom";
 import RecentContent from "../components/RecentContent";
 import { notifyProjectCreated } from "../utils/notifications";
 
+const PROJECT_MODULE_IDS = [
+  "product-architect",
+  "tabletop-creator",
+];
+
+function getDefaultProjectType(selectedModules) {
+  return (
+    PROJECT_MODULE_IDS.find((moduleId) =>
+      selectedModules.includes(moduleId)
+    ) || ""
+  );
+}
+
 function Dashboard({
   dashboardMode = "basic",
   onDashboardModeChange,
+  selectedModules = [],
 }) {
   const navigate = useNavigate();
 
@@ -33,7 +47,7 @@ function Dashboard({
     title: "",
     description: "",
     workspaceId: "",
-    projectType: "product-architect",
+    projectType: getDefaultProjectType(selectedModules),
   });
 
   const [projectCreating, setProjectCreating] = useState(false);
@@ -42,6 +56,7 @@ function Dashboard({
 
   const modules = [
     {
+      id: "product-architect",
       name: "Product Architect",
       subtitle: "AI Product Planning",
       description:
@@ -53,6 +68,7 @@ function Dashboard({
       features: ["PRDs", "Personas", "User Stories", "Logos"],
     },
     {
+      id: "tabletop-creator",
       name: "Tabletop Creator",
       subtitle: "AI Tabletop Design",
       description:
@@ -64,6 +80,7 @@ function Dashboard({
       features: ["Campaigns", "NPCs", "Quests", "Locations"],
     },
     {
+      id: "problem-solver",
       name: "Problem Solver",
       subtitle: "AI Problem Analysis",
       description:
@@ -76,6 +93,14 @@ function Dashboard({
       features: ["Root Causes", "Solutions", "Pros & Cons", "Action Plans"],
     },
   ];
+
+  const visibleModules = modules.filter((module) =>
+    selectedModules.includes(module.id)
+  );
+
+  const canCreateProjects = PROJECT_MODULE_IDS.some((moduleId) =>
+    selectedModules.includes(moduleId)
+  );
 
   const quickActions = [
     {
@@ -99,7 +124,7 @@ function Dashboard({
   ];
 
   const searchItems = [
-    ...modules.map((module) => ({
+    ...visibleModules.map((module) => ({
       title: module.name,
       description: module.subtitle,
       icon: module.icon,
@@ -265,11 +290,15 @@ function Dashboard({
   };
 
   const handleOpenNewProject = async () => {
+    if (!canCreateProjects) {
+      return;
+    }
+
     setNewProjectForm({
       title: "",
       description: "",
       workspaceId: "",
-      projectType: "product-architect",
+      projectType: getDefaultProjectType(selectedModules),
     });
 
     setProjectCreateError("");
@@ -290,7 +319,7 @@ function Dashboard({
       title: "",
       description: "",
       workspaceId: "",
-      projectType: "product-architect",
+      projectType: getDefaultProjectType(selectedModules),
     });
 
     setProjectCreateError("");
@@ -324,8 +353,8 @@ function Dashboard({
     }
 
     if (
-      newProjectForm.projectType !== "product-architect" &&
-      newProjectForm.projectType !== "tabletop-creator"
+      !PROJECT_MODULE_IDS.includes(newProjectForm.projectType) ||
+      !selectedModules.includes(newProjectForm.projectType)
     ) {
       setProjectCreateError("Please choose a project type.");
       return;
@@ -407,7 +436,7 @@ function Dashboard({
           title: "",
           description: "",
           workspaceId: "",
-          projectType: "product-architect",
+          projectType: getDefaultProjectType(selectedModules),
         });
 
         setProjectCreateSuccess("");
@@ -535,14 +564,16 @@ function Dashboard({
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleOpenNewProject}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:bg-cyan-400"
-              >
-                <span className="text-lg leading-none">+</span>
-                New Project
-              </button>
+              {canCreateProjects && (
+                <button
+                  type="button"
+                  onClick={handleOpenNewProject}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:bg-cyan-400"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  New Project
+                </button>
+              )}
             </div>
           </section>
 
@@ -556,7 +587,7 @@ function Dashboard({
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              {modules.map((module) => {
+              {visibleModules.map((module) => {
                 const basicAccentClasses = {
                   cyan: {
                     card: "hover:border-cyan-700",
@@ -744,14 +775,16 @@ function Dashboard({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={handleOpenNewProject}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:bg-cyan-400"
-              >
-                <span className="text-lg leading-none">+</span>
-                New Project
-              </button>
+              {canCreateProjects && (
+                <button
+                  type="button"
+                  onClick={handleOpenNewProject}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:bg-cyan-400"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  New Project
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -879,12 +912,12 @@ function Dashboard({
 
           <span className="inline-flex items-center gap-2 self-start rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-400 sm:self-auto">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            {modules.length} active modules
+            {visibleModules.length} active modules
           </span>
         </div>
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-          {modules.map((module) => {
+          {visibleModules.map((module) => {
             const accentClasses = {
               cyan: {
                 card: "border-cyan-900/80 bg-gradient-to-br from-cyan-950/35 via-slate-900 to-slate-900 hover:border-cyan-600 hover:shadow-2xl hover:shadow-cyan-950/30",
@@ -1241,77 +1274,81 @@ function Dashboard({
                   </p>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewProjectForm((previous) => ({
-                          ...previous,
-                          projectType: "product-architect",
-                        }));
-                        setProjectCreateError("");
-                      }}
-                      disabled={projectCreating}
-                      className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                        newProjectForm.projectType === "product-architect"
-                          ? "border-cyan-500 bg-cyan-950/40 shadow-lg shadow-cyan-950/20"
-                          : "border-slate-700 bg-slate-950/60 hover:border-cyan-800 hover:bg-slate-950"
-                      }`}
-                      aria-pressed={
-                        newProjectForm.projectType === "product-architect"
-                      }
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-800 bg-cyan-950 text-xl">
-                          ⚡
-                        </div>
+                    {selectedModules.includes("product-architect") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewProjectForm((previous) => ({
+                            ...previous,
+                            projectType: "product-architect",
+                          }));
+                          setProjectCreateError("");
+                        }}
+                        disabled={projectCreating}
+                        className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          newProjectForm.projectType === "product-architect"
+                            ? "border-cyan-500 bg-cyan-950/40 shadow-lg shadow-cyan-950/20"
+                            : "border-slate-700 bg-slate-950/60 hover:border-cyan-800 hover:bg-slate-950"
+                        }`}
+                        aria-pressed={
+                          newProjectForm.projectType === "product-architect"
+                        }
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-800 bg-cyan-950 text-xl">
+                            ⚡
+                          </div>
 
-                        <div>
-                          <p className="font-semibold text-white">
-                            Product Architect
-                          </p>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                            Plan products, generate documents, and build product
-                            strategy with AI.
-                          </p>
+                          <div>
+                            <p className="font-semibold text-white">
+                              Product Architect
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                              Plan products, generate documents, and build
+                              product strategy with AI.
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                    )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewProjectForm((previous) => ({
-                          ...previous,
-                          projectType: "tabletop-creator",
-                        }));
-                        setProjectCreateError("");
-                      }}
-                      disabled={projectCreating}
-                      className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                        newProjectForm.projectType === "tabletop-creator"
-                          ? "border-purple-500 bg-purple-950/40 shadow-lg shadow-purple-950/20"
-                          : "border-slate-700 bg-slate-950/60 hover:border-purple-800 hover:bg-slate-950"
-                      }`}
-                      aria-pressed={
-                        newProjectForm.projectType === "tabletop-creator"
-                      }
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-purple-800 bg-purple-950 text-xl">
-                          🎲
-                        </div>
+                    {selectedModules.includes("tabletop-creator") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewProjectForm((previous) => ({
+                            ...previous,
+                            projectType: "tabletop-creator",
+                          }));
+                          setProjectCreateError("");
+                        }}
+                        disabled={projectCreating}
+                        className={`rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          newProjectForm.projectType === "tabletop-creator"
+                            ? "border-purple-500 bg-purple-950/40 shadow-lg shadow-purple-950/20"
+                            : "border-slate-700 bg-slate-950/60 hover:border-purple-800 hover:bg-slate-950"
+                        }`}
+                        aria-pressed={
+                          newProjectForm.projectType === "tabletop-creator"
+                        }
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-purple-800 bg-purple-950 text-xl">
+                            🎲
+                          </div>
 
-                        <div>
-                          <p className="font-semibold text-white">
-                            Tabletop Creator
-                          </p>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                            Build campaigns, NPCs, quests, encounters, and
-                            locations with AI.
-                          </p>
+                          <div>
+                            <p className="font-semibold text-white">
+                              Tabletop Creator
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                              Build campaigns, NPCs, quests, encounters, and
+                              locations with AI.
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                    )}
                   </div>
 
                   <p className="mt-2 text-xs text-slate-500">

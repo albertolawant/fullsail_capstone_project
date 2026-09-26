@@ -1,22 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
-from jose import jwt, JWTError
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.database import get_db
 from app.models.user import User
+from app.models.user_interest import UserInterest
 from app.schemas.user import (
-    Token,
-    UserCreate,
-    UserResponse,
-    UserUpdate,
     EmailUpdate,
     EmailUpdateResponse,
     PasswordUpdate,
+    Token,
+    UserCreate,
+    UserInterestResponse,
+    UserInterestUpdate,
     UserProfileUpdateResponse,
+    UserResponse,
+    UserUpdate,
 )
 
 
@@ -33,6 +37,12 @@ password_context = CryptContext(
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/auth/login",
 )
+
+ALLOWED_INTEREST_MODULES = {
+    "product-architect",
+    "tabletop-creator",
+    "problem-solver",
+}
 
 
 def hash_password(password: str):
@@ -89,7 +99,6 @@ def get_current_user(
 
         if email is None:
             raise credentials_exception
-
     except JWTError:
         raise credentials_exception
 
@@ -128,9 +137,7 @@ def register(
     new_user = User(
         username=user_data.username,
         email=user_data.email,
-        hashed_password=hash_password(
-            user_data.password
-        ),
+        hashed_password=hash_password(user_data.password),
     )
 
     db.add(new_user)
@@ -331,6 +338,85 @@ def update_password(
 
     return {
         "message": "Password updated successfully",
+    }
+
+
+@router.get(
+    "/me/interests",
+    response_model=UserInterestResponse,
+)
+def get_user_interests(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    user_interests = (
+        db.query(UserInterest)
+        .filter(UserInterest.user_id == current_user.id)
+        .first()
+    )
+
+    if user_interests is None:
+        return {
+            "completed": False,
+            "selected_modules": [],
+        }
+
+    return {
+        "completed": True,
+        "selected_modules": user_interests.selected_modules,
+    }
+
+
+@router.put(
+    "/me/interests",
+    response_model=UserInterestResponse,
+)
+def save_user_interests(
+    interest_data: UserInterestUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    selected_modules = list(
+        dict.fromkeys(interest_data.selected_modules)
+    )
+
+    if not selected_modules:
+        raise HTTPException(
+            status_code=400,
+            detail="Select at least one module.",
+        )
+
+    invalid_modules = (
+        set(selected_modules) - ALLOWED_INTEREST_MODULES
+    )
+
+    if invalid_modules:
+        raise HTTPException(
+            status_code=400,
+            detail="One or more selected modules are invalid.",
+        )
+
+    user_interests = (
+        db.query(UserInterest)
+        .filter(UserInterest.user_id == current_user.id)
+        .first()
+    )
+
+    if user_interests is None:
+        user_interests = UserInterest(
+            user_id=current_user.id,
+            selected_modules=selected_modules,
+        )
+        db.add(user_interests)
+    else:
+        user_interests.selected_modules = selected_modules
+
+    db.commit()
+    db.refresh(user_interests)
+
+    return {
+        "completed": True,
+        "selected_modules": user_interests.selected_modules,
     }
 
 

@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import logo from "../assets/logo.png";
+
+const INTEREST_PROMPT_KEY = "tanioInterestPromptPending";
 
 function SignIn() {
   const navigate = useNavigate();
@@ -12,6 +15,7 @@ function SignIn() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
     setError("");
     setLoading(true);
 
@@ -21,19 +25,26 @@ function SignIn() {
       formData.append("username", email.trim());
       formData.append("password", password);
 
-      const response = await fetch("http://127.0.0.1:8000/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: formData.toString(),
-      });
+      const response = await fetch(
+        "http://127.0.0.1:8000/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded",
+          },
+          body: formData.toString(),
+        }
+      );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
+        const errorData = await response
+          .json()
+          .catch(() => null);
 
         throw new Error(
-          errorData?.detail || "Invalid email or password."
+          errorData?.detail ||
+            "Invalid email or password."
         );
       }
 
@@ -49,21 +60,28 @@ function SignIn() {
       localStorage.setItem("tanioSession", "true");
 
       localStorage.setItem(
+        INTEREST_PROMPT_KEY,
+        "true"
+      );
+
+      localStorage.setItem(
         "tanioUser",
         JSON.stringify({
           email: email.trim(),
           username:
-            email.trim().toLowerCase() === "demo@tanio.ai"
+            email.trim().toLowerCase() ===
+            "demo@tanio.ai"
               ? "Demo User"
               : email.trim(),
         })
       );
 
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (err) {
       localStorage.removeItem("token");
       localStorage.removeItem("tanioSession");
       localStorage.removeItem("tanioUser");
+      localStorage.removeItem(INTEREST_PROMPT_KEY);
 
       setError(
         err instanceof Error
@@ -76,19 +94,21 @@ function SignIn() {
   };
 
   return (
-    <main className="min-h-screen bg-[#010A24] text-white flex items-center justify-center p-6">
+    <main className="flex min-h-screen items-center justify-center bg-[#010A24] p-6 text-white">
       <div className="w-full max-w-md">
         <img
           src={logo}
           alt="Tanio AI"
-          className="h-64 mx-auto mb-1 object-contain"
+          className="mx-auto mb-1 h-64 object-contain"
         />
 
-        <div className="w-full bg-[#07142F] border border-slate-800 rounded-2xl p-8 shadow-xl">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold">Welcome to Tanio AI</h1>
+        <div className="w-full rounded-2xl border border-slate-800 bg-[#07142F] p-8 shadow-xl">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-bold">
+              Welcome to Tanio AI
+            </h1>
 
-            <p className="text-slate-400 mt-2">
+            <p className="mt-2 text-slate-400">
               Sign in to access your workspace.
             </p>
           </div>
@@ -97,7 +117,7 @@ function SignIn() {
             <div className="mb-5">
               <label
                 htmlFor="email"
-                className="block text-sm text-slate-300 mb-2"
+                className="mb-2 block text-sm text-slate-300"
               >
                 Email Address
               </label>
@@ -106,11 +126,13 @@ function SignIn() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
                 placeholder="demo@tanio.ai"
                 autoComplete="email"
                 required
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
                 data-testid="signin-email"
               />
             </div>
@@ -118,7 +140,7 @@ function SignIn() {
             <div className="mb-5">
               <label
                 htmlFor="password"
-                className="block text-sm text-slate-300 mb-2"
+                className="mb-2 block text-sm text-slate-300"
               >
                 Password
               </label>
@@ -127,24 +149,29 @@ function SignIn() {
                 id="password"
                 type="password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
                 placeholder="Enter your password"
                 autoComplete="current-password"
                 required
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:border-cyan-500"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
                 data-testid="signin-password"
               />
             </div>
 
             <div className="mb-5 rounded-lg border border-cyan-900 bg-cyan-950/30 p-3 text-sm text-slate-300">
-              <p className="font-semibold text-cyan-400">Demo Account</p>
+              <p className="font-semibold text-cyan-400">
+                Demo Account
+              </p>
+
               <p>Email: demo@tanio.ai</p>
               <p>Password: Demo123!</p>
             </div>
 
             {error && (
               <p
-                className="mb-5 bg-red-950 border border-red-800 text-red-300 rounded-lg p-3 text-sm"
+                className="mb-5 rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-300"
                 role="alert"
                 data-testid="signin-error"
               >
@@ -155,7 +182,7 @@ function SignIn() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold py-3 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-lg bg-cyan-500 py-3 font-semibold text-slate-950 transition-all duration-200 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="signin-button"
             >
               {loading ? "Signing In..." : "Sign In"}

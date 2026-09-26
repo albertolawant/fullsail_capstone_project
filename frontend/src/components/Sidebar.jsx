@@ -21,7 +21,10 @@ import {
 
 const SIDEBAR_KEY = "tanioSidebarCollapsed";
 
-function Sidebar({ dashboardMode = "basic" }) {
+function Sidebar({
+  dashboardMode = "basic",
+  selectedModules = [],
+}) {
   const navigate = useNavigate();
   const isBasicMode = dashboardMode === "basic";
 
@@ -62,6 +65,7 @@ function Sidebar({ dashboardMode = "basic" }) {
 
   const aiTools = [
     {
+      id: "product-architect",
       to: "/product-architect",
       label: "Product Architect",
       subtitle: "Product planning",
@@ -69,6 +73,7 @@ function Sidebar({ dashboardMode = "basic" }) {
       accent: "cyan",
     },
     {
+      id: "tabletop-creator",
       to: "/tabletop-creator",
       label: "Tabletop Creator",
       subtitle: "World building",
@@ -76,6 +81,7 @@ function Sidebar({ dashboardMode = "basic" }) {
       accent: "purple",
     },
     {
+      id: "problem-solver",
       to: "/problem-solver",
       label: "Problem Solver",
       subtitle: "Problem analysis",
@@ -83,6 +89,10 @@ function Sidebar({ dashboardMode = "basic" }) {
       accent: "cyan",
     },
   ];
+
+  const visibleAiTools = aiTools.filter((tool) =>
+    selectedModules.includes(tool.id)
+  );
 
   const supportNavigation = [
     {
@@ -185,7 +195,7 @@ function Sidebar({ dashboardMode = "basic" }) {
         <>
           {isActive && (
             <>
-              <span className="absolute left-0 bottom-2 top-2 w-[3px] rounded-r-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.7)]" />
+              <span className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.7)]" />
 
               <span className="pointer-events-none absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-400/[0.035] to-transparent" />
             </>
@@ -195,11 +205,7 @@ function Sidebar({ dashboardMode = "basic" }) {
             className={`
               relative z-10 flex shrink-0 items-center justify-center
               rounded-lg border transition-all duration-200
-              ${
-                collapsed
-                  ? "h-8 w-8"
-                  : "h-9 w-9"
-              }
+              ${collapsed ? "h-8 w-8" : "h-9 w-9"}
               ${
                 isActive
                   ? "border-cyan-400/25 bg-cyan-400/10 text-cyan-300"
@@ -271,7 +277,7 @@ function Sidebar({ dashboardMode = "basic" }) {
           {isActive && (
             <span
               className={`
-                absolute left-0 bottom-2.5 top-2.5 w-[3px]
+                absolute bottom-2.5 left-0 top-2.5 w-[3px]
                 rounded-r-full
                 ${
                   accent === "purple"
@@ -286,19 +292,15 @@ function Sidebar({ dashboardMode = "basic" }) {
             className={`
               flex shrink-0 items-center justify-center rounded-xl
               border transition-all duration-200
-              ${
-                collapsed
-                  ? "h-8 w-8"
-                  : "h-10 w-10"
-              }
+              ${collapsed ? "h-8 w-8" : "h-10 w-10"}
               ${
                 isActive
                   ? accent === "purple"
                     ? "border-purple-400/30 bg-purple-500/10 text-purple-300"
                     : "border-cyan-400/30 bg-cyan-500/10 text-cyan-300"
                   : accent === "purple"
-                  ? "border-slate-700/70 bg-slate-800/70 text-slate-400 group-hover:border-purple-500/25 group-hover:bg-purple-500/[0.06] group-hover:text-purple-300"
-                  : "border-slate-700/70 bg-slate-800/70 text-slate-400 group-hover:border-cyan-500/25 group-hover:bg-cyan-500/[0.06] group-hover:text-cyan-300"
+                    ? "border-slate-700/70 bg-slate-800/70 text-slate-400 group-hover:border-purple-500/25 group-hover:bg-purple-500/[0.06] group-hover:text-purple-300"
+                    : "border-slate-700/70 bg-slate-800/70 text-slate-400 group-hover:border-cyan-500/25 group-hover:bg-cyan-500/[0.06] group-hover:text-cyan-300"
               }
             `}
           >
@@ -364,28 +366,18 @@ function Sidebar({ dashboardMode = "basic" }) {
         sticky top-0 z-30 flex h-screen shrink-0 flex-col
         overflow-visible border-r border-slate-800/80
         bg-[#020817] transition-[width] duration-300
-        ${
-          collapsed
-            ? "w-[72px]"
-            : "w-64"
-        }
+        ${collapsed ? "w-[72px]" : "w-64"}
       `}
     >
-      {}
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-cyan-500/[0.06] blur-3xl" />
 
       <div className="pointer-events-none absolute -bottom-32 -right-24 h-72 w-72 rounded-full bg-purple-500/[0.04] blur-3xl" />
 
-      {}
       <div
         className={`
           relative z-10 flex h-[72px] shrink-0 items-center
           border-b border-slate-800/80
-          ${
-            collapsed
-              ? "justify-center"
-              : "justify-center px-5"
-          }
+          ${collapsed ? "justify-center" : "justify-center px-5"}
         `}
       >
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
@@ -396,28 +388,19 @@ function Sidebar({ dashboardMode = "basic" }) {
           className={`
             h-auto select-none object-contain
             transition-all duration-300
-            ${
-              collapsed
-                ? "w-11"
-                : "w-40"
-            }
+            ${collapsed ? "w-11" : "w-40"}
           `}
           draggable={false}
         />
 
-        {}
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
           aria-label={
-            collapsed
-              ? "Expand sidebar"
-              : "Collapse sidebar"
+            collapsed ? "Expand sidebar" : "Collapse sidebar"
           }
           title={
-            collapsed
-              ? "Expand sidebar"
-              : "Collapse sidebar"
+            collapsed ? "Expand sidebar" : "Collapse sidebar"
           }
           className="
             absolute -right-3 bottom-[-13px] z-40
@@ -437,19 +420,13 @@ function Sidebar({ dashboardMode = "basic" }) {
         </button>
       </div>
 
-      {}
       <div
         className={`
           relative z-10 flex flex-1 flex-col overflow-y-auto
           overflow-x-visible py-5
-          ${
-            collapsed
-              ? "items-center px-3"
-              : "px-4"
-          }
+          ${collapsed ? "items-center px-3" : "px-4"}
         `}
       >
-        {}
         <div className={collapsed ? "" : "w-full"}>
           {!collapsed && (
             <div className="mb-2 flex items-center gap-2 px-3">
@@ -461,31 +438,19 @@ function Sidebar({ dashboardMode = "basic" }) {
             </div>
           )}
 
-          <nav
-            className={
-              collapsed
-                ? "space-y-1"
-                : "space-y-1"
-            }
-          >
+          <nav className="space-y-1">
             {visibleMainNavigation.map(renderStandardNavItem)}
           </nav>
         </div>
 
-        {}
         <div
           className={`
             my-6 h-px bg-gradient-to-r
             from-transparent via-slate-800 to-transparent
-            ${
-              collapsed
-                ? "w-10"
-                : "w-full"
-            }
+            ${collapsed ? "w-10" : "w-full"}
           `}
         />
 
-        {}
         <div className={collapsed ? "" : "w-full"}>
           {!collapsed && (
             <div className="mb-2 flex items-center justify-between px-3">
@@ -504,20 +469,15 @@ function Sidebar({ dashboardMode = "basic" }) {
           )}
 
           <nav className="space-y-1.5">
-            {aiTools.map(renderAiNavItem)}
+            {visibleAiTools.map(renderAiNavItem)}
           </nav>
         </div>
 
-        {}
         {visibleSupportNavigation.length > 0 && (
           <div
             className={`
               mt-7
-              ${
-                collapsed
-                  ? ""
-                  : "w-full"
-              }
+              ${collapsed ? "" : "w-full"}
             `}
           >
             {!collapsed && (
@@ -531,7 +491,9 @@ function Sidebar({ dashboardMode = "basic" }) {
             )}
 
             <nav className="space-y-1">
-              {visibleSupportNavigation.map(renderStandardNavItem)}
+              {visibleSupportNavigation.map(
+                renderStandardNavItem
+              )}
             </nav>
           </div>
         )}
@@ -539,7 +501,6 @@ function Sidebar({ dashboardMode = "basic" }) {
         <div className="flex-1" />
       </div>
 
-      {}
       <div
         className={`
           relative z-10 border-t border-slate-800/80
@@ -574,11 +535,7 @@ function Sidebar({ dashboardMode = "basic" }) {
               group-hover:border-red-500/20
               group-hover:bg-red-500/10
               group-hover:text-red-400
-              ${
-                collapsed
-                  ? "h-8 w-8"
-                  : "h-9 w-9"
-              }
+              ${collapsed ? "h-8 w-8" : "h-9 w-9"}
             `}
           >
             <FaSignOutAlt className="text-sm" />

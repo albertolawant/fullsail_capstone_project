@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from typing import List
 
 
 class UserCreate(BaseModel):
@@ -57,3 +58,12 @@ class UserProfileUpdateResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UserInterestUpdate(BaseModel):
+    selected_modules: List[str]
+
+
+class UserInterestResponse(BaseModel):
+    completed: bool
+    selected_modules: List[str]
