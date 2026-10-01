@@ -16,6 +16,11 @@ const AI_REQUEST_TIMEOUT_MS = 35000;
 const SLOW_REQUEST_THRESHOLD_MS = 30000;
 const SETTINGS_KEY = "tanioSettings";
 
+const PRODUCT_ARCHITECT_TABS = [
+  { key: "content", label: "Content Generator" },
+  { key: "logo", label: "Logo Generator" },
+];
+
 const DEFAULT_AI_SETTINGS = {
   creativity: "balanced",
   responseLength: "medium",
@@ -135,14 +140,14 @@ function normalizeProductArchitectContentType(contentType) {
 function ProductArchitect() {
   const location = useLocation();
   const selectedProject = location.state?.project;
+
+  const [activeTab, setActiveTab] = useState("content");
   const [selectedProjectId, setSelectedProjectId] = useState(
     selectedProject?.id || null
   );
-
   const [projectName, setProjectName] = useState(
     selectedProject?.title || ""
   );
-
   const [description, setDescription] = useState(
     selectedProject?.description || ""
   );
@@ -158,6 +163,7 @@ function ProductArchitect() {
   const [regenerateError, setRegenerateError] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
   const [logoBase64, setLogoBase64] = useState("");
   const [logoLoading, setLogoLoading] = useState(false);
   const [logoError, setLogoError] = useState("");
@@ -165,7 +171,9 @@ function ProductArchitect() {
   const [preferredColors, setPreferredColors] = useState("");
   const [logoIdeas, setLogoIdeas] = useState("");
   const [brandingDirection, setBrandingDirection] = useState("");
-  const [logoProjectId, setLogoProjectId] = useState(selectedProject?.id || null);
+  const [logoProjectId, setLogoProjectId] = useState(
+    selectedProject?.id || null
+  );
   const [logoGallery, setLogoGallery] = useState([]);
   const [selectedLogoIndex, setSelectedLogoIndex] = useState(-1);
   const [logoGalleryLoading, setLogoGalleryLoading] = useState(false);
@@ -182,7 +190,8 @@ function ProductArchitect() {
 
   const [showMoveLogoCreateWorkspace, setShowMoveLogoCreateWorkspace] =
     useState(false);
-  const [moveLogoNewWorkspaceName, setMoveLogoNewWorkspaceName] = useState("");
+  const [moveLogoNewWorkspaceName, setMoveLogoNewWorkspaceName] =
+    useState("");
   const [moveLogoNewWorkspaceDescription, setMoveLogoNewWorkspaceDescription] =
     useState("");
   const [creatingMoveLogoWorkspace, setCreatingMoveLogoWorkspace] =
@@ -193,21 +202,24 @@ function ProductArchitect() {
   const [moveLogoNewProjectTitle, setMoveLogoNewProjectTitle] = useState("");
   const [moveLogoNewProjectDescription, setMoveLogoNewProjectDescription] =
     useState("");
-  const [creatingMoveLogoProject, setCreatingMoveLogoProject] = useState(false);
+  const [creatingMoveLogoProject, setCreatingMoveLogoProject] =
+    useState(false);
 
   const [saveWorkspaceOpen, setSaveWorkspaceOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState([]);
   const [projects, setProjects] = useState([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedSaveProjectId, setSelectedSaveProjectId] = useState("");
-  const [workspaceOptionsLoading, setWorkspaceOptionsLoading] = useState(false);
+  const [workspaceOptionsLoading, setWorkspaceOptionsLoading] =
+    useState(false);
   const [savingToWorkspace, setSavingToWorkspace] = useState(false);
   const [saveWorkspaceError, setSaveWorkspaceError] = useState("");
   const [saveWorkspaceSuccess, setSaveWorkspaceSuccess] = useState("");
   const [autoSaveStatus, setAutoSaveStatus] = useState("");
   const [autoSaveError, setAutoSaveError] = useState("");
 
-  const [showSaveCreateWorkspace, setShowSaveCreateWorkspace] = useState(false);
+  const [showSaveCreateWorkspace, setShowSaveCreateWorkspace] =
+    useState(false);
   const [saveNewWorkspaceName, setSaveNewWorkspaceName] = useState("");
   const [saveNewWorkspaceDescription, setSaveNewWorkspaceDescription] =
     useState("");
@@ -215,16 +227,21 @@ function ProductArchitect() {
 
   const [showSaveCreateProject, setShowSaveCreateProject] = useState(false);
   const [saveNewProjectTitle, setSaveNewProjectTitle] = useState("");
-  const [saveNewProjectDescription, setSaveNewProjectDescription] = useState("");
+  const [saveNewProjectDescription, setSaveNewProjectDescription] =
+    useState("");
   const [creatingSaveProject, setCreatingSaveProject] = useState(false);
 
   const [projectContentLoading, setProjectContentLoading] = useState(false);
   const [projectContentError, setProjectContentError] = useState("");
-  const [showGeneratedOutputModal, setShowGeneratedOutputModal] = useState(false);
+  const [showGeneratedOutputModal, setShowGeneratedOutputModal] =
+    useState(false);
   const [copyGeneratedLabel, setCopyGeneratedLabel] = useState("Copy");
   const projectSetupRef = useRef(null);
   const [projectSetupHeight, setProjectSetupHeight] = useState(940);
-  const [generatedModalPosition, setGeneratedModalPosition] = useState({ x: 0, y: 0 });
+  const [generatedModalPosition, setGeneratedModalPosition] = useState({
+    x: 0,
+    y: 0,
+  });
   const generatedModalDragRef = useRef(null);
 
   const endpointMap = {
@@ -243,57 +260,92 @@ function ProductArchitect() {
     technicalArchitecture: "Technical Architecture",
   };
 
+  const handleTabKeyDown = (event, currentIndex) => {
+    let nextIndex;
+
+    if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % PRODUCT_ARCHITECT_TABS.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex =
+        (currentIndex - 1 + PRODUCT_ARCHITECT_TABS.length) %
+        PRODUCT_ARCHITECT_TABS.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = PRODUCT_ARCHITECT_TABS.length - 1;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+
+    const nextTab = PRODUCT_ARCHITECT_TABS[nextIndex];
+    setActiveTab(nextTab.key);
+    document
+      .getElementById(`product-architect-tab-${nextTab.key}`)
+      ?.focus();
+  };
+
+  const handleProjectNameChange = (value) => {
+    setProjectName(value);
+    setError("");
+    setSuccessMessage("");
+    setLogoError("");
+    setLogoBase64("");
+    setLogoProjectId(null);
+    setLogoGallery([]);
+    setSelectedLogoIndex(-1);
+    setLogoGalleryError("");
+  };
+
+  const handleProjectDescriptionChange = (value) => {
+    setDescription(value);
+    setError("");
+    setSuccessMessage("");
+    setLogoError("");
+    setLogoBase64("");
+  };
+
   const markdownComponents = {
     h1: ({ children }) => (
       <h1 className="text-3xl font-bold text-white mb-6">{children}</h1>
     ),
-
     h2: ({ children }) => (
       <h2 className="text-2xl font-bold text-white mt-8 mb-4">{children}</h2>
     ),
-
     h3: ({ children }) => (
       <h3 className="text-xl font-semibold text-cyan-400 mt-6 mb-3">
         {children}
       </h3>
     ),
-
     p: ({ children }) => (
       <p className="text-slate-200 leading-relaxed mb-4">{children}</p>
     ),
-
     ul: ({ children }) => (
       <ul className="list-disc pl-6 text-slate-200 mb-4 space-y-2">
         {children}
       </ul>
     ),
-
     ol: ({ children }) => (
       <ol className="list-decimal pl-6 text-slate-200 mb-4 space-y-2">
         {children}
       </ol>
     ),
-
     li: ({ children }) => <li>{children}</li>,
-
     strong: ({ children }) => (
       <strong className="font-semibold text-white">{children}</strong>
     ),
-
     hr: () => <hr className="border-slate-700 my-8" />,
-
     blockquote: ({ children }) => (
       <blockquote className="border-l-4 border-cyan-500 pl-4 my-4 text-slate-300 italic">
         {children}
       </blockquote>
     ),
-
     code: ({ children }) => (
       <code className="bg-slate-950 text-cyan-300 px-1.5 py-0.5 rounded">
         {children}
       </code>
     ),
-
     table: ({ children }) => (
       <div className="overflow-x-auto my-6">
         <table className="w-full border-collapse border border-slate-700">
@@ -301,17 +353,14 @@ function ProductArchitect() {
         </table>
       </div>
     ),
-
     thead: ({ children }) => (
       <thead className="bg-slate-800">{children}</thead>
     ),
-
     th: ({ children }) => (
       <th className="border border-slate-700 px-4 py-3 text-left text-white">
         {children}
       </th>
     ),
-
     td: ({ children }) => (
       <td className="border border-slate-700 px-4 py-3 text-slate-200">
         {children}
@@ -380,7 +429,7 @@ function ProductArchitect() {
 
     setRegenerateInstructions("");
   };
-  
+
   const findOrCreateAutoSaveWorkspace = async (token) => {
     const workspaceResponse = await fetch("http://127.0.0.1:8000/workspaces/", {
       headers: {
@@ -397,8 +446,9 @@ function ProductArchitect() {
 
     const existingWorkspace = loadedWorkspaces.find(
       (workspace) =>
-        String(workspace.name || workspace.title || "").trim().toLowerCase() ===
-        "auto-saved content"
+        String(workspace.name || workspace.title || "")
+          .trim()
+          .toLowerCase() === "auto-saved content"
     );
 
     if (existingWorkspace) {
@@ -503,10 +553,7 @@ function ProductArchitect() {
 
     const createdProject = await createProjectResponse.json();
 
-    setProjects((currentProjects) => [
-      createdProject,
-      ...currentProjects,
-    ]);
+    setProjects((currentProjects) => [createdProject, ...currentProjects]);
 
     return createdProject;
   };
@@ -584,7 +631,7 @@ function ProductArchitect() {
           : "Auto-Save could not save the generated content."
       );
     }
-  };  
+  };
 
   const handleGenerate = async (
     isRegeneration = false,
@@ -630,6 +677,7 @@ function ProductArchitect() {
 
     setLoading(true);
     setRegenerating(isRegeneration && Boolean(generatedContent));
+
     const controller = new AbortController();
     const timeoutId = window.setTimeout(
       () => controller.abort(),
@@ -651,10 +699,8 @@ function ProductArchitect() {
       }
 
       const aiSettings = getAiGenerationSettings();
-
       const aiPreferenceInstructions =
         buildAiPreferenceInstructions(aiSettings);
-
       const cleanedCustomInstructions = customInstructions.trim();
 
       const descriptionWithPreferences = `${cleanedDescription}
@@ -672,20 +718,16 @@ ${aiPreferenceInstructions}`;
           project_name: cleanedProjectName,
           description: descriptionWithPreferences,
           original_content:
-            isRegeneration && generatedContent
-              ? generatedContent
-              : null,
-          regeneration_instructions:
-            isRegeneration
-              ? cleanedCustomInstructions || null
-              : null,
+            isRegeneration && generatedContent ? generatedContent : null,
+          regeneration_instructions: isRegeneration
+            ? cleanedCustomInstructions || null
+            : null,
         }),
         signal: controller.signal,
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-
         let message = "Failed to generate content. Please try again.";
 
         if (typeof errorData?.detail === "string") {
@@ -716,7 +758,7 @@ ${aiPreferenceInstructions}`;
       }
 
       const data = await response.json();
-      
+
       if (data?.project_id) {
         setSelectedProjectId(data.project_id);
         setLogoProjectId(data.project_id);
@@ -758,10 +800,7 @@ ${aiPreferenceInstructions}`;
         cleanedProjectName,
       });
 
-      notifyGenerationComplete(
-        "Product Architect",
-        cleanedProjectName
-      );
+      notifyGenerationComplete("Product Architect", cleanedProjectName);
 
       addRecentActivity({
         type: "Content Generated",
@@ -780,8 +819,11 @@ ${aiPreferenceInstructions}`;
       });
     } catch (err) {
       console.error("Generation error:", err);
+
       if (err instanceof DOMException && err.name === "AbortError") {
-        setError("The AI request took too long. Please try generating the content again.");
+        setError(
+          "The AI request took too long. Please try generating the content again."
+        );
       } else if (err instanceof TypeError) {
         setError(
           "Could not connect to the server. Make sure the backend is running and try again."
@@ -838,9 +880,7 @@ ${aiPreferenceInstructions}`;
             item.content_type
           ),
         }))
-        .filter(
-          (item) => item.productArchitectType && item.body?.trim()
-        );
+        .filter((item) => item.productArchitectType && item.body?.trim());
 
       setAvailableProjectContent(productArchitectContent);
 
@@ -914,9 +954,7 @@ ${aiPreferenceInstructions}`;
             item.content_type
           ),
         }))
-        .filter(
-          (item) => item.productArchitectType && item.body?.trim()
-        );
+        .filter((item) => item.productArchitectType && item.body?.trim());
 
       if (productArchitectContent.length === 0) {
         setGeneratedContent("");
@@ -1017,11 +1055,13 @@ ${aiPreferenceInstructions}`;
       return logos;
     } catch (err) {
       console.error("Logo gallery load error:", err);
+
       setLogoGalleryError(
         err instanceof Error
           ? err.message
           : "Something went wrong while loading the logo gallery."
       );
+
       return [];
     } finally {
       setLogoGalleryLoading(false);
@@ -1104,7 +1144,6 @@ ${aiPreferenceInstructions}`;
     setError("");
     setSuccessMessage("");
     setSaveWorkspaceSuccess("");
-
     setLogoProjectId(selectedProject.id);
     setSelectedProjectId(selectedProject.id);
 
@@ -1144,39 +1183,36 @@ ${aiPreferenceInstructions}`;
     handleSelectLogoVersion(selectedLogoIndex + 1);
   };
 
-
   const handleGenerateLogo = async () => {
     if (logoLoading) {
       return;
     }
 
-  const selectedLogoContext = availableProjectContent.find(
-    (item) => String(item.id) === String(selectedLogoContentId)
-  );
+    const selectedLogoContext = availableProjectContent.find(
+      (item) => String(item.id) === String(selectedLogoContentId)
+    );
 
-  const contextProject = projects.find(
-    (project) =>
-      selectedLogoContext?.project_id &&
-      String(project.id) === String(selectedLogoContext.project_id)
-  );
+    const contextProject = projects.find(
+      (project) =>
+        selectedLogoContext?.project_id &&
+        String(project.id) === String(selectedLogoContext.project_id)
+    );
 
-  const contextProjectName =
-    contextProject?.title ||
-    selectedLogoContext?.title ||
-    "";
+    const contextProjectName =
+      contextProject?.title || selectedLogoContext?.title || "";
 
-  const contextProjectDescription =
-    contextProject?.description?.trim() ||
-    selectedLogoContext?.body?.trim() ||
-    "";
+    const contextProjectDescription =
+      contextProject?.description?.trim() ||
+      selectedLogoContext?.body?.trim() ||
+      "";
 
-  const cleanedProjectName = (
-    projectName.trim() || contextProjectName.trim()
-  ).slice(0, 100);
+    const cleanedProjectName = (
+      projectName.trim() || contextProjectName.trim()
+    ).slice(0, 100);
 
-  const cleanedDescription = (
-    description.trim() || contextProjectDescription
-  ).slice(0, 5000);
+    const cleanedDescription = (
+      description.trim() || contextProjectDescription
+    ).slice(0, 5000);
 
     setLogoError("");
     setLogoGalleryError("");
@@ -1248,7 +1284,10 @@ ${aiPreferenceInstructions}`;
 
           logoSaveProjectId = autoSaveLogoProject.id;
         } catch (autoSaveErr) {
-          console.error("Product Architect logo auto-save setup error:", autoSaveErr);
+          console.error(
+            "Product Architect logo auto-save setup error:",
+            autoSaveErr
+          );
 
           setAutoSaveStatus("");
           setAutoSaveError(
@@ -1257,7 +1296,7 @@ ${aiPreferenceInstructions}`;
               : "Auto-Save could not prepare the logo destination. The logo will still generate normally."
           );
         }
-      }      
+      }
 
       const response = await fetch(
         "http://127.0.0.1:8000/product-architect/logo",
@@ -1285,7 +1324,6 @@ ${aiPreferenceInstructions}`;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-
         let message = "Failed to generate logo. Please try again.";
 
         if (typeof errorData?.detail === "string") {
@@ -1406,7 +1444,6 @@ ${aiPreferenceInstructions}`;
     }
   };
 
-
   const handleDownloadLogo = () => {
     if (!logoBase64) {
       return;
@@ -1442,7 +1479,9 @@ ${aiPreferenceInstructions}`;
 
   const handleOpenMoveLogo = async (logo) => {
     if (!logo?.id) {
-      setLogoGalleryError("This logo cannot be moved because it does not have a saved ID.");
+      setLogoGalleryError(
+        "This logo cannot be moved because it does not have a saved ID."
+      );
       return;
     }
 
@@ -1468,14 +1507,10 @@ ${aiPreferenceInstructions}`;
 
       const [workspaceResponse, projectResponse] = await Promise.all([
         fetch("http://127.0.0.1:8000/workspaces/", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }),
         fetch("http://127.0.0.1:8000/projects/", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
 
@@ -1490,32 +1525,35 @@ ${aiPreferenceInstructions}`;
       const workspaceData = await workspaceResponse.json();
       const projectData = await projectResponse.json();
 
-      const loadedWorkspaces = Array.isArray(workspaceData)
-        ? workspaceData
-        : [];
+      const loadedWorkspaces = Array.isArray(workspaceData) ? workspaceData : [];
       const loadedProjects = Array.isArray(projectData) ? projectData : [];
 
       setWorkspaces(loadedWorkspaces);
       setProjects(loadedProjects);
 
       const currentLogoProject = loadedProjects.find(
-        (project) => String(project.id) === String(logo.project_id || selectedProjectId)
+        (project) =>
+          String(project.id) ===
+          String(logo.project_id || selectedProjectId)
       );
 
       const preferredWorkspaceId =
-        currentLogoProject?.workspace_id ||
-        loadedWorkspaces[0]?.id ||
-        "";
+        currentLogoProject?.workspace_id || loadedWorkspaces[0]?.id || "";
 
-      setMoveLogoWorkspaceId(preferredWorkspaceId ? String(preferredWorkspaceId) : "");
+      setMoveLogoWorkspaceId(
+        preferredWorkspaceId ? String(preferredWorkspaceId) : ""
+      );
 
       const preferredProject =
         currentLogoProject ||
         loadedProjects.find(
-          (project) => String(project.workspace_id) === String(preferredWorkspaceId)
+          (project) =>
+            String(project.workspace_id) === String(preferredWorkspaceId)
         );
 
-      setMoveLogoProjectId(preferredProject ? String(preferredProject.id) : "");
+      setMoveLogoProjectId(
+        preferredProject ? String(preferredProject.id) : ""
+      );
     } catch (err) {
       console.error("Logo move options load error:", err);
 
@@ -1610,7 +1648,10 @@ ${aiPreferenceInstructions}`;
           return updatedLogos;
         }
 
-        const nextIndex = Math.min(selectedLogoIndex, updatedLogos.length - 1);
+        const nextIndex = Math.min(
+          selectedLogoIndex,
+          updatedLogos.length - 1
+        );
 
         setSelectedLogoIndex(nextIndex);
         setLogoBase64(updatedLogos[nextIndex].image_base64);
@@ -1653,7 +1694,7 @@ ${aiPreferenceInstructions}`;
     } finally {
       setMoveLogoLoading(false);
     }
-  };  
+  };
 
   const handleMoveLogoWorkspaceSelection = (workspaceId) => {
     setMoveLogoWorkspaceId(workspaceId);
@@ -1735,9 +1776,7 @@ ${aiPreferenceInstructions}`;
       console.error("Create move logo workspace error:", err);
 
       setMoveLogoError(
-        err instanceof Error
-          ? err.message
-          : "Workspace could not be created."
+        err instanceof Error ? err.message : "Workspace could not be created."
       );
     } finally {
       setCreatingMoveLogoWorkspace(false);
@@ -1807,7 +1846,6 @@ ${aiPreferenceInstructions}`;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-
         let message = "Project could not be created.";
 
         if (typeof errorData?.detail === "string") {
@@ -1824,10 +1862,7 @@ ${aiPreferenceInstructions}`;
 
       const createdProject = await response.json();
 
-      setProjects((currentProjects) => [
-        createdProject,
-        ...currentProjects,
-      ]);
+      setProjects((currentProjects) => [createdProject, ...currentProjects]);
 
       setMoveLogoProjectId(String(createdProject.id));
       setShowMoveLogoCreateProject(false);
@@ -1842,7 +1877,7 @@ ${aiPreferenceInstructions}`;
     } finally {
       setCreatingMoveLogoProject(false);
     }
-  };  
+  };
 
   const getProjectsForWorkspace = (workspaceId) => {
     if (!workspaceId) {
@@ -1862,10 +1897,8 @@ ${aiPreferenceInstructions}`;
       setSelectedLogoIndex(-1);
       setLogoBase64("");
       setProjectContentError("");
-
       setProjectName("");
       setDescription("");
-
       return;
     }
 
@@ -1890,7 +1923,7 @@ ${aiPreferenceInstructions}`;
 
     await loadLogoGallery(project.id, token);
     await loadProjectContent(project.id, token);
-  };  
+  };
 
   const loadWorkspaceOptions = async () => {
     setWorkspaceOptionsLoading(true);
@@ -1905,14 +1938,10 @@ ${aiPreferenceInstructions}`;
 
       const [workspaceResponse, projectResponse] = await Promise.all([
         fetch("http://127.0.0.1:8000/workspaces/", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }),
         fetch("http://127.0.0.1:8000/projects/", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
 
@@ -1939,9 +1968,7 @@ ${aiPreferenceInstructions}`;
       const workspaceData = await workspaceResponse.json();
       const projectData = await projectResponse.json();
 
-      const loadedWorkspaces = Array.isArray(workspaceData)
-        ? workspaceData
-        : [];
+      const loadedWorkspaces = Array.isArray(workspaceData) ? workspaceData : [];
       const loadedProjects = Array.isArray(projectData) ? projectData : [];
 
       setWorkspaces(loadedWorkspaces);
@@ -2105,9 +2132,7 @@ ${aiPreferenceInstructions}`;
       console.error("Create save workspace error:", err);
 
       setSaveWorkspaceError(
-        err instanceof Error
-          ? err.message
-          : "Workspace could not be created."
+        err instanceof Error ? err.message : "Workspace could not be created."
       );
     } finally {
       setCreatingSaveWorkspace(false);
@@ -2129,12 +2154,16 @@ ${aiPreferenceInstructions}`;
     }
 
     if (cleanedDescription.length < 10) {
-      setSaveWorkspaceError("Project description must be at least 10 characters.");
+      setSaveWorkspaceError(
+        "Project description must be at least 10 characters."
+      );
       return;
     }
 
     if (cleanedDescription.length > 5000) {
-      setSaveWorkspaceError("Project description must be 5000 characters or fewer.");
+      setSaveWorkspaceError(
+        "Project description must be 5000 characters or fewer."
+      );
       return;
     }
 
@@ -2177,7 +2206,6 @@ ${aiPreferenceInstructions}`;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-
         let message = "Project could not be created.";
 
         if (typeof errorData?.detail === "string") {
@@ -2194,10 +2222,7 @@ ${aiPreferenceInstructions}`;
 
       const createdProject = await response.json();
 
-      setProjects((currentProjects) => [
-        createdProject,
-        ...currentProjects,
-      ]);
+      setProjects((currentProjects) => [createdProject, ...currentProjects]);
 
       setSelectedSaveProjectId(String(createdProject.id));
       setShowSaveCreateProject(false);
@@ -2213,7 +2238,7 @@ ${aiPreferenceInstructions}`;
       setCreatingSaveProject(false);
     }
   };
-  
+
   const handleSaveToWorkspace = async () => {
     if (savingToWorkspace) {
       return;
@@ -2282,7 +2307,6 @@ ${aiPreferenceInstructions}`;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-
         let message = "Content could not be saved. Please try again.";
 
         if (typeof errorData?.detail === "string") {
@@ -2294,7 +2318,8 @@ ${aiPreferenceInstructions}`;
         } else if (response.status === 404) {
           message = "The selected project could not be found.";
         } else if (response.status === 422) {
-          message = "The generated content could not be saved in its current form.";
+          message =
+            "The generated content could not be saved in its current form.";
         }
 
         throw new Error(message);
@@ -2304,7 +2329,8 @@ ${aiPreferenceInstructions}`;
         (workspace) => String(workspace.id) === String(selectedWorkspaceId)
       );
 
-      const workspaceName = selectedWorkspace?.name || "the selected workspace";
+      const workspaceName =
+        selectedWorkspace?.name || "the selected workspace";
       const savedProjectName =
         selectedProjectForSave?.title || "the selected project";
 
@@ -2342,7 +2368,6 @@ ${aiPreferenceInstructions}`;
       const cleanedProjectName = projectName.trim() || "Tanio AI";
       const documentLabel =
         documentTypeLabels[contentType] || "Generated Content";
-
       const safeProjectName = cleanedProjectName
         .replace(/[^a-zA-Z0-9-_ ]/g, "")
         .trim()
@@ -2378,7 +2403,6 @@ ${aiPreferenceInstructions}`;
       const cleanedProjectName = projectName.trim() || "Tanio AI";
       const documentLabel =
         documentTypeLabels[contentType] || "Generated Content";
-
       const safeProjectName = cleanedProjectName
         .replace(/[^a-zA-Z0-9-_ ]/g, "")
         .trim()
@@ -2414,7 +2438,6 @@ ${aiPreferenceInstructions}`;
       const cleanedProjectName = projectName.trim() || "Tanio AI";
       const documentLabel =
         documentTypeLabels[contentType] || "Generated Content";
-
       const safeProjectName = cleanedProjectName
         .replace(/[^a-zA-Z0-9-_ ]/g, "")
         .trim()
@@ -2443,7 +2466,6 @@ ${aiPreferenceInstructions}`;
     }
   };
 
-
   const handleCopyGeneratedOutput = async () => {
     if (!generatedContent.trim()) {
       return;
@@ -2466,6 +2488,7 @@ ${aiPreferenceInstructions}`;
     }
 
     const target = event.target;
+
     if (target instanceof HTMLElement && target.closest("button")) {
       return;
     }
@@ -2481,6 +2504,7 @@ ${aiPreferenceInstructions}`;
 
     const handlePointerMove = (moveEvent) => {
       const dragState = generatedModalDragRef.current;
+
       if (!dragState) {
         return;
       }
@@ -2528,7 +2552,9 @@ ${aiPreferenceInstructions}`;
                 <div className="absolute inset-0 rotate-6 rounded-[20px] border border-cyan-400/15 bg-cyan-500/[0.04]" />
                 <div className="relative flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-[18px] border border-cyan-300/30 bg-gradient-to-br from-cyan-400/25 via-sky-500/10 to-slate-950 text-[28px] text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_35px_rgba(34,211,238,0.14)]">
                   <span className="absolute inset-0 bg-gradient-to-br from-white/[0.12] via-transparent to-transparent" />
-                  <span className="relative drop-shadow-[0_0_12px_rgba(103,232,249,0.75)]">◈</span>
+                  <span className="relative drop-shadow-[0_0_12px_rgba(103,232,249,0.75)]">
+                    ◈
+                  </span>
                 </div>
               </div>
 
@@ -2547,7 +2573,8 @@ ${aiPreferenceInstructions}`;
                   Product Architect
                 </h1>
                 <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
-                  Turn product ideas into structured plans, requirements, architecture, and launch-ready documentation.
+                  Turn product ideas into structured plans, requirements,
+                  architecture, and launch-ready documentation.
                 </p>
               </div>
             </div>
@@ -2562,7 +2589,9 @@ ${aiPreferenceInstructions}`;
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="truncate font-bold text-white">AI Planning Engine</p>
+                    <p className="truncate font-bold text-white">
+                      AI Planning Engine
+                    </p>
                     <span className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
                       Ready
                     </span>
@@ -2582,1868 +2611,2007 @@ ${aiPreferenceInstructions}`;
           </div>
         </div>
 
-        {/* Main Product Architect Workspace */}
-        <div className="grid items-stretch gap-4 2xl:gap-5 xl:grid-cols-2">
-        {/* Project Setup */}
-        <section ref={projectSetupRef} className="relative flex h-full min-h-[940px] flex-col overflow-visible rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6">
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/55 to-transparent" />
+        {/* Generator Tabs */}
+        <div
+          role="tablist"
+          aria-label="Product Architect generators"
+          className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.18)]"
+        >
+          {PRODUCT_ARCHITECT_TABS.map((tab, index) => {
+            const isActive = activeTab === tab.key;
 
-          <div className="mb-6 flex items-start gap-3 border-b border-slate-800/70 pb-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
-              ◈
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-white">Project Setup</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Choose your project, describe the product, and select what Tanio should generate.
-              </p>
-            </div>
-          </div>
+            return (
+              <button
+                key={tab.key}
+                id={`product-architect-tab-${tab.key}`}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`product-architect-panel-${tab.key}`}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => setActiveTab(tab.key)}
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
+                className={`min-w-0 flex-1 rounded-xl px-3 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 sm:flex-none sm:px-5 ${
+                  isActive
+                    ? "border border-cyan-400/40 bg-cyan-400/15 text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,0.10)]"
+                    : "border border-transparent text-slate-400 hover:bg-slate-900 hover:text-white"
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
 
-          <div className="flex flex-1 flex-col"><div className="grid gap-5">
-            <div className="rounded-2xl border border-slate-800/80 bg-slate-950/35 p-4 sm:p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
+        {/* Content Generator Panel */}
+        <div
+          id="product-architect-panel-content"
+          role="tabpanel"
+          aria-labelledby="product-architect-tab-content"
+          hidden={activeTab !== "content"}
+          tabIndex={0}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          <div className="grid items-stretch gap-4 2xl:gap-5 xl:grid-cols-2">
+            {/* Project Setup */}
+            <section
+              ref={projectSetupRef}
+              className="relative flex h-full min-h-[940px] flex-col overflow-visible rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
+            >
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/55 to-transparent" />
+
+              <div className="mb-6 flex items-start gap-3 border-b border-slate-800/70 pb-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
+                  ◈
+                </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Project Details</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Use an existing project or create a new one automatically.
+                  <h2 className="text-xl font-bold text-white">Project Setup</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Choose your project, describe the product, and select what
+                    Tanio should generate.
                   </p>
                 </div>
-                <span className="rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-cyan-300">
-                  Step 1
-                </span>
               </div>
 
-              <div className="mb-4">
-                <label htmlFor="existing-project" className="mb-2 block text-sm font-medium text-slate-300">
-                  Choose Existing Project
-                </label>
+              <div className="flex flex-1 flex-col">
+                <div className="grid gap-5">
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/35 p-4 sm:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          Project Details
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Use an existing project or create a new one automatically.
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-cyan-500/20 bg-cyan-500/[0.06] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-cyan-300">
+                        Step 1
+                      </span>
+                    </div>
+
+                    <div className="mb-4">
+                      <label
+                        htmlFor="existing-project"
+                        className="mb-2 block text-sm font-medium text-slate-300"
+                      >
+                        Choose Existing Project
+                      </label>
+
+                      <select
+                        id="existing-project"
+                        value={selectedProjectId || ""}
+                        onChange={(event) =>
+                          handleSelectedProjectChange(event.target.value)
+                        }
+                        disabled={loading || logoLoading}
+                        className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">Create a new project automatically</option>
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.title}
+                          </option>
+                        ))}
+                      </select>
+
+                      <p className="mt-2 text-xs text-slate-500">
+                        Select an existing project to save generated content and
+                        logos there. Leave this blank to auto-create a new project.
+                      </p>
+                    </div>
+
+                    <div className="mb-4">
+                      <label
+                        htmlFor="project-name"
+                        className="mb-2 block text-sm font-medium text-slate-300"
+                      >
+                        Project Name
+                      </label>
+
+                      <input
+                        id="project-name"
+                        type="text"
+                        value={projectName}
+                        placeholder="e.g. Smart Budget Planner, Fitness Coaching App, Team Collaboration Platform"
+                        onChange={(event) =>
+                          handleProjectNameChange(event.target.value)
+                        }
+                        maxLength={100}
+                        disabled={loading || logoLoading}
+                        aria-describedby="project-name-help"
+                        className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white placeholder:text-slate-600 shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+
+                      <div
+                        id="project-name-help"
+                        className="mt-2 flex justify-between gap-4 text-xs text-slate-500"
+                      >
+                        <span>Use between 2 and 100 characters.</span>
+                        <span>{projectName.length}/100</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="project-description"
+                        className="mb-2 block text-sm font-medium text-slate-300"
+                      >
+                        Project Description
+                      </label>
+
+                      <textarea
+                        id="project-description"
+                        value={description}
+                        placeholder="Describe what you're building, who it's for, the problem it solves, and any important features or goals..."
+                        onChange={(event) =>
+                          handleProjectDescriptionChange(event.target.value)
+                        }
+                        rows={7}
+                        maxLength={5000}
+                        disabled={loading || logoLoading}
+                        aria-describedby="project-description-help"
+                        className="w-full resize-none rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white placeholder:text-slate-600 shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+
+                      <div
+                        id="project-description-help"
+                        className="mt-2 flex justify-between gap-4 text-xs text-slate-500"
+                      >
+                        <span>Use at least 10 characters.</span>
+                        <span>{description.length}/5000</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col rounded-2xl border border-cyan-500/10 bg-gradient-to-b from-cyan-950/[0.10] to-slate-950/45 p-4 sm:p-5">
+                    <div className="mb-5 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          Generation Settings
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Choose the planning document you want Tanio to build.
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-violet-500/20 bg-violet-500/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-300">
+                        Step 2
+                      </span>
+                    </div>
+
+                    <div className="mb-5">
+                      <label
+                        htmlFor="document-type"
+                        className="mb-2 block text-sm font-medium text-slate-300"
+                      >
+                        Document Type
+                      </label>
+
+                      <select
+                        id="document-type"
+                        value={contentType}
+                        onChange={(event) => {
+                          setContentType(event.target.value);
+                          setError("");
+                          setSuccessMessage("");
+                        }}
+                        disabled={loading}
+                        className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="prd">Product Requirements Document</option>
+                        <option value="persona">User Persona</option>
+                        <option value="userStories">User Stories</option>
+                        <option value="featureList">Feature List</option>
+                        <option value="technicalArchitecture">
+                          Technical Architecture
+                        </option>
+                      </select>
+                    </div>
+
+                    <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Ready to Generate
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-white">
+                        {documentTypeLabels[contentType] || "Generated Content"}
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-slate-400">
+                        Tanio will use your project information together with
+                        your saved AI preferences.
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className="rounded-full border border-cyan-500/15 bg-cyan-500/[0.05] px-2.5 py-1 text-xs text-cyan-300">
+                          AI-assisted
+                        </span>
+                        <span className="rounded-full border border-violet-500/15 bg-violet-500/[0.05] px-2.5 py-1 text-xs text-violet-300">
+                          Versioned
+                        </span>
+                        <span className="rounded-full border border-emerald-500/15 bg-emerald-500/[0.05] px-2.5 py-1 text-xs text-emerald-300">
+                          Exportable
+                        </span>
+                      </div>
+                    </div>
 
-                <select
-                  id="existing-project"
-                  value={selectedProjectId || ""}
-                  onChange={(e) => handleSelectedProjectChange(e.target.value)}
-                  disabled={loading || logoLoading}
-                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="">Create a new project automatically</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.title}
-                    </option>
-                  ))}
-                </select>
-
-                <p className="mt-2 text-xs text-slate-500">
-                  Select an existing project to save generated content and logos there.
-                  Leave this blank to auto-create a new project.
-                </p>
-              </div>
-
-              <div className="mb-4">
-                <label htmlFor="project-name" className="mb-2 block text-sm font-medium text-slate-300">
-                  Project Name
-                </label>
-
-                <input
-                  id="project-name"
-                  type="text"
-                  value={projectName}
-                  placeholder="e.g. Smart Budget Planner, Fitness Coaching App, Team Collaboration Platform"
-                  onChange={(e) => {
-                    setProjectName(e.target.value);
-
-                    if (error) {
-                      setError("");
-                    }
-                    if (successMessage) {
-                      setSuccessMessage("");
-                    }
-                    if (logoError) {
-                      setLogoError("");
-                    }
-                    if (logoBase64) {
-                      setLogoBase64("");
-                    }
-
-                    setLogoProjectId(null);
-                    setLogoGallery([]);
-                    setSelectedLogoIndex(-1);
-                    setLogoGalleryError("");
-                  }}
-                  maxLength={100}
-                  aria-describedby="project-name-help"
-                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white placeholder:text-slate-600 shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
-                />
-
-                <div id="project-name-help" className="mt-2 flex justify-between gap-4 text-xs text-slate-500">
-                  <span>Use between 2 and 100 characters.</span>
-                  <span>{projectName.length}/100</span>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="project-description" className="mb-2 block text-sm font-medium text-slate-300">
-                  Project Description
-                </label>
-
-                <textarea
-                  id="project-description"
-                  value={description}
-                  placeholder="Describe what you're building, who it's for, the problem it solves, and any important features or goals..."
-                  onChange={(e) => {
-                    setDescription(e.target.value);
-
-                    if (error) {
-                      setError("");
-                    }
-                    if (successMessage) {
-                      setSuccessMessage("");
-                    }
-                    if (logoError) {
-                      setLogoError("");
-                    }
-                    if (logoBase64) {
-                      setLogoBase64("");
-                    }
-                  }}
-                  rows={7}
-                  maxLength={5000}
-                  aria-describedby="project-description-help"
-                  className="w-full resize-none rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white placeholder:text-slate-600 shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
-                />
-
-                <div id="project-description-help" className="mt-2 flex justify-between gap-4 text-xs text-slate-500">
-                  <span>Use at least 10 characters.</span>
-                  <span>{description.length}/5000</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col rounded-2xl border border-cyan-500/10 bg-gradient-to-b from-cyan-950/[0.10] to-slate-950/45 p-4 sm:p-5">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-white">Generation Settings</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Choose the planning document you want Tanio to build.
-                  </p>
-                </div>
-                <span className="rounded-full border border-violet-500/20 bg-violet-500/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-300">
-                  Step 2
-                </span>
-              </div>
-
-              <div className="mb-5">
-                <label htmlFor="document-type" className="mb-2 block text-sm font-medium text-slate-300">
-                  Document Type
-                </label>
-
-                <select
-                  id="document-type"
-                  value={contentType}
-                  onChange={(e) => {
-                    setContentType(e.target.value);
-
-                    if (error) {
-                      setError("");
-                    }
-                    if (successMessage) {
-                      setSuccessMessage("");
-                    }
-                  }}
-                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3.5 text-white shadow-inner shadow-black/10 transition-all focus:border-cyan-400/70 focus:bg-slate-950 focus:outline-none focus:ring-4 focus:ring-cyan-500/10"
-                >
-                  <option value="prd">Product Requirements Document</option>
-                  <option value="persona">User Persona</option>
-                  <option value="userStories">User Stories</option>
-                  <option value="featureList">Feature List</option>
-                  <option value="technicalArchitecture">Technical Architecture</option>
-                </select>
-              </div>
-
-              <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Ready to Generate
-                </p>
-                <p className="mt-2 text-base font-semibold text-white">
-                  {documentTypeLabels[contentType] || "Generated Content"}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-slate-400">
-                  Tanio will use the project information on the left together with your saved AI preferences.
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="rounded-full border border-cyan-500/15 bg-cyan-500/[0.05] px-2.5 py-1 text-xs text-cyan-300">
-                    AI-assisted
-                  </span>
-                  <span className="rounded-full border border-violet-500/15 bg-violet-500/[0.05] px-2.5 py-1 text-xs text-violet-300">
-                    Versioned
-                  </span>
-                  <span className="rounded-full border border-emerald-500/15 bg-emerald-500/[0.05] px-2.5 py-1 text-xs text-emerald-300">
-                    Exportable
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleGenerate(false)}
-                disabled={
-                  loading ||
-                  projectName.trim().length < 2 ||
-                  description.trim().length < 10
-                }
-                className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-400 to-sky-400 px-6 py-3.5 font-bold text-slate-950 shadow-[0_-10px_30px_rgba(2,6,23,0.45),0_14px_36px_rgba(34,211,238,0.16)] transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 hover:shadow-[0_-10px_30px_rgba(2,6,23,0.45),0_18px_44px_rgba(34,211,238,0.22)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span aria-hidden="true">✦</span>
-                {loading ? "Generating..." : "Generate Content"}
-              </button>
-
-              {error && (
-                <div className="mt-4 rounded-xl border border-red-800 bg-red-950/50 p-4" role="alert" aria-live="polite">
-                  <p className="font-semibold text-red-300">Something went wrong</p>
-                  <p className="mt-1 text-sm text-red-300">{error}</p>
-                  <button
-                    type="button"
-                    onClick={() => handleGenerate(false)}
-                    disabled={loading}
-                    className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              {successMessage && (
-                <div className="mt-4 rounded-xl border border-emerald-800 bg-emerald-950/50 p-4" role="status" aria-live="polite">
-                  <p className="font-semibold text-emerald-300">Success</p>
-                  <p className="mt-1 text-sm text-emerald-300">{successMessage}</p>
-                </div>
-              )}
-            </div>
-          </div>
-          </div>
-        </section>
-
-      <div
-        style={{
-          "--project-setup-height": `${projectSetupHeight}px`,
-        }}
-        className="relative flex min-h-[700px] flex-col overflow-hidden rounded-2xl border border-cyan-500/15 xl:h-[var(--project-setup-height)] xl:min-h-0 xl:max-h-[var(--project-setup-height)] bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.06),transparent_28%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
-        aria-busy={loading}
-      >
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/55 to-transparent" />
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/70 pb-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
-              ▤
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">Generated Output</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Review, regenerate, save, or export your AI-generated planning document.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCopyGeneratedOutput}
-              disabled={!generatedContent.trim()}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/60 px-3.5 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <span aria-hidden="true">⧉</span>
-              {copyGeneratedLabel}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowGeneratedOutputModal(true)}
-              disabled={!generatedContent.trim()}
-              className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.08] px-3.5 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/45 hover:bg-cyan-500/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <span aria-hidden="true">⛶</span>
-              Expand
-            </button>
-          </div>
-
-          {generatedContent && (
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handlePreviousVersion}
-                disabled={loading || currentVersionIndex <= 0}
-                className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                ← Previous
-              </button>
-
-              <button
-                type="button"
-                onClick={handleNextVersion}
-                disabled={
-                  loading ||
-                  currentVersionIndex >= generationHistory.length - 1
-                }
-                className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Next →
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenRegenerate}
-                disabled={loading}
-                className="rounded-lg border border-violet-400/30 bg-gradient-to-r from-violet-500/20 via-purple-500/15 to-slate-900 px-4 py-2 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/55 hover:text-white disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {regenerating ? "Regenerating..." : "Regenerate"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenSaveWorkspace}
-                disabled={loading || savingToWorkspace}
-                className="rounded-lg border border-emerald-400/30 bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-slate-900 px-4 py-2 font-semibold text-emerald-100 transition-all hover:-translate-y-0.5 hover:border-emerald-400/55 hover:text-white disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingToWorkspace ? "Saving..." : "Save to Workspace"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportTxt}
-                disabled={loading}
-                className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Export TXT
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportMarkdown}
-                disabled={loading}
-                className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Export Markdown
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportPdf}
-                disabled={loading}
-                className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-200 transition-all hover:border-emerald-400/45 hover:bg-emerald-500/15 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Export PDF
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Scrollable generated-content body */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pr-2 [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin]">
-        {projectContentLoading && (
-          <div
-            className="mb-6 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-slate-400"
-            role="status"
-            aria-live="polite"
-          >
-            <div
-              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
-              aria-hidden="true"
-            />
-            <p>Loading saved project content...</p>
-          </div>
-        )}
-
-        {projectContentError && (
-          <div
-            className="mb-6 rounded-lg border border-amber-800 bg-amber-950/40 p-4"
-            role="alert"
-          >
-            <p className="font-semibold text-amber-300">
-              Saved content could not be loaded
-            </p>
-            <p className="mt-1 text-sm text-amber-300">
-              {projectContentError}
-            </p>
-            {selectedProject?.id && (
-              <button
-                type="button"
-                onClick={() => loadProjectContent(selectedProject.id)}
-                disabled={projectContentLoading}
-                className="mt-3 rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-
-        {autoSaveStatus && (
-          <div
-            className="mb-6 rounded-lg border border-cyan-800 bg-cyan-950/50 p-4"
-            role="status"
-            aria-live="polite"
-          >
-            <p className="font-semibold text-cyan-300">Auto-Save</p>
-            <p className="mt-1 text-sm text-cyan-300">
-              {autoSaveStatus}
-            </p>
-          </div>
-        )}
-
-        {autoSaveError && (
-          <div
-            className="mb-6 rounded-lg border border-amber-800 bg-amber-950/50 p-4"
-            role="alert"
-            aria-live="polite"
-          >
-            <p className="font-semibold text-amber-300">Auto-Save issue</p>
-            <p className="mt-1 text-sm text-amber-300">
-              {autoSaveError}
-            </p>
-          </div>
-        )}        
-
-        {saveWorkspaceSuccess && (
-          <div
-            className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/50 p-4"
-            role="status"
-            aria-live="polite"
-          >
-            <p className="font-semibold text-emerald-300">Saved successfully</p>
-            <p className="mt-1 text-sm text-emerald-300">
-              {saveWorkspaceSuccess}
-            </p>
-          </div>
-        )}
-
-        {loading && !generatedContent ? (
-          <div className="flex items-center gap-3 text-slate-400">
-            <div
-              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
-              aria-hidden="true"
-            />
-
-            <p>Generating your document. This may take a moment...</p>
-          </div>
-        ) : generatedContent ? (
-          <>
-            {regenerating && (
-              <div
-                className="mb-6 flex items-center gap-3 rounded-lg border border-cyan-800/60 bg-cyan-950/30 p-4 text-cyan-200"
-                role="status"
-                aria-live="polite"
-              >
-                <div
-                  className="h-5 w-5 shrink-0 rounded-full border-2 border-cyan-800 border-t-cyan-300 animate-spin"
-                  aria-hidden="true"
-                />
-
-                <p>
-                  Regenerating your document. Your current version will stay
-                  visible until the new one is ready.
-                </p>
-              </div>
-            )}
-
-            {generationHistory.length > 0 && (
-              <div className="mb-5 flex flex-wrap items-center gap-3 text-sm">
-                <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
-                  Version {currentVersionIndex + 1} of {generationHistory.length}
-                </span>
-
-                <span
-                  className={`rounded-lg border px-3 py-1.5 font-semibold ${
-                    currentVersionIndex === generationHistory.length - 1
-                      ? "border-emerald-800 bg-emerald-950 text-emerald-300"
-                      : "border-slate-700 bg-slate-800 text-slate-400"
-                  }`}
-                >
-                  {currentVersionIndex === generationHistory.length - 1
-                    ? "Current Version"
-                    : "Previous Version"}
-                </span>
-              </div>
-            )}
-
-            {generationHistory[currentVersionIndex]?.regenerationInstructions && (
-              <div className="mb-5 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
-                  Regeneration Instructions
-                </p>
-                <p className="mt-2 text-sm text-slate-300">
-                  {generationHistory[currentVersionIndex].regenerationInstructions}
-                </p>
-              </div>
-            )}
-
-            <div className="min-h-full max-w-none rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
-              >
-                {generatedContent}
-              </ReactMarkdown>
-            </div>
-          </>
-        ) : (
-          <div className="flex h-full min-h-0 flex-1 items-center justify-center rounded-2xl border border-slate-800/80 bg-slate-950/45 p-8 text-center shadow-inner shadow-black/15">
-            <div className="max-w-sm">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-3xl text-cyan-300 shadow-lg shadow-cyan-950/20">
-                ▤
-              </div>
-              <div className="mt-6 flex justify-center gap-3 text-cyan-400" aria-hidden="true">
-                <span>✦</span>
-                <span className="text-xl">✦</span>
-                <span>✦</span>
-              </div>
-              <p className="mt-5 text-lg font-semibold text-slate-200">
-                Your planning document will appear here
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                Complete the project details and click &quot;Generate Content&quot; to get started.
-              </p>
-            </div>
-          </div>
-        )}
-        </div>
-      </div>
-        </div>
-
-        {/* Logo Generator */}
-      <div
-        className="relative mt-5 overflow-hidden rounded-2xl border border-violet-500/15 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,0.07),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
-        aria-busy={logoLoading}
-      >
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/70 pb-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-500/15 to-slate-900 text-xl text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.10)]">
-              ✦
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">AI Product Logo</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Generate and refine a visual identity for your product.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleGenerateLogo}
-              disabled={
-                logoLoading ||
-                (
-                  !selectedLogoContentId &&
-                  (
-                    projectName.trim().length < 2 ||
-                    description.trim().length < 10
-                  )
-                )
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/35 bg-gradient-to-r from-violet-500/80 to-fuchsia-500/75 px-5 py-2.5 font-bold text-white shadow-[0_12px_30px_rgba(139,92,246,0.20)] transition-all hover:-translate-y-0.5 hover:from-violet-400 hover:to-fuchsia-400 hover:shadow-[0_16px_36px_rgba(139,92,246,0.28)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {logoLoading
-                ? "Generating Logo..."
-                : logoBase64
-                ? "Generate New Logo"
-                : "Generate Logo"}
-            </button>
-
-            {logoBase64 && !logoLoading && (
-              <button
-                type="button"
-                onClick={handleDownloadLogo}
-                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors"
-              >
-                Download Logo
-              </button>
-            )}
-
-            {logoGallery[selectedLogoIndex]?.id && (
-              <button
-                type="button"
-                onClick={() => handleOpenMoveLogo(logoGallery[selectedLogoIndex])}
-                disabled={
-                  moveLogoLoading ||
-                  moveLogoOptionsLoading ||
-                  creatingMoveLogoWorkspace ||
-                  creatingMoveLogoProject
-                }
-                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Save Logo to Project
-              </button>
-            )}            
-          </div>
-        </div>
-
-        <div className="mb-6 rounded-xl border border-violet-500/10 bg-gradient-to-br from-violet-950/10 via-slate-950/55 to-slate-950/70 p-5 shadow-inner shadow-black/10">
-          <div className="mb-4">
-            <h3 className="font-semibold text-white">Customize Logo Prompt</h3>
-            <p className="mt-1 text-sm text-slate-400">
-              Optional. Add branding preferences before generating your logo.
-              Leave these fields unchanged to use the default prompt.
-            </p>
-          </div>
-
-          <div className="mb-5">
-            <label
-              htmlFor="logo-context-content"
-              className="mb-2 block text-sm text-slate-400"
-            >
-              Use Saved Content as Logo Context
-            </label>
-
-            <select
-              id="logo-context-content"
-              value={selectedLogoContentId}
-              onChange={(e) => {
-                setSelectedLogoContentId(e.target.value);
-                setLogoError("");
-              }}
-              disabled={logoLoading || availableProjectContent.length === 0}
-              className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">
-                {availableProjectContent.length === 0
-                  ? "No saved content available"
-                  : "Choose previous saved content"}
-              </option>
-
-              {availableProjectContent.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title} ({item.content_type})
-                </option>
-              ))}
-            </select>
-
-            <p className="mt-2 text-xs text-slate-500">
-              Optional. Select previously saved content to give Tanio more
-              context about the product before generating the logo.
-            </p>
-          </div>          
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label htmlFor="logo-style" className="mb-2 block text-sm text-slate-400">
-                Logo Style
-              </label>
-              <select
-                id="logo-style"
-                value={logoStyle}
-                onChange={(e) => {
-                  setLogoStyle(e.target.value);
-                  setLogoError("");
-                }}
-                disabled={logoLoading}
-                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="default">Default</option>
-                <option value="modern">Modern</option>
-                <option value="minimalist">Minimalist</option>
-                <option value="bold">Bold</option>
-                <option value="playful">Playful</option>
-                <option value="luxury">Luxury</option>
-                <option value="futuristic">Futuristic</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="preferred-colors" className="mb-2 block text-sm text-slate-400">
-                Preferred Colors
-              </label>
-              <input
-                id="preferred-colors"
-                type="text"
-                value={preferredColors}
-                onChange={(e) => {
-                  setPreferredColors(e.target.value);
-                  setLogoError("");
-                }}
-                maxLength={200}
-                disabled={logoLoading}
-                placeholder="e.g. navy blue, purple, silver"
-                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              <p className="mt-2 text-right text-xs text-slate-500">
-                {preferredColors.length}/200
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="logo-ideas" className="mb-2 block text-sm text-slate-400">
-                Logo Ideas / Symbols
-              </label>
-              <input
-                id="logo-ideas"
-                type="text"
-                value={logoIdeas}
-                onChange={(e) => {
-                  setLogoIdeas(e.target.value);
-                  setLogoError("");
-                }}
-                maxLength={300}
-                disabled={logoLoading}
-                placeholder="e.g. letter T, spark, circuit, shield"
-                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              <p className="mt-2 text-right text-xs text-slate-500">
-                {logoIdeas.length}/300
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="branding-direction" className="mb-2 block text-sm text-slate-400">
-                Branding Direction
-              </label>
-              <input
-                id="branding-direction"
-                type="text"
-                value={brandingDirection}
-                onChange={(e) => {
-                  setBrandingDirection(e.target.value);
-                  setLogoError("");
-                }}
-                maxLength={500}
-                disabled={logoLoading}
-                placeholder="e.g. Clean, trustworthy SaaS brand for creative professionals"
-                className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              <p className="mt-2 text-right text-xs text-slate-500">
-                {brandingDirection.length}/500
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {autoSaveStatus && (
-          <div
-            className="mb-4 rounded-lg border border-cyan-800 bg-cyan-950/50 p-4"
-            role="status"
-            aria-live="polite"
-          >
-            <p className="font-semibold text-cyan-300">Auto-Save</p>
-            <p className="mt-1 text-sm text-cyan-300">
-              {autoSaveStatus}
-            </p>
-          </div>
-        )}
-
-        {autoSaveError && (
-          <div
-            className="mb-4 rounded-lg border border-amber-800 bg-amber-950/50 p-4"
-            role="alert"
-            aria-live="polite"
-          >
-            <p className="font-semibold text-amber-300">Auto-Save issue</p>
-            <p className="mt-1 text-sm text-amber-300">
-              {autoSaveError}
-            </p>
-          </div>
-        )}        
-
-        {logoError && (
-          <div
-            className="mb-4 bg-red-950/50 border border-red-800 rounded-lg p-4"
-            role="alert"
-            aria-live="polite"
-          >
-            <p className="font-semibold text-red-300">
-              Logo generation failed
-            </p>
-
-            <p className="text-sm text-red-300 mt-1">{logoError}</p>
-
-            <button
-              type="button"
-              onClick={handleGenerateLogo}
-              disabled={logoLoading}
-              className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {logoLoading && (
-          <div
-            className="flex items-center gap-3 text-slate-400 py-6"
-            role="status"
-            aria-live="polite"
-          >
-            <div
-              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-purple-400 animate-spin"
-              aria-hidden="true"
-            />
-
-            <p>Generating your logo. This may take a moment...</p>
-          </div>
-        )}
-
-        {logoGalleryLoading && !logoLoading && (
-          <div
-            className="mb-4 flex items-center gap-3 text-slate-400"
-            role="status"
-            aria-live="polite"
-          >
-            <div
-              className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-purple-400 animate-spin"
-              aria-hidden="true"
-            />
-            <p>Loading saved logo versions...</p>
-          </div>
-        )}
-
-        {logoGalleryError && (
-          <div className="mb-4 rounded-lg border border-amber-800 bg-amber-950/40 p-4">
-            <p className="font-semibold text-amber-300">
-              Logo gallery could not be loaded
-            </p>
-            <p className="mt-1 text-sm text-amber-300">{logoGalleryError}</p>
-            {logoProjectId && (
-              <button
-                type="button"
-                onClick={() => loadLogoGallery(logoProjectId)}
-                disabled={logoGalleryLoading}
-                className="mt-3 rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Retry Gallery
-              </button>
-            )}
-          </div>
-        )}
-
-        {logoBase64 && !logoLoading && (
-          <div className="mt-6">
-            <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
-              {logoGallery.length > 0 && selectedLogoIndex >= 0 && (
-                <>
-                  <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
-                    Version {selectedLogoIndex + 1} of {logoGallery.length}
-                  </span>
-
-                  <span
-                    className={`rounded-lg border px-3 py-1.5 font-semibold ${
-                      selectedLogoIndex === logoGallery.length - 1
-                        ? "border-emerald-800 bg-emerald-950 text-emerald-300"
-                        : "border-slate-700 bg-slate-800 text-slate-400"
-                    }`}
-                  >
-                    {selectedLogoIndex === logoGallery.length - 1
-                      ? "Current Version"
-                      : "Previous Version"}
-                  </span>
-
-                  {logoGallery[selectedLogoIndex]?.created_at && (
-                    <span className="text-slate-500">
-                      {new Date(
-                        logoGallery[selectedLogoIndex].created_at
-                      ).toLocaleString()}
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-start gap-6">
-              <div>
-                <img
-                  src={`data:image/png;base64,${logoBase64}`}
-                  alt={`${projectName.trim() || "Project"} generated logo`}
-                  className="w-full max-w-md rounded-xl border border-slate-700 bg-white"
-                />
-
-                {logoGallery.length > 1 && selectedLogoIndex >= 0 && (
-                  <div className="mt-4 flex flex-wrap gap-3">
                     <button
                       type="button"
-                      onClick={handlePreviousLogoVersion}
-                      disabled={selectedLogoIndex <= 0}
-                      className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => handleGenerate(false)}
+                      disabled={
+                        loading ||
+                        projectName.trim().length < 2 ||
+                        description.trim().length < 10
+                      }
+                      className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-400 to-sky-400 px-6 py-3.5 font-bold text-slate-950 shadow-[0_-10px_30px_rgba(2,6,23,0.45),0_14px_36px_rgba(34,211,238,0.16)] transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 hover:shadow-[0_-10px_30px_rgba(2,6,23,0.45),0_18px_44px_rgba(34,211,238,0.22)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span aria-hidden="true">✦</span>
+                      {loading ? "Generating..." : "Generate Content"}
+                    </button>
+
+                    {error && (
+                      <div
+                        className="mt-4 rounded-xl border border-red-800 bg-red-950/50 p-4"
+                        role="alert"
+                        aria-live="polite"
+                      >
+                        <p className="font-semibold text-red-300">
+                          Something went wrong
+                        </p>
+                        <p className="mt-1 text-sm text-red-300">{error}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerate(false)}
+                          disabled={loading}
+                          className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
+
+                    {successMessage && (
+                      <div
+                        className="mt-4 rounded-xl border border-emerald-800 bg-emerald-950/50 p-4"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <p className="font-semibold text-emerald-300">Success</p>
+                        <p className="mt-1 text-sm text-emerald-300">
+                          {successMessage}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Generated Output */}
+            <div
+              style={{
+                "--project-setup-height": `${projectSetupHeight}px`,
+              }}
+              className="relative flex min-h-[700px] flex-col overflow-hidden rounded-2xl border border-cyan-500/15 xl:h-[var(--project-setup-height)] xl:min-h-0 xl:max-h-[var(--project-setup-height)] bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.06),transparent_28%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
+              aria-busy={loading}
+            >
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/55 to-transparent" />
+
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/70 pb-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/15 to-slate-900 text-xl text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.08)]">
+                    ▤
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Generated Output</h2>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Review, regenerate, save, or export your AI-generated
+                      planning document.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyGeneratedOutput}
+                    disabled={!generatedContent.trim()}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/60 px-3.5 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span aria-hidden="true">⧉</span>
+                    {copyGeneratedLabel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGeneratedOutputModal(true)}
+                    disabled={!generatedContent.trim()}
+                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.08] px-3.5 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/45 hover:bg-cyan-500/[0.12] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span aria-hidden="true">⛶</span>
+                    Expand
+                  </button>
+                </div>
+
+                {generatedContent && (
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={handlePreviousVersion}
+                      disabled={loading || currentVersionIndex <= 0}
+                      className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       ← Previous
                     </button>
 
                     <button
                       type="button"
-                      onClick={handleNextLogoVersion}
-                      disabled={selectedLogoIndex >= logoGallery.length - 1}
-                      className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={handleNextVersion}
+                      disabled={
+                        loading ||
+                        currentVersionIndex >= generationHistory.length - 1
+                      }
+                      className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Next →
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleOpenRegenerate}
+                      disabled={loading}
+                      className="rounded-lg border border-violet-400/30 bg-gradient-to-r from-violet-500/20 via-purple-500/15 to-slate-900 px-4 py-2 font-semibold text-violet-100 transition-all hover:-translate-y-0.5 hover:border-violet-400/55 hover:text-white disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {regenerating ? "Regenerating..." : "Regenerate"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleOpenSaveWorkspace}
+                      disabled={loading || savingToWorkspace}
+                      className="rounded-lg border border-emerald-400/30 bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-slate-900 px-4 py-2 font-semibold text-emerald-100 transition-all hover:-translate-y-0.5 hover:border-emerald-400/55 hover:text-white disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingToWorkspace ? "Saving..." : "Save to Workspace"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleExportTxt}
+                      disabled={loading}
+                      className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Export TXT
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleExportMarkdown}
+                      disabled={loading}
+                      className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 font-semibold text-slate-200 transition-all hover:border-cyan-500/30 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Export Markdown
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleExportPdf}
+                      disabled={loading}
+                      className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 font-semibold text-emerald-200 transition-all hover:border-emerald-400/45 hover:bg-emerald-500/15 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Export PDF
                     </button>
                   </div>
                 )}
               </div>
 
-              {logoGallery.length > 0 && selectedLogoIndex >= 0 && (
-                <div className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-                  <h3 className="font-semibold text-white">Version Details</h3>
-
-                  <dl className="mt-3 space-y-3 text-sm">
-                    <div>
-                      <dt className="text-slate-500">Style</dt>
-                      <dd className="mt-1 capitalize text-slate-200">
-                        {logoGallery[selectedLogoIndex]?.style || "default"}
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-slate-500">Preferred Colors</dt>
-                      <dd className="mt-1 text-slate-200">
-                        {logoGallery[selectedLogoIndex]?.preferred_colors ||
-                          "Default"}
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-slate-500">Logo Ideas / Symbols</dt>
-                      <dd className="mt-1 text-slate-200">
-                        {logoGallery[selectedLogoIndex]?.logo_ideas || "None"}
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-slate-500">Branding Direction</dt>
-                      <dd className="mt-1 text-slate-200">
-                        {logoGallery[selectedLogoIndex]?.branding_direction ||
-                          "Default"}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {logoGallery.length > 0 && !logoLoading && (
-          <div className="mt-8 border-t border-slate-800 pt-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-bold text-white">
-                  Logo Gallery & Version History
-                </h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  Browse every saved logo version for this project.
-                </p>
-              </div>
-
-              <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
-                {logoGallery.length} saved{" "}
-                {logoGallery.length === 1 ? "logo" : "logos"}
-              </span>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {logoGallery.map((logo, index) => {
-                const isSelected = index === selectedLogoIndex;
-                const isCurrent = index === logoGallery.length - 1;
-
-                return (
-                  <article
-                    key={logo.id ?? `${logo.project_id}-${index}`}
-                    className={`overflow-hidden rounded-xl border p-3 text-left transition ${
-                      isSelected
-                        ? "border-purple-500 bg-purple-950/20"
-                        : "border-slate-800 bg-slate-950/40 hover:border-slate-600"
-                    }`}
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pr-2 [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin]">
+                {projectContentLoading && (
+                  <div
+                    className="mb-6 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-slate-400"
+                    role="status"
+                    aria-live="polite"
                   >
-                  <button
-                    type="button"
-                    onClick={() => handleSelectLogoVersion(index)}
-                    className="w-full text-left"
-                  >
-                  <div className="aspect-square overflow-hidden rounded-lg bg-white">
-                    <img
-                      src={`data:image/png;base64,${logo.image_base64}`}
-                      alt={`${projectName.trim() || "Project"} logo version ${
-                        index + 1
-                      }`}
-                      className="h-full w-full object-contain"
+                    <div
+                      className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
+                      aria-hidden="true"
                     />
+                    <p>Loading saved project content...</p>
                   </div>
+                )}
 
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <span className="font-semibold text-white">
-                      Version {index + 1}
-                    </span>
-
-                    {isCurrent && (
-                      <span className="rounded-md border border-emerald-800 bg-emerald-950 px-2 py-1 text-xs font-semibold text-emerald-300">
-                        Current
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="mt-1 text-xs capitalize text-slate-400">
-                    {logo.style || "default"} style
-                  </p>
-
-                  {logo.created_at && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      {new Date(logo.created_at).toLocaleString()}
+                {projectContentError && (
+                  <div
+                    className="mb-6 rounded-lg border border-amber-800 bg-amber-950/40 p-4"
+                    role="alert"
+                  >
+                    <p className="font-semibold text-amber-300">
+                      Saved content could not be loaded
                     </p>
-                  )}
-                    </button>
-
-                    {logo.id && (
+                    <p className="mt-1 text-sm text-amber-300">
+                      {projectContentError}
+                    </p>
+                    {selectedProjectId && (
                       <button
                         type="button"
-                        onClick={() => handleOpenMoveLogo(logo)}
-                        disabled={moveLogoLoading}
-                        className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => loadProjectContent(selectedProjectId)}
+                        disabled={projectContentLoading}
+                        className="mt-3 rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Save Logo to Project
+                        Retry
                       </button>
                     )}
-                  </article>
-                );
-              })}
+                  </div>
+                )}
+
+                {autoSaveStatus && (
+                  <div
+                    className="mb-6 rounded-lg border border-cyan-800 bg-cyan-950/50 p-4"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <p className="font-semibold text-cyan-300">Auto-Save</p>
+                    <p className="mt-1 text-sm text-cyan-300">{autoSaveStatus}</p>
+                  </div>
+                )}
+
+                {autoSaveError && (
+                  <div
+                    className="mb-6 rounded-lg border border-amber-800 bg-amber-950/50 p-4"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    <p className="font-semibold text-amber-300">Auto-Save issue</p>
+                    <p className="mt-1 text-sm text-amber-300">{autoSaveError}</p>
+                  </div>
+                )}
+
+                {saveWorkspaceSuccess && (
+                  <div
+                    className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/50 p-4"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <p className="font-semibold text-emerald-300">
+                      Saved successfully
+                    </p>
+                    <p className="mt-1 text-sm text-emerald-300">
+                      {saveWorkspaceSuccess}
+                    </p>
+                  </div>
+                )}
+
+                {loading && !generatedContent ? (
+                  <div className="flex items-center gap-3 text-slate-400">
+                    <div
+                      className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-cyan-400 animate-spin"
+                      aria-hidden="true"
+                    />
+                    <p>Generating your document. This may take a moment...</p>
+                  </div>
+                ) : generatedContent ? (
+                  <>
+                    {regenerating && (
+                      <div
+                        className="mb-6 flex items-center gap-3 rounded-lg border border-cyan-800/60 bg-cyan-950/30 p-4 text-cyan-200"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <div
+                          className="h-5 w-5 shrink-0 rounded-full border-2 border-cyan-800 border-t-cyan-300 animate-spin"
+                          aria-hidden="true"
+                        />
+                        <p>
+                          Regenerating your document. Your current version will
+                          stay visible until the new one is ready.
+                        </p>
+                      </div>
+                    )}
+
+                    {generationHistory.length > 0 && (
+                      <div className="mb-5 flex flex-wrap items-center gap-3 text-sm">
+                        <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                          Version {currentVersionIndex + 1} of{" "}
+                          {generationHistory.length}
+                        </span>
+                        <span
+                          className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                            currentVersionIndex === generationHistory.length - 1
+                              ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                              : "border-slate-700 bg-slate-800 text-slate-400"
+                          }`}
+                        >
+                          {currentVersionIndex === generationHistory.length - 1
+                            ? "Current Version"
+                            : "Previous Version"}
+                        </span>
+                      </div>
+                    )}
+
+                    {generationHistory[currentVersionIndex]
+                      ?.regenerationInstructions && (
+                      <div className="mb-5 rounded-lg border border-cyan-800/50 bg-cyan-950/20 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-cyan-400">
+                          Regeneration Instructions
+                        </p>
+                        <p className="mt-2 text-sm text-slate-300">
+                          {
+                            generationHistory[currentVersionIndex]
+                              .regenerationInstructions
+                          }
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="min-h-full max-w-none rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownComponents}
+                      >
+                        {generatedContent}
+                      </ReactMarkdown>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex h-full min-h-0 flex-1 items-center justify-center rounded-2xl border border-slate-800/80 bg-slate-950/45 p-8 text-center shadow-inner shadow-black/15">
+                    <div className="max-w-sm">
+                      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-3xl text-cyan-300 shadow-lg shadow-cyan-950/20">
+                        ▤
+                      </div>
+                      <div
+                        className="mt-6 flex justify-center gap-3 text-cyan-400"
+                        aria-hidden="true"
+                      >
+                        <span>✦</span>
+                        <span className="text-xl">✦</span>
+                        <span>✦</span>
+                      </div>
+                      <p className="mt-5 text-lg font-semibold text-slate-200">
+                        Your planning document will appear here
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">
+                        Complete the project details and click &quot;Generate
+                        Content&quot; to get started.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {!logoBase64 &&
-          !logoLoading &&
-          !logoGalleryLoading &&
-          !logoError && (
-            <p className="text-slate-500">
-              Your generated logo will appear here.
-            </p>
-          )}
-      </div>
-
-
-      {showGeneratedOutputModal && generatedContent && (
+        {/* Logo Generator Panel */}
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/85 px-2 pb-4 pt-35 sm:px-3 sm:pb-5 sm:pt-35 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="product-architect-expanded-output-title"
+          id="product-architect-panel-logo"
+          role="tabpanel"
+          aria-labelledby="product-architect-tab-logo"
+          hidden={activeTab !== "logo"}
+          tabIndex={0}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
           <div
-            className="relative flex h-[82vh] w-[98vw] max-w-[2000px] flex-col overflow-hidden rounded-2xl border border-cyan-500/20 bg-slate-950 shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.03]"
-            style={{
-              transform: `translate3d(${generatedModalPosition.x}px, ${generatedModalPosition.y}px, 0)`,
-            }}
+            className="relative overflow-hidden rounded-2xl border border-violet-500/15 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,0.07),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
+            aria-busy={logoLoading}
           >
-            <div
-              onPointerDown={handleGeneratedModalDragStart}
-              className="flex cursor-grab select-none flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 bg-slate-900/80 px-5 py-4 active:cursor-grabbing sm:px-6"
-              title="Drag to move"
-            >
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
-                  Product Architect
-                </p>
-                <h3
-                  id="product-architect-expanded-output-title"
-                  className="mt-1 text-xl font-bold text-white"
-                >
-                  {documentTypeLabels[contentType] || "Generated Output"}
-                </h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {projectName.trim() || "Untitled Project"}
-                </p>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/70 pb-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-500/15 to-slate-900 text-xl text-violet-300 shadow-[0_0_24px_rgba(139,92,246,0.10)]">
+                  ✦
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">AI Product Logo</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Generate and refine a visual identity for your product.
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={handleCopyGeneratedOutput}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/70 px-3.5 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500/30 hover:text-white"
+                  onClick={handleGenerateLogo}
+                  disabled={
+                    logoLoading ||
+                    (!selectedLogoContentId &&
+                      (projectName.trim().length < 2 ||
+                        description.trim().length < 10))
+                  }
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/35 bg-gradient-to-r from-violet-500/80 to-fuchsia-500/75 px-5 py-2.5 font-bold text-white shadow-[0_12px_30px_rgba(139,92,246,0.20)] transition-all hover:-translate-y-0.5 hover:from-violet-400 hover:to-fuchsia-400 hover:shadow-[0_16px_36px_rgba(139,92,246,0.28)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <span aria-hidden="true">⧉</span>
-                  {copyGeneratedLabel}
+                  {logoLoading
+                    ? "Generating Logo..."
+                    : logoBase64
+                      ? "Generate New Logo"
+                      : "Generate Logo"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowGeneratedOutputModal(false)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/70 text-lg text-slate-300 transition hover:border-slate-600 hover:text-white"
-                  aria-label="Close expanded generated output"
-                >
-                  ×
-                </button>
+
+                {logoBase64 && !logoLoading && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadLogo}
+                    className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors"
+                  >
+                    Download Logo
+                  </button>
+                )}
+
+                {logoGallery[selectedLogoIndex]?.id && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleOpenMoveLogo(logoGallery[selectedLogoIndex])
+                    }
+                    disabled={
+                      moveLogoLoading ||
+                      moveLogoOptionsLoading ||
+                      creatingMoveLogoWorkspace ||
+                      creatingMoveLogoProject
+                    }
+                    className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Save Logo to Project
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin] sm:px-6 sm:py-6">
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/35 p-5 shadow-inner shadow-black/15 sm:p-7">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
-                  {generatedContent}
-                </ReactMarkdown>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {regenerateModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="regenerate-title"
-        >
-          <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2
-                  id="regenerate-title"
-                  className="text-2xl font-bold text-white"
-                >
-                  Regenerate Content
-                </h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Tell the AI what you want changed in the new version. You can
-                  also leave this blank for a general regeneration.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleCloseRegenerate}
-                disabled={loading}
-                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Close regenerate dialog"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="mt-6">
-              <label
-                htmlFor="regenerate-instructions"
-                className="mb-2 block text-sm font-medium text-slate-300"
-              >
-                What would you like to change?
-              </label>
-
-              <textarea
-                id="regenerate-instructions"
-                value={regenerateInstructions}
-                onChange={(e) => {
-                  setRegenerateInstructions(e.target.value);
-                  setRegenerateError("");
-                }}
-                rows="6"
-                maxLength={1000}
-                disabled={loading}
-                placeholder="e.g. Make it shorter, add more technical detail, and keep the risk section mostly the same."
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
-              />
-
-              <div className="mt-2 flex items-center justify-between gap-4 text-xs text-slate-500">
-                <span>Optional</span>
-                <span>{regenerateInstructions.length}/1000</span>
-              </div>
-            </div>
-
-            {regenerateError && (
-              <div
-                className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4"
-                role="alert"
-              >
-                <p className="text-sm text-red-300">{regenerateError}</p>
-              </div>
-            )}
-
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={handleCloseRegenerate}
-                disabled={loading}
-                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleConfirmRegenerate}
-                disabled={loading}
-                className="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {loading ? "Regenerating..." : "Regenerate"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {moveLogoOpen && moveLogoTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="move-logo-title"
-        >
-          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 id="move-logo-title" className="text-2xl font-bold text-white">
-                  Save Logo to Project
-                </h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Choose the project where this saved logo should be saved.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleCloseMoveLogo}
-                disabled={moveLogoLoading}
-                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Close move logo dialog"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <p className="text-sm text-slate-500">Current Project</p>
-              <p className="mt-1 font-semibold text-white">
-                {projectName.trim() || "Current Project"}
+            {/* Shared Product Details */}
+            <div className="mb-6 rounded-2xl border border-slate-800/80 bg-slate-950/35 p-4 sm:p-5">
+              <h3 className="text-sm font-semibold text-white">Product Details</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                These details are shared with Content Generator. You can also
+                use saved content below as logo context.
               </p>
-            </div>
 
-            {moveLogoOptionsLoading ? (
-              <div
-                className="mt-6 flex items-center gap-3 text-slate-400"
-                role="status"
-                aria-live="polite"
-              >
-                <div
-                  className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-violet-400 animate-spin"
-                  aria-hidden="true"
-                />
-                <p>Loading your workspaces and projects...</p>
-              </div>
-            ) : (
-              <>
-                <div className="mt-5">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <label
-                      htmlFor="move-logo-workspace"
-                      className="block text-sm font-medium text-slate-300"
-                    >
-                      Workspace
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMoveLogoCreateWorkspace((currentValue) => !currentValue);
-                        setMoveLogoError("");
-                      }}
-                      disabled={
-                        moveLogoLoading ||
-                        creatingMoveLogoWorkspace ||
-                        creatingMoveLogoProject
-                      }
-                      className="text-sm font-semibold text-violet-300 transition hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {showMoveLogoCreateWorkspace
-                        ? "Choose existing workspace"
-                        : "Create new workspace"}
-                    </button>
-                  </div>
-
-                  {!showMoveLogoCreateWorkspace ? (
-                    <select
-                      id="move-logo-workspace"
-                      value={moveLogoWorkspaceId}
-                      onChange={(e) => handleMoveLogoWorkspaceSelection(e.target.value)}
-                      disabled={
-                        moveLogoLoading ||
-                        creatingMoveLogoWorkspace ||
-                        creatingMoveLogoProject
-                      }
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
-                    >
-                      <option value="">Choose a workspace</option>
-
-                      {workspaces.map((workspace) => (
-                        <option key={workspace.id} value={workspace.id}>
-                          {workspace.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
-                      <div>
-                        <label
-                          htmlFor="move-logo-new-workspace-name"
-                          className="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                          New Workspace Name
-                        </label>
-
-                        <input
-                          id="move-logo-new-workspace-name"
-                          type="text"
-                          value={moveLogoNewWorkspaceName}
-                          onChange={(e) => {
-                            setMoveLogoNewWorkspaceName(e.target.value);
-                            setMoveLogoError("");
-                          }}
-                          disabled={creatingMoveLogoWorkspace}
-                          placeholder="Example: Brand Assets"
-                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <label
-                          htmlFor="move-logo-new-workspace-description"
-                          className="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                          Workspace Description
-                        </label>
-
-                        <textarea
-                          id="move-logo-new-workspace-description"
-                          value={moveLogoNewWorkspaceDescription}
-                          onChange={(e) => {
-                            setMoveLogoNewWorkspaceDescription(e.target.value);
-                            setMoveLogoError("");
-                          }}
-                          disabled={creatingMoveLogoWorkspace}
-                          rows="3"
-                          placeholder="Describe what this workspace is for..."
-                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleCreateMoveLogoWorkspace}
-                        disabled={
-                          creatingMoveLogoWorkspace ||
-                          !moveLogoNewWorkspaceName.trim()
-                        }
-                        className="mt-4 rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {creatingMoveLogoWorkspace
-                          ? "Creating Workspace..."
-                          : "Create Workspace"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-5">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <label
-                      htmlFor="move-logo-project"
-                      className="block text-sm font-medium text-slate-300"
-                    >
-                      Save to Project
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMoveLogoCreateProject((currentValue) => !currentValue);
-                        setMoveLogoNewProjectTitle(projectName.trim());
-                        setMoveLogoNewProjectDescription(description.trim());
-                        setMoveLogoError("");
-                      }}
-                      disabled={
-                        moveLogoLoading ||
-                        creatingMoveLogoWorkspace ||
-                        creatingMoveLogoProject ||
-                        !moveLogoWorkspaceId ||
-                        showMoveLogoCreateWorkspace
-                      }
-                      className="text-sm font-semibold text-violet-300 transition hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {showMoveLogoCreateProject ? "Choose existing project" : "Create new project"}
-                    </button>
-                  </div>
-
-                  {!showMoveLogoCreateProject ? (
-                    <select
-                      id="move-logo-project"
-                      value={moveLogoProjectId}
-                      onChange={(e) => {
-                        setMoveLogoProjectId(e.target.value);
-                        setMoveLogoError("");
-                      }}
-                      disabled={
-                        moveLogoLoading ||
-                        creatingMoveLogoWorkspace ||
-                        creatingMoveLogoProject ||
-                        !moveLogoWorkspaceId
-                      }
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
-                    >
-                      <option value="">Choose a project</option>
-
-                      {getProjectsForWorkspace(moveLogoWorkspaceId).map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
-                      <div>
-                        <label
-                          htmlFor="move-logo-new-project-title"
-                          className="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                          New Project Name
-                        </label>
-
-                        <input
-                          id="move-logo-new-project-title"
-                          type="text"
-                          value={moveLogoNewProjectTitle}
-                          onChange={(e) => {
-                            setMoveLogoNewProjectTitle(e.target.value);
-                            setMoveLogoError("");
-                          }}
-                          disabled={creatingMoveLogoProject}
-                          maxLength={100}
-                          placeholder="Example: Logo Design Project"
-                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <label
-                          htmlFor="move-logo-new-project-description"
-                          className="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                          Project Description
-                        </label>
-
-                        <textarea
-                          id="move-logo-new-project-description"
-                          value={moveLogoNewProjectDescription}
-                          onChange={(e) => {
-                            setMoveLogoNewProjectDescription(e.target.value);
-                            setMoveLogoError("");
-                          }}
-                          disabled={creatingMoveLogoProject}
-                          rows="3"
-                          maxLength={5000}
-                          placeholder="Describe what this project is for..."
-                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleCreateMoveLogoProject}
-                        disabled={
-                          creatingMoveLogoProject ||
-                          !moveLogoWorkspaceId ||
-                          !moveLogoNewProjectTitle.trim()
-                        }
-                        className="mt-4 rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {creatingMoveLogoProject ? "Creating Project..." : "Create Project"}
-                      </button>
-                    </div>
-                  )}
-
-                  {moveLogoWorkspaceId &&
-                    !showMoveLogoCreateProject &&
-                    getProjectsForWorkspace(moveLogoWorkspaceId).length === 0 && (
-                      <p className="mt-2 text-sm text-amber-300">
-                        This workspace does not have any projects yet. Create a new project here before saving.
-                      </p>
-                    )}
-                </div>
-              </>
-            )}
-
-            {moveLogoError && (
-              <div className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4">
-                <p className="text-sm text-red-300">{moveLogoError}</p>
-              </div>
-            )}
-
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={handleCloseMoveLogo}
-                disabled={
-                  moveLogoLoading ||
-                  moveLogoOptionsLoading ||
-                  creatingMoveLogoWorkspace ||
-                  creatingMoveLogoProject
-                }
-                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleMoveLogo}
-                disabled={
-                  moveLogoOptionsLoading ||
-                  moveLogoLoading ||
-                  creatingMoveLogoWorkspace ||
-                  creatingMoveLogoProject ||
-                  showMoveLogoCreateWorkspace ||
-                  showMoveLogoCreateProject ||
-                  !moveLogoWorkspaceId ||
-                  !moveLogoProjectId ||
-                  String(moveLogoProjectId) === String(moveLogoTarget.project_id)
-                }
-                className="rounded-lg bg-violet-600 px-5 py-2.5 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {moveLogoLoading
-                  ? "Saving..."
-                  : creatingMoveLogoWorkspace
-                    ? "Creating Workspace..."
-                    : creatingMoveLogoProject
-                      ? "Creating Project..."
-                      : "Save Logo"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}      
-
-      {saveWorkspaceOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="save-workspace-title"
-        >
-          <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2
-                  id="save-workspace-title"
-                  className="text-2xl font-bold text-white"
+              <div className="mt-4">
+                <label
+                  htmlFor="logo-project-name"
+                  className="mb-2 block text-sm font-medium text-slate-300"
                 >
-                  Save to Workspace
-                </h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Choose the workspace and project where you want to save this
-                  generated content.
+                  Project Name
+                </label>
+                <input
+                  id="logo-project-name"
+                  type="text"
+                  value={projectName}
+                  onChange={(event) =>
+                    handleProjectNameChange(event.target.value)
+                  }
+                  maxLength={100}
+                  disabled={loading || logoLoading}
+                  aria-describedby="logo-project-name-help"
+                  placeholder="e.g. Smart Budget Planner"
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <div
+                  id="logo-project-name-help"
+                  className="mt-2 flex justify-between gap-4 text-xs text-slate-500"
+                >
+                  <span>Use between 2 and 100 characters.</span>
+                  <span>{projectName.length}/100</span>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label
+                  htmlFor="logo-project-description"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  Project Description
+                </label>
+                <textarea
+                  id="logo-project-description"
+                  value={description}
+                  onChange={(event) =>
+                    handleProjectDescriptionChange(event.target.value)
+                  }
+                  rows={4}
+                  maxLength={5000}
+                  disabled={loading || logoLoading}
+                  aria-describedby="logo-project-description-help"
+                  placeholder="Describe your product, its audience, and what it does..."
+                  className="w-full resize-none rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <div
+                  id="logo-project-description-help"
+                  className="mt-2 flex justify-between gap-4 text-xs text-slate-500"
+                >
+                  <span>Use at least 10 characters.</span>
+                  <span>{description.length}/5000</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6 rounded-xl border border-violet-500/10 bg-gradient-to-br from-violet-950/10 via-slate-950/55 to-slate-950/70 p-5 shadow-inner shadow-black/10">
+              <div className="mb-4">
+                <h3 className="font-semibold text-white">Customize Logo Prompt</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Optional. Add branding preferences before generating your logo.
+                  Leave these fields unchanged to use the default prompt.
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleCloseSaveWorkspace}
-                disabled={savingToWorkspace || creatingSaveWorkspace || creatingSaveProject}
-                className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Close save to workspace dialog"
-              >
-                ×
-              </button>
+              <div className="mb-5">
+                <label
+                  htmlFor="logo-context-content"
+                  className="mb-2 block text-sm text-slate-400"
+                >
+                  Use Saved Content as Logo Context
+                </label>
+
+                <select
+                  id="logo-context-content"
+                  value={selectedLogoContentId}
+                  onChange={(event) => {
+                    setSelectedLogoContentId(event.target.value);
+                    setLogoError("");
+                  }}
+                  disabled={logoLoading || availableProjectContent.length === 0}
+                  className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">
+                    {availableProjectContent.length === 0
+                      ? "No saved content available"
+                      : "Choose previous saved content"}
+                  </option>
+
+                  {availableProjectContent.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title} ({item.content_type})
+                    </option>
+                  ))}
+                </select>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  Optional. Select previously saved content to give Tanio more
+                  context about the product before generating the logo.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="logo-style"
+                    className="mb-2 block text-sm text-slate-400"
+                  >
+                    Logo Style
+                  </label>
+                  <select
+                    id="logo-style"
+                    value={logoStyle}
+                    onChange={(event) => {
+                      setLogoStyle(event.target.value);
+                      setLogoError("");
+                    }}
+                    disabled={logoLoading}
+                    className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="default">Default</option>
+                    <option value="modern">Modern</option>
+                    <option value="minimalist">Minimalist</option>
+                    <option value="bold">Bold</option>
+                    <option value="playful">Playful</option>
+                    <option value="luxury">Luxury</option>
+                    <option value="futuristic">Futuristic</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="preferred-colors"
+                    className="mb-2 block text-sm text-slate-400"
+                  >
+                    Preferred Colors
+                  </label>
+                  <input
+                    id="preferred-colors"
+                    type="text"
+                    value={preferredColors}
+                    onChange={(event) => {
+                      setPreferredColors(event.target.value);
+                      setLogoError("");
+                    }}
+                    maxLength={200}
+                    disabled={logoLoading}
+                    placeholder="e.g. navy blue, purple, silver"
+                    className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <p className="mt-2 text-right text-xs text-slate-500">
+                    {preferredColors.length}/200
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="logo-ideas"
+                    className="mb-2 block text-sm text-slate-400"
+                  >
+                    Logo Ideas / Symbols
+                  </label>
+                  <input
+                    id="logo-ideas"
+                    type="text"
+                    value={logoIdeas}
+                    onChange={(event) => {
+                      setLogoIdeas(event.target.value);
+                      setLogoError("");
+                    }}
+                    maxLength={300}
+                    disabled={logoLoading}
+                    placeholder="e.g. letter T, spark, circuit, shield"
+                    className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <p className="mt-2 text-right text-xs text-slate-500">
+                    {logoIdeas.length}/300
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="branding-direction"
+                    className="mb-2 block text-sm text-slate-400"
+                  >
+                    Branding Direction
+                  </label>
+                  <input
+                    id="branding-direction"
+                    type="text"
+                    value={brandingDirection}
+                    onChange={(event) => {
+                      setBrandingDirection(event.target.value);
+                      setLogoError("");
+                    }}
+                    maxLength={500}
+                    disabled={logoLoading}
+                    placeholder="e.g. Clean, trustworthy SaaS brand for creative professionals"
+                    className="w-full rounded-xl border border-slate-700/90 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-600 transition-all focus:border-violet-400/70 focus:outline-none focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <p className="mt-2 text-right text-xs text-slate-500">
+                    {brandingDirection.length}/500
+                  </p>
+                </div>
+              </div>
             </div>
 
-            {workspaceOptionsLoading ? (
+            {autoSaveStatus && (
               <div
-                className="mt-6 flex items-center gap-3 text-slate-400"
+                className="mb-4 rounded-lg border border-cyan-800 bg-cyan-950/50 p-4"
                 role="status"
                 aria-live="polite"
               >
-                <div
-                  className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-indigo-400 animate-spin"
-                  aria-hidden="true"
-                />
-                <p>Loading your workspaces and projects...</p>
+                <p className="font-semibold text-cyan-300">Auto-Save</p>
+                <p className="mt-1 text-sm text-cyan-300">{autoSaveStatus}</p>
               </div>
-            ) : (
-              <>
-                <div className="mt-6">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <label
-                      htmlFor="save-workspace"
-                      className="block text-sm font-medium text-slate-300"
-                    >
-                      Workspace
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowSaveCreateWorkspace((currentValue) => !currentValue);
-                        setSaveWorkspaceError("");
-                      }}
-                      disabled={savingToWorkspace || creatingSaveWorkspace || creatingSaveProject}
-                      className="text-sm font-semibold text-indigo-300 transition hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {showSaveCreateWorkspace
-                        ? "Choose existing workspace"
-                        : "Create new workspace"}
-                    </button>
-                  </div>
-
-                  {!showSaveCreateWorkspace ? (
-                    <select
-                      id="save-workspace"
-                      value={selectedWorkspaceId}
-                      onChange={(e) => handleWorkspaceSelection(e.target.value)}
-                      disabled={
-                        savingToWorkspace ||
-                        creatingSaveWorkspace ||
-                        creatingSaveProject
-                      }
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                    >
-                      <option value="">Choose a workspace</option>
-
-                      {workspaces.map((workspace) => (
-                        <option key={workspace.id} value={workspace.id}>
-                          {workspace.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-4">
-                      <div>
-                        <label
-                          htmlFor="save-new-workspace-name"
-                          className="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                          New Workspace Name
-                        </label>
-
-                        <input
-                          id="save-new-workspace-name"
-                          type="text"
-                          value={saveNewWorkspaceName}
-                          onChange={(e) => {
-                            setSaveNewWorkspaceName(e.target.value);
-                            setSaveWorkspaceError("");
-                          }}
-                          disabled={creatingSaveWorkspace}
-                          placeholder="Example: Client Projects"
-                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <label
-                          htmlFor="save-new-workspace-description"
-                          className="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                          Workspace Description
-                        </label>
-
-                        <textarea
-                          id="save-new-workspace-description"
-                          value={saveNewWorkspaceDescription}
-                          onChange={(e) => {
-                            setSaveNewWorkspaceDescription(e.target.value);
-                            setSaveWorkspaceError("");
-                          }}
-                          disabled={creatingSaveWorkspace}
-                          rows="3"
-                          placeholder="Describe what this workspace is for..."
-                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleCreateSaveWorkspace}
-                        disabled={creatingSaveWorkspace || !saveNewWorkspaceName.trim()}
-                        className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {creatingSaveWorkspace ? "Creating Workspace..." : "Create Workspace"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <label
-                      htmlFor="save-project"
-                      className="block text-sm font-medium text-slate-300"
-                    >
-                      Project
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowSaveCreateProject((currentValue) => !currentValue);
-                        setSaveNewProjectTitle(projectName.trim());
-                        setSaveNewProjectDescription(description.trim());
-                        setSaveWorkspaceError("");
-                      }}
-                      disabled={
-                        savingToWorkspace ||
-                        creatingSaveWorkspace ||
-                        creatingSaveProject ||
-                        !selectedWorkspaceId ||
-                        showSaveCreateWorkspace
-                      }
-                      className="text-sm font-semibold text-indigo-300 transition hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {showSaveCreateProject ? "Choose existing project" : "Create new project"}
-                    </button>
-                  </div>
-
-                  {!showSaveCreateProject ? (
-                    <select
-                      id="save-project"
-                      value={selectedSaveProjectId}
-                      onChange={(e) => {
-                        setSelectedSaveProjectId(e.target.value);
-                        setSaveWorkspaceError("");
-                      }}
-                      disabled={
-                        savingToWorkspace ||
-                        creatingSaveWorkspace ||
-                        creatingSaveProject ||
-                        !selectedWorkspaceId
-                      }
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                    >
-                      <option value="">Choose a project</option>
-
-                      {getProjectsForWorkspace(selectedWorkspaceId).map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.title}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-4">
-                      <div>
-                        <label
-                          htmlFor="save-new-project-title"
-                          className="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                          New Project Name
-                        </label>
-
-                        <input
-                          id="save-new-project-title"
-                          type="text"
-                          value={saveNewProjectTitle}
-                          onChange={(e) => {
-                            setSaveNewProjectTitle(e.target.value);
-                            setSaveWorkspaceError("");
-                          }}
-                          disabled={creatingSaveProject}
-                          maxLength={100}
-                          placeholder="Example: Product Planning Project"
-                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <label
-                          htmlFor="save-new-project-description"
-                          className="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                          Project Description
-                        </label>
-
-                        <textarea
-                          id="save-new-project-description"
-                          value={saveNewProjectDescription}
-                          onChange={(e) => {
-                            setSaveNewProjectDescription(e.target.value);
-                            setSaveWorkspaceError("");
-                          }}
-                          disabled={creatingSaveProject}
-                          rows="3"
-                          maxLength={5000}
-                          placeholder="Describe what this project is for..."
-                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleCreateSaveProject}
-                        disabled={
-                          creatingSaveProject ||
-                          !selectedWorkspaceId ||
-                          !saveNewProjectTitle.trim()
-                        }
-                        className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {creatingSaveProject ? "Creating Project..." : "Create Project"}
-                      </button>
-                    </div>
-                  )}
-
-                  {selectedWorkspaceId &&
-                    !showSaveCreateProject &&
-                    getProjectsForWorkspace(selectedWorkspaceId).length === 0 && (
-                      <p className="mt-2 text-sm text-amber-300">
-                        This workspace does not have any projects yet. Create a new project here before saving.
-                      </p>
-                    )}
-                </div>
-              </>
             )}
 
-            {saveWorkspaceError && (
+            {autoSaveError && (
               <div
-                className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4"
+                className="mb-4 rounded-lg border border-amber-800 bg-amber-950/50 p-4"
+                role="alert"
+                aria-live="polite"
+              >
+                <p className="font-semibold text-amber-300">Auto-Save issue</p>
+                <p className="mt-1 text-sm text-amber-300">{autoSaveError}</p>
+              </div>
+            )}
+
+            {logoError && (
+              <div
+                className="mb-4 bg-red-950/50 border border-red-800 rounded-lg p-4"
                 role="alert"
                 aria-live="polite"
               >
                 <p className="font-semibold text-red-300">
-                  Content could not be saved
+                  Logo generation failed
                 </p>
-                <p className="mt-1 text-sm text-red-300">
-                  {saveWorkspaceError}
-                </p>
+                <p className="text-sm text-red-300 mt-1">{logoError}</p>
+                <button
+                  type="button"
+                  onClick={handleGenerateLogo}
+                  disabled={logoLoading}
+                  className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Retry
+                </button>
               </div>
             )}
 
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={handleCloseSaveWorkspace}
-                disabled={savingToWorkspace || creatingSaveWorkspace || creatingSaveProject}
-                className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+            {logoLoading && (
+              <div
+                className="flex items-center gap-3 text-slate-400 py-6"
+                role="status"
+                aria-live="polite"
               >
-                Cancel
-              </button>
+                <div
+                  className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-purple-400 animate-spin"
+                  aria-hidden="true"
+                />
+                <p>Generating your logo. This may take a moment...</p>
+              </div>
+            )}
 
-              <button
-                type="button"
-                onClick={handleSaveToWorkspace}
-                disabled={
-                  workspaceOptionsLoading ||
-                  savingToWorkspace ||
-                  creatingSaveWorkspace ||
-                  creatingSaveProject ||
-                  showSaveCreateWorkspace ||
-                  showSaveCreateProject ||
-                  !selectedWorkspaceId ||
-                  !selectedSaveProjectId
-                }
-                className="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            {logoGalleryLoading && !logoLoading && (
+              <div
+                className="mb-4 flex items-center gap-3 text-slate-400"
+                role="status"
+                aria-live="polite"
               >
-                {savingToWorkspace
-                  ? "Saving..."
-                  : creatingSaveWorkspace
-                    ? "Creating Workspace..."
-                    : creatingSaveProject
-                      ? "Creating Project..."
-                      : "Save Content"}
-              </button>
-            </div>
+                <div
+                  className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-purple-400 animate-spin"
+                  aria-hidden="true"
+                />
+                <p>Loading saved logo versions...</p>
+              </div>
+            )}
+
+            {logoGalleryError && (
+              <div className="mb-4 rounded-lg border border-amber-800 bg-amber-950/40 p-4">
+                <p className="font-semibold text-amber-300">
+                  Logo gallery could not be loaded
+                </p>
+                <p className="mt-1 text-sm text-amber-300">{logoGalleryError}</p>
+                {logoProjectId && (
+                  <button
+                    type="button"
+                    onClick={() => loadLogoGallery(logoProjectId)}
+                    disabled={logoGalleryLoading}
+                    className="mt-3 rounded-lg bg-amber-800 px-4 py-2 font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Retry Gallery
+                  </button>
+                )}
+              </div>
+            )}
+
+            {logoBase64 && !logoLoading && (
+              <div className="mt-6">
+                <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+                  {logoGallery.length > 0 && selectedLogoIndex >= 0 && (
+                    <>
+                      <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300">
+                        Version {selectedLogoIndex + 1} of {logoGallery.length}
+                      </span>
+                      <span
+                        className={`rounded-lg border px-3 py-1.5 font-semibold ${
+                          selectedLogoIndex === logoGallery.length - 1
+                            ? "border-emerald-800 bg-emerald-950 text-emerald-300"
+                            : "border-slate-700 bg-slate-800 text-slate-400"
+                        }`}
+                      >
+                        {selectedLogoIndex === logoGallery.length - 1
+                          ? "Current Version"
+                          : "Previous Version"}
+                      </span>
+                      {logoGallery[selectedLogoIndex]?.created_at && (
+                        <span className="text-slate-500">
+                          {new Date(
+                            logoGallery[selectedLogoIndex].created_at
+                          ).toLocaleString()}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-start gap-6">
+                  <div>
+                    <img
+                      src={`data:image/png;base64,${logoBase64}`}
+                      alt={`${projectName.trim() || "Project"} generated logo`}
+                      className="w-full max-w-md rounded-xl border border-slate-700 bg-white"
+                    />
+
+                    {logoGallery.length > 1 && selectedLogoIndex >= 0 && (
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={handlePreviousLogoVersion}
+                          disabled={selectedLogoIndex <= 0}
+                          className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          ← Previous
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleNextLogoVersion}
+                          disabled={selectedLogoIndex >= logoGallery.length - 1}
+                          className="rounded-lg bg-slate-700 px-4 py-2 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {logoGallery.length > 0 && selectedLogoIndex >= 0 && (
+                    <div className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+                      <h3 className="font-semibold text-white">Version Details</h3>
+                      <dl className="mt-3 space-y-3 text-sm">
+                        <div>
+                          <dt className="text-slate-500">Style</dt>
+                          <dd className="mt-1 capitalize text-slate-200">
+                            {logoGallery[selectedLogoIndex]?.style || "default"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">Preferred Colors</dt>
+                          <dd className="mt-1 text-slate-200">
+                            {logoGallery[selectedLogoIndex]?.preferred_colors ||
+                              "Default"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">Logo Ideas / Symbols</dt>
+                          <dd className="mt-1 text-slate-200">
+                            {logoGallery[selectedLogoIndex]?.logo_ideas || "None"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">Branding Direction</dt>
+                          <dd className="mt-1 text-slate-200">
+                            {logoGallery[selectedLogoIndex]?.branding_direction ||
+                              "Default"}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {logoGallery.length > 0 && !logoLoading && (
+              <div className="mt-8 border-t border-slate-800 pt-6">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">
+                      Logo Gallery & Version History
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Browse every saved logo version for this project.
+                    </p>
+                  </div>
+                  <span className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
+                    {logoGallery.length} saved{" "}
+                    {logoGallery.length === 1 ? "logo" : "logos"}
+                  </span>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {logoGallery.map((logo, index) => {
+                    const isSelected = index === selectedLogoIndex;
+                    const isCurrent = index === logoGallery.length - 1;
+
+                    return (
+                      <article
+                        key={logo.id ?? `${logo.project_id}-${index}`}
+                        className={`overflow-hidden rounded-xl border p-3 text-left transition ${
+                          isSelected
+                            ? "border-purple-500 bg-purple-950/20"
+                            : "border-slate-800 bg-slate-950/40 hover:border-slate-600"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleSelectLogoVersion(index)}
+                          className="w-full text-left"
+                        >
+                          <div className="aspect-square overflow-hidden rounded-lg bg-white">
+                            <img
+                              src={`data:image/png;base64,${logo.image_base64}`}
+                              alt={`${
+                                projectName.trim() || "Project"
+                              } logo version ${index + 1}`}
+                              className="h-full w-full object-contain"
+                            />
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-2">
+                            <span className="font-semibold text-white">
+                              Version {index + 1}
+                            </span>
+                            {isCurrent && (
+                              <span className="rounded-md border border-emerald-800 bg-emerald-950 px-2 py-1 text-xs font-semibold text-emerald-300">
+                                Current
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs capitalize text-slate-400">
+                            {logo.style || "default"} style
+                          </p>
+                          {logo.created_at && (
+                            <p className="mt-1 text-xs text-slate-500">
+                              {new Date(logo.created_at).toLocaleString()}
+                            </p>
+                          )}
+                        </button>
+
+                        {logo.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenMoveLogo(logo)}
+                            disabled={moveLogoLoading}
+                            className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Save Logo to Project
+                          </button>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {!logoBase64 &&
+              !logoLoading &&
+              !logoGalleryLoading &&
+              !logoError && (
+                <p className="text-slate-500">
+                  Your generated logo will appear here.
+                </p>
+              )}
           </div>
         </div>
-      )}
+
+        {/* Expanded Output Modal */}
+        {showGeneratedOutputModal && generatedContent && (
+          <div
+            className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/85 px-2 pb-4 pt-35 sm:px-3 sm:pb-5 sm:pt-35 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-architect-expanded-output-title"
+          >
+            <div
+              className="relative flex h-[82vh] w-[98vw] max-w-[2000px] flex-col overflow-hidden rounded-2xl border border-cyan-500/20 bg-slate-950 shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.03]"
+              style={{
+                transform: `translate3d(${generatedModalPosition.x}px, ${generatedModalPosition.y}px, 0)`,
+              }}
+            >
+              <div
+                onPointerDown={handleGeneratedModalDragStart}
+                className="flex cursor-grab select-none flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 bg-slate-900/80 px-5 py-4 active:cursor-grabbing sm:px-6"
+                title="Drag to move"
+              >
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
+                    Product Architect
+                  </p>
+                  <h3
+                    id="product-architect-expanded-output-title"
+                    className="mt-1 text-xl font-bold text-white"
+                  >
+                    {documentTypeLabels[contentType] || "Generated Output"}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {projectName.trim() || "Untitled Project"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyGeneratedOutput}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/70 px-3.5 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-500/30 hover:text-white"
+                  >
+                    <span aria-hidden="true">⧉</span>
+                    {copyGeneratedLabel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGeneratedOutputModal(false)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/70 text-lg text-slate-300 transition hover:border-slate-600 hover:text-white"
+                    aria-label="Close expanded generated output"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin] sm:px-6 sm:py-6">
+                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/35 p-5 shadow-inner shadow-black/15 sm:p-7">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
+                  >
+                    {generatedContent}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Regenerate Modal */}
+        {regenerateModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="regenerate-title"
+          >
+            <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="regenerate-title" className="text-2xl font-bold text-white">
+                    Regenerate Content
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Tell the AI what you want changed in the new version. You can
+                    also leave this blank for a general regeneration.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseRegenerate}
+                  disabled={loading}
+                  className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Close regenerate dialog"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mt-6">
+                <label
+                  htmlFor="regenerate-instructions"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  What would you like to change?
+                </label>
+                <textarea
+                  id="regenerate-instructions"
+                  value={regenerateInstructions}
+                  onChange={(event) => {
+                    setRegenerateInstructions(event.target.value);
+                    setRegenerateError("");
+                  }}
+                  rows={6}
+                  maxLength={1000}
+                  disabled={loading}
+                  placeholder="e.g. Make it shorter, add more technical detail, and keep the risk section mostly the same."
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
+                />
+                <div className="mt-2 flex items-center justify-between gap-4 text-xs text-slate-500">
+                  <span>Optional</span>
+                  <span>{regenerateInstructions.length}/1000</span>
+                </div>
+              </div>
+
+              {regenerateError && (
+                <div
+                  className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4"
+                  role="alert"
+                >
+                  <p className="text-sm text-red-300">{regenerateError}</p>
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseRegenerate}
+                  disabled={loading}
+                  className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRegenerate}
+                  disabled={loading}
+                  className="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading ? "Regenerating..." : "Regenerate"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Save Logo Modal */}
+        {moveLogoOpen && moveLogoTarget && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="move-logo-title"
+          >
+            <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="move-logo-title" className="text-2xl font-bold text-white">
+                    Save Logo to Project
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Choose the project where this saved logo should be saved.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseMoveLogo}
+                  disabled={moveLogoLoading}
+                  className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Close move logo dialog"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-sm text-slate-500">Current Project</p>
+                <p className="mt-1 font-semibold text-white">
+                  {projectName.trim() || "Current Project"}
+                </p>
+              </div>
+
+              {moveLogoOptionsLoading ? (
+                <div
+                  className="mt-6 flex items-center gap-3 text-slate-400"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div
+                    className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-violet-400 animate-spin"
+                    aria-hidden="true"
+                  />
+                  <p>Loading your workspaces and projects...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mt-5">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <label
+                        htmlFor="move-logo-workspace"
+                        className="block text-sm font-medium text-slate-300"
+                      >
+                        Workspace
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMoveLogoCreateWorkspace(
+                            (currentValue) => !currentValue
+                          );
+                          setMoveLogoError("");
+                        }}
+                        disabled={
+                          moveLogoLoading ||
+                          creatingMoveLogoWorkspace ||
+                          creatingMoveLogoProject
+                        }
+                        className="text-sm font-semibold text-violet-300 transition hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {showMoveLogoCreateWorkspace
+                          ? "Choose existing workspace"
+                          : "Create new workspace"}
+                      </button>
+                    </div>
+
+                    {!showMoveLogoCreateWorkspace ? (
+                      <select
+                        id="move-logo-workspace"
+                        value={moveLogoWorkspaceId}
+                        onChange={(event) =>
+                          handleMoveLogoWorkspaceSelection(event.target.value)
+                        }
+                        disabled={
+                          moveLogoLoading ||
+                          creatingMoveLogoWorkspace ||
+                          creatingMoveLogoProject
+                        }
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">Choose a workspace</option>
+                        {workspaces.map((workspace) => (
+                          <option key={workspace.id} value={workspace.id}>
+                            {workspace.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+                        <div>
+                          <label
+                            htmlFor="move-logo-new-workspace-name"
+                            className="mb-2 block text-sm font-medium text-slate-300"
+                          >
+                            New Workspace Name
+                          </label>
+                          <input
+                            id="move-logo-new-workspace-name"
+                            type="text"
+                            value={moveLogoNewWorkspaceName}
+                            onChange={(event) => {
+                              setMoveLogoNewWorkspaceName(event.target.value);
+                              setMoveLogoError("");
+                            }}
+                            disabled={creatingMoveLogoWorkspace}
+                            placeholder="Example: Brand Assets"
+                            className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                          />
+                        </div>
+                        <div className="mt-4">
+                          <label
+                            htmlFor="move-logo-new-workspace-description"
+                            className="mb-2 block text-sm font-medium text-slate-300"
+                          >
+                            Workspace Description
+                          </label>
+                          <textarea
+                            id="move-logo-new-workspace-description"
+                            value={moveLogoNewWorkspaceDescription}
+                            onChange={(event) => {
+                              setMoveLogoNewWorkspaceDescription(
+                                event.target.value
+                              );
+                              setMoveLogoError("");
+                            }}
+                            disabled={creatingMoveLogoWorkspace}
+                            rows={3}
+                            placeholder="Describe what this workspace is for..."
+                            className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCreateMoveLogoWorkspace}
+                          disabled={
+                            creatingMoveLogoWorkspace ||
+                            !moveLogoNewWorkspaceName.trim()
+                          }
+                          className="mt-4 rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {creatingMoveLogoWorkspace
+                            ? "Creating Workspace..."
+                            : "Create Workspace"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <label
+                        htmlFor="move-logo-project"
+                        className="block text-sm font-medium text-slate-300"
+                      >
+                        Save to Project
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMoveLogoCreateProject(
+                            (currentValue) => !currentValue
+                          );
+                          setMoveLogoNewProjectTitle(projectName.trim());
+                          setMoveLogoNewProjectDescription(description.trim());
+                          setMoveLogoError("");
+                        }}
+                        disabled={
+                          moveLogoLoading ||
+                          creatingMoveLogoWorkspace ||
+                          creatingMoveLogoProject ||
+                          !moveLogoWorkspaceId ||
+                          showMoveLogoCreateWorkspace
+                        }
+                        className="text-sm font-semibold text-violet-300 transition hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {showMoveLogoCreateProject
+                          ? "Choose existing project"
+                          : "Create new project"}
+                      </button>
+                    </div>
+
+                    {!showMoveLogoCreateProject ? (
+                      <select
+                        id="move-logo-project"
+                        value={moveLogoProjectId}
+                        onChange={(event) => {
+                          setMoveLogoProjectId(event.target.value);
+                          setMoveLogoError("");
+                        }}
+                        disabled={
+                          moveLogoLoading ||
+                          creatingMoveLogoWorkspace ||
+                          creatingMoveLogoProject ||
+                          !moveLogoWorkspaceId
+                        }
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">Choose a project</option>
+                        {getProjectsForWorkspace(moveLogoWorkspaceId).map(
+                          (project) => (
+                            <option key={project.id} value={project.id}>
+                              {project.title}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+                        <div>
+                          <label
+                            htmlFor="move-logo-new-project-title"
+                            className="mb-2 block text-sm font-medium text-slate-300"
+                          >
+                            New Project Name
+                          </label>
+                          <input
+                            id="move-logo-new-project-title"
+                            type="text"
+                            value={moveLogoNewProjectTitle}
+                            onChange={(event) => {
+                              setMoveLogoNewProjectTitle(event.target.value);
+                              setMoveLogoError("");
+                            }}
+                            disabled={creatingMoveLogoProject}
+                            maxLength={100}
+                            placeholder="Example: Logo Design Project"
+                            className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                          />
+                        </div>
+                        <div className="mt-4">
+                          <label
+                            htmlFor="move-logo-new-project-description"
+                            className="mb-2 block text-sm font-medium text-slate-300"
+                          >
+                            Project Description
+                          </label>
+                          <textarea
+                            id="move-logo-new-project-description"
+                            value={moveLogoNewProjectDescription}
+                            onChange={(event) => {
+                              setMoveLogoNewProjectDescription(event.target.value);
+                              setMoveLogoError("");
+                            }}
+                            disabled={creatingMoveLogoProject}
+                            rows={3}
+                            maxLength={5000}
+                            placeholder="Describe what this project is for..."
+                            className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-violet-500 focus:outline-none disabled:opacity-50"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCreateMoveLogoProject}
+                          disabled={
+                            creatingMoveLogoProject ||
+                            !moveLogoWorkspaceId ||
+                            !moveLogoNewProjectTitle.trim()
+                          }
+                          className="mt-4 rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {creatingMoveLogoProject
+                            ? "Creating Project..."
+                            : "Create Project"}
+                        </button>
+                      </div>
+                    )}
+
+                    {moveLogoWorkspaceId &&
+                      !showMoveLogoCreateProject &&
+                      getProjectsForWorkspace(moveLogoWorkspaceId).length ===
+                        0 && (
+                        <p className="mt-2 text-sm text-amber-300">
+                          This workspace does not have any projects yet. Create a
+                          new project here before saving.
+                        </p>
+                      )}
+                  </div>
+                </>
+              )}
+
+              {moveLogoError && (
+                <div className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4">
+                  <p className="text-sm text-red-300">{moveLogoError}</p>
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseMoveLogo}
+                  disabled={
+                    moveLogoLoading ||
+                    moveLogoOptionsLoading ||
+                    creatingMoveLogoWorkspace ||
+                    creatingMoveLogoProject
+                  }
+                  className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMoveLogo}
+                  disabled={
+                    moveLogoOptionsLoading ||
+                    moveLogoLoading ||
+                    creatingMoveLogoWorkspace ||
+                    creatingMoveLogoProject ||
+                    showMoveLogoCreateWorkspace ||
+                    showMoveLogoCreateProject ||
+                    !moveLogoWorkspaceId ||
+                    !moveLogoProjectId ||
+                    String(moveLogoProjectId) ===
+                      String(moveLogoTarget.project_id)
+                  }
+                  className="rounded-lg bg-violet-600 px-5 py-2.5 font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {moveLogoLoading
+                    ? "Saving..."
+                    : creatingMoveLogoWorkspace
+                      ? "Creating Workspace..."
+                      : creatingMoveLogoProject
+                        ? "Creating Project..."
+                        : "Save Logo"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Save Content Modal */}
+        {saveWorkspaceOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="save-workspace-title"
+          >
+            <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2
+                    id="save-workspace-title"
+                    className="text-2xl font-bold text-white"
+                  >
+                    Save to Workspace
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Choose the workspace and project where you want to save this
+                    generated content.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseSaveWorkspace}
+                  disabled={
+                    savingToWorkspace ||
+                    creatingSaveWorkspace ||
+                    creatingSaveProject
+                  }
+                  className="rounded-lg px-3 py-1.5 text-xl text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Close save to workspace dialog"
+                >
+                  ×
+                </button>
+              </div>
+
+              {workspaceOptionsLoading ? (
+                <div
+                  className="mt-6 flex items-center gap-3 text-slate-400"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div
+                    className="h-5 w-5 rounded-full border-2 border-slate-600 border-t-indigo-400 animate-spin"
+                    aria-hidden="true"
+                  />
+                  <p>Loading your workspaces and projects...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mt-6">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <label
+                        htmlFor="save-workspace"
+                        className="block text-sm font-medium text-slate-300"
+                      >
+                        Workspace
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSaveCreateWorkspace(
+                            (currentValue) => !currentValue
+                          );
+                          setSaveWorkspaceError("");
+                        }}
+                        disabled={
+                          savingToWorkspace ||
+                          creatingSaveWorkspace ||
+                          creatingSaveProject
+                        }
+                        className="text-sm font-semibold text-indigo-300 transition hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {showSaveCreateWorkspace
+                          ? "Choose existing workspace"
+                          : "Create new workspace"}
+                      </button>
+                    </div>
+
+                    {!showSaveCreateWorkspace ? (
+                      <select
+                        id="save-workspace"
+                        value={selectedWorkspaceId}
+                        onChange={(event) =>
+                          handleWorkspaceSelection(event.target.value)
+                        }
+                        disabled={
+                          savingToWorkspace ||
+                          creatingSaveWorkspace ||
+                          creatingSaveProject
+                        }
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">Choose a workspace</option>
+                        {workspaces.map((workspace) => (
+                          <option key={workspace.id} value={workspace.id}>
+                            {workspace.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-4">
+                        <div>
+                          <label
+                            htmlFor="save-new-workspace-name"
+                            className="mb-2 block text-sm font-medium text-slate-300"
+                          >
+                            New Workspace Name
+                          </label>
+                          <input
+                            id="save-new-workspace-name"
+                            type="text"
+                            value={saveNewWorkspaceName}
+                            onChange={(event) => {
+                              setSaveNewWorkspaceName(event.target.value);
+                              setSaveWorkspaceError("");
+                            }}
+                            disabled={creatingSaveWorkspace}
+                            placeholder="Example: Client Projects"
+                            className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                          />
+                        </div>
+                        <div className="mt-4">
+                          <label
+                            htmlFor="save-new-workspace-description"
+                            className="mb-2 block text-sm font-medium text-slate-300"
+                          >
+                            Workspace Description
+                          </label>
+                          <textarea
+                            id="save-new-workspace-description"
+                            value={saveNewWorkspaceDescription}
+                            onChange={(event) => {
+                              setSaveNewWorkspaceDescription(event.target.value);
+                              setSaveWorkspaceError("");
+                            }}
+                            disabled={creatingSaveWorkspace}
+                            rows={3}
+                            placeholder="Describe what this workspace is for..."
+                            className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCreateSaveWorkspace}
+                          disabled={
+                            creatingSaveWorkspace ||
+                            !saveNewWorkspaceName.trim()
+                          }
+                          className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {creatingSaveWorkspace
+                            ? "Creating Workspace..."
+                            : "Create Workspace"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <label
+                        htmlFor="save-project"
+                        className="block text-sm font-medium text-slate-300"
+                      >
+                        Project
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSaveCreateProject(
+                            (currentValue) => !currentValue
+                          );
+                          setSaveNewProjectTitle(projectName.trim());
+                          setSaveNewProjectDescription(description.trim());
+                          setSaveWorkspaceError("");
+                        }}
+                        disabled={
+                          savingToWorkspace ||
+                          creatingSaveWorkspace ||
+                          creatingSaveProject ||
+                          !selectedWorkspaceId ||
+                          showSaveCreateWorkspace
+                        }
+                        className="text-sm font-semibold text-indigo-300 transition hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {showSaveCreateProject
+                          ? "Choose existing project"
+                          : "Create new project"}
+                      </button>
+                    </div>
+
+                    {!showSaveCreateProject ? (
+                      <select
+                        id="save-project"
+                        value={selectedSaveProjectId}
+                        onChange={(event) => {
+                          setSelectedSaveProjectId(event.target.value);
+                          setSaveWorkspaceError("");
+                        }}
+                        disabled={
+                          savingToWorkspace ||
+                          creatingSaveWorkspace ||
+                          creatingSaveProject ||
+                          !selectedWorkspaceId
+                        }
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                      >
+                        <option value="">Choose a project</option>
+                        {getProjectsForWorkspace(selectedWorkspaceId).map(
+                          (project) => (
+                            <option key={project.id} value={project.id}>
+                              {project.title}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border border-indigo-900/50 bg-indigo-950/20 p-4">
+                        <div>
+                          <label
+                            htmlFor="save-new-project-title"
+                            className="mb-2 block text-sm font-medium text-slate-300"
+                          >
+                            New Project Name
+                          </label>
+                          <input
+                            id="save-new-project-title"
+                            type="text"
+                            value={saveNewProjectTitle}
+                            onChange={(event) => {
+                              setSaveNewProjectTitle(event.target.value);
+                              setSaveWorkspaceError("");
+                            }}
+                            disabled={creatingSaveProject}
+                            maxLength={100}
+                            placeholder="Example: Product Planning Project"
+                            className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                          />
+                        </div>
+                        <div className="mt-4">
+                          <label
+                            htmlFor="save-new-project-description"
+                            className="mb-2 block text-sm font-medium text-slate-300"
+                          >
+                            Project Description
+                          </label>
+                          <textarea
+                            id="save-new-project-description"
+                            value={saveNewProjectDescription}
+                            onChange={(event) => {
+                              setSaveNewProjectDescription(event.target.value);
+                              setSaveWorkspaceError("");
+                            }}
+                            disabled={creatingSaveProject}
+                            rows={3}
+                            maxLength={5000}
+                            placeholder="Describe what this project is for..."
+                            className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCreateSaveProject}
+                          disabled={
+                            creatingSaveProject ||
+                            !selectedWorkspaceId ||
+                            !saveNewProjectTitle.trim()
+                          }
+                          className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {creatingSaveProject
+                            ? "Creating Project..."
+                            : "Create Project"}
+                        </button>
+                      </div>
+                    )}
+
+                    {selectedWorkspaceId &&
+                      !showSaveCreateProject &&
+                      getProjectsForWorkspace(selectedWorkspaceId).length ===
+                        0 && (
+                        <p className="mt-2 text-sm text-amber-300">
+                          This workspace does not have any projects yet. Create a
+                          new project here before saving.
+                        </p>
+                      )}
+                  </div>
+                </>
+              )}
+
+              {saveWorkspaceError && (
+                <div
+                  className="mt-5 rounded-lg border border-red-800 bg-red-950/50 p-4"
+                  role="alert"
+                  aria-live="polite"
+                >
+                  <p className="font-semibold text-red-300">
+                    Content could not be saved
+                  </p>
+                  <p className="mt-1 text-sm text-red-300">{saveWorkspaceError}</p>
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseSaveWorkspace}
+                  disabled={
+                    savingToWorkspace ||
+                    creatingSaveWorkspace ||
+                    creatingSaveProject
+                  }
+                  className="rounded-lg bg-slate-700 px-5 py-2.5 font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveToWorkspace}
+                  disabled={
+                    workspaceOptionsLoading ||
+                    savingToWorkspace ||
+                    creatingSaveWorkspace ||
+                    creatingSaveProject ||
+                    showSaveCreateWorkspace ||
+                    showSaveCreateProject ||
+                    !selectedWorkspaceId ||
+                    !selectedSaveProjectId
+                  }
+                  className="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingToWorkspace
+                    ? "Saving..."
+                    : creatingSaveWorkspace
+                      ? "Creating Workspace..."
+                      : creatingSaveProject
+                        ? "Creating Project..."
+                        : "Save Content"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
