@@ -2643,7 +2643,7 @@ ${aiPreferenceInstructions}`;
           })}
         </div>
 
-        {/* Content Generator Panel */}
+        {}
         <div
           id="product-architect-panel-content"
           role="tabpanel"
@@ -2653,7 +2653,7 @@ ${aiPreferenceInstructions}`;
           className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
           <div className="grid items-stretch gap-4 2xl:gap-5 xl:grid-cols-2">
-            {/* Project Setup */}
+            {}
             <section
               ref={projectSetupRef}
               className="relative flex h-full min-h-[940px] flex-col overflow-visible rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
