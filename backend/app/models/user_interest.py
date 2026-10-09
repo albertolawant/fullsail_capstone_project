@@ -7,7 +7,11 @@ from app.db.database import Base
 class UserInterest(Base):
     __tablename__ = "user_interests"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     user_id = Column(
         Integer,

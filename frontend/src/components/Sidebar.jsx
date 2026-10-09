@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 
 import logo from "../assets/cropped_logo.png";
-
-import { NavLink, useNavigate } from "react-router-dom";
 
 import {
   FaHome,
@@ -13,6 +12,7 @@ import {
   FaBrain,
   FaDice,
   FaLightbulb,
+  FaGraduationCap,
   FaQuestionCircle,
   FaSignOutAlt,
   FaChevronRight,
@@ -86,6 +86,14 @@ function Sidebar({
       label: "Problem Solver",
       subtitle: "Problem analysis",
       icon: FaLightbulb,
+      accent: "cyan",
+    },
+    {
+      id: "learning-studio",
+      to: "/learning-studio",
+      label: "Learning Studio",
+      subtitle: "Lessons and study tools",
+      icon: FaGraduationCap,
       accent: "cyan",
     },
   ];

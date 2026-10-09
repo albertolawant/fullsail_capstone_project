@@ -42,6 +42,7 @@ ALLOWED_INTEREST_MODULES = {
     "product-architect",
     "tabletop-creator",
     "problem-solver",
+    "learning-studio",
 }
 
 
