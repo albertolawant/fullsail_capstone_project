@@ -17,7 +17,6 @@ const OUTPUT_TYPES = [
     icon: "▤",
     description:
       "Learn through clear explanations, examples, and structured sections.",
-    available: true,
   },
   {
     value: "flashcards",
@@ -25,7 +24,6 @@ const OUTPUT_TYPES = [
     icon: "◇",
     description:
       "Review important terms and concepts with question and answer cards.",
-    available: true,
   },
   {
     value: "quiz",
@@ -33,7 +31,6 @@ const OUTPUT_TYPES = [
     icon: "✓",
     description:
       "Check your understanding with practice questions about your topic.",
-    available: false,
   },
 ];
 
@@ -80,6 +77,30 @@ function isValidStudyResponse(data, request) {
         (card) =>
           isNonEmptyText(card?.question) &&
           isNonEmptyText(card?.answer)
+      )
+    );
+  }
+
+  if (request.output_type === "quiz") {
+    return (
+      Array.isArray(content.questions) &&
+      content.questions.length > 0 &&
+      content.questions.length <= 15 &&
+      content.questions.every(
+        (question) =>
+          isNonEmptyText(question?.question) &&
+          Array.isArray(question?.choices) &&
+          question.choices.length === 4 &&
+          question.choices.every(isNonEmptyText) &&
+          new Set(
+            question.choices.map((choice) =>
+              choice.trim().toLowerCase()
+            )
+          ).size === 4 &&
+          Number.isInteger(question.correct_answer_index) &&
+          question.correct_answer_index >= 0 &&
+          question.correct_answer_index < 4 &&
+          isNonEmptyText(question.explanation)
       )
     );
   }
@@ -193,11 +214,9 @@ function LessonView({ lesson }) {
                 <h5 className="mt-2 break-words font-semibold text-white">
                   {example.title}
                 </h5>
-
                 <pre className="mt-3 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-4 text-sm leading-6 text-cyan-100">
                   <code>{example.example}</code>
                 </pre>
-
                 <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-300">
                   {example.explanation}
                 </p>
@@ -330,7 +349,6 @@ function FlashcardsView({ deck, disabled }) {
         >
           {answerVisible ? "Hide Answer" : "Reveal Answer"}
         </button>
-
         <button
           type="button"
           onClick={() => goToCard(cardIndex - 1)}
@@ -339,7 +357,6 @@ function FlashcardsView({ deck, disabled }) {
         >
           ← Previous
         </button>
-
         <button
           type="button"
           onClick={() => goToCard(cardIndex + 1)}
@@ -354,10 +371,288 @@ function FlashcardsView({ deck, disabled }) {
         id="flashcard-keyboard-help"
         className="mt-4 text-sm leading-6 text-slate-400"
       >
-        Keyboard: Tab to the controls and press Enter or Space to activate
-        them. Use Left and Right Arrow while focused inside the deck to
-        change cards.
+        Keyboard: Tab to the controls and press Enter or Space to
+        activate them. Use Left and Right Arrow while focused inside
+        the deck to change cards.
       </p>
+    </section>
+  );
+}
+
+function QuizView({ quiz, disabled }) {
+  const [selectedAnswers, setSelectedAnswers] = useState(() =>
+    quiz.questions.map(() => null)
+  );
+  const [submitted, setSubmitted] = useState(false);
+
+  const quizTitleRef = useRef(null);
+  const resultsTitleRef = useRef(null);
+
+  const totalQuestions = quiz.questions.length;
+  const answeredCount = selectedAnswers.filter(
+    (answer) => answer !== null
+  ).length;
+  const allAnswered = answeredCount === totalQuestions;
+
+  // Index 0 is a valid answer, so compare indexes directly.
+  const correctCount = quiz.questions.reduce(
+    (total, question, index) =>
+      total +
+      (selectedAnswers[index] === question.correct_answer_index
+        ? 1
+        : 0),
+    0
+  );
+  const percentage = Math.round(
+    (correctCount / totalQuestions) * 100
+  );
+
+  useEffect(() => {
+    if (submitted) {
+      resultsTitleRef.current?.focus();
+    }
+  }, [submitted]);
+
+  const handleAnswerChange = (questionIndex, choiceIndex) => {
+    if (disabled || submitted) {
+      return;
+    }
+
+    setSelectedAnswers((currentAnswers) =>
+      currentAnswers.map((answer, index) =>
+        index === questionIndex ? choiceIndex : answer
+      )
+    );
+  };
+
+  const handleSubmitQuiz = (event) => {
+    event.preventDefault();
+
+    if (disabled || submitted || !allAnswered) {
+      return;
+    }
+
+    setSubmitted(true);
+  };
+
+  const handleRetake = () => {
+    if (disabled) {
+      return;
+    }
+
+    setSelectedAnswers(quiz.questions.map(() => null));
+    setSubmitted(false);
+    quizTitleRef.current?.focus();
+  };
+
+  return (
+    <section
+      aria-labelledby="quiz-title"
+      className="mt-6 min-w-0"
+    >
+      <h3
+        ref={quizTitleRef}
+        id="quiz-title"
+        tabIndex={-1}
+        className="break-words text-2xl font-bold text-white focus:outline-none"
+      >
+        {quiz.title}
+      </h3>
+
+      {submitted ? (
+        <>
+          <div className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-5">
+            <h4
+              ref={resultsTitleRef}
+              tabIndex={-1}
+              className="text-xl font-bold text-cyan-200 focus:outline-none"
+            >
+              Quiz Results
+            </h4>
+            <p className="mt-3 text-3xl font-bold text-white">
+              {correctCount} / {totalQuestions}
+            </p>
+            <p className="mt-2 text-slate-300">
+              You answered {percentage}% correctly.
+            </p>
+            <button
+              type="button"
+              onClick={handleRetake}
+              disabled={disabled}
+              className={`${PRIMARY_BUTTON} mt-5`}
+            >
+              Retake Quiz
+            </button>
+          </div>
+
+          <div className="mt-6 space-y-5">
+            {quiz.questions.map((question, questionIndex) => {
+              const selectedIndex =
+                selectedAnswers[questionIndex];
+              const isCorrect =
+                selectedIndex === question.correct_answer_index;
+
+              return (
+                <article
+                  key={questionIndex}
+                  className={`rounded-xl border p-5 ${
+                    isCorrect
+                      ? "border-emerald-700 bg-emerald-950/20"
+                      : "border-red-800 bg-red-950/20"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-300">
+                      Question {questionIndex + 1}
+                    </p>
+                    <p
+                      className={`text-sm font-bold ${
+                        isCorrect
+                          ? "text-emerald-300"
+                          : "text-red-300"
+                      }`}
+                    >
+                      {isCorrect ? "Correct" : "Incorrect"}
+                    </p>
+                  </div>
+
+                  <h5 className="mt-3 whitespace-pre-wrap break-words text-lg font-semibold text-white">
+                    {question.question}
+                  </h5>
+
+                  <dl className="mt-4 space-y-4 text-sm">
+                    <div>
+                      <dt className="font-semibold text-slate-400">
+                        Your Answer
+                      </dt>
+                      <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-200">
+                        {question.choices[selectedIndex]}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold text-emerald-300">
+                        Correct Answer
+                      </dt>
+                      <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-200">
+                        {
+                          question.choices[
+                            question.correct_answer_index
+                          ]
+                        }
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold text-cyan-300">
+                        Explanation
+                      </dt>
+                      <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-300">
+                        {question.explanation}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <form
+          onSubmit={handleSubmitQuiz}
+          aria-labelledby="quiz-title"
+          noValidate
+          className="mt-5"
+        >
+          <p className="text-sm leading-6 text-slate-400">
+            Choose one answer for each question. Submit the quiz
+            to see your score and explanations.
+          </p>
+
+          <p
+            id="quiz-progress"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="mt-4 text-sm font-semibold text-cyan-200"
+          >
+            {answeredCount} of {totalQuestions} questions answered
+          </p>
+
+          <div className="mt-5 space-y-5">
+            {quiz.questions.map((question, questionIndex) => (
+              <fieldset
+                key={questionIndex}
+                disabled={disabled}
+                className="min-w-0 rounded-xl border border-slate-700 bg-slate-900/60 p-5"
+              >
+                <legend className="max-w-full whitespace-pre-wrap break-words px-1 text-lg font-semibold text-white">
+                  {questionIndex + 1}. {question.question}
+                </legend>
+
+                <div className="mt-3 space-y-3">
+                  {question.choices.map((choice, choiceIndex) => {
+                    const isSelected =
+                      selectedAnswers[questionIndex] ===
+                      choiceIndex;
+
+                    return (
+                      <label
+                        key={choiceIndex}
+                        className={`flex items-start gap-3 rounded-xl border p-4 transition focus-within:ring-2 focus-within:ring-cyan-400 ${
+                          disabled
+                            ? "cursor-not-allowed opacity-60"
+                            : "cursor-pointer"
+                        } ${
+                          isSelected
+                            ? "border-cyan-400 bg-cyan-400/10"
+                            : "border-slate-700 bg-slate-950/60 hover:border-slate-500"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`quiz-question-${questionIndex}`}
+                          value={choiceIndex}
+                          checked={isSelected}
+                          onChange={() =>
+                            handleAnswerChange(
+                              questionIndex,
+                              choiceIndex
+                            )
+                          }
+                          className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
+                        />
+                        <span className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">
+                          <span className="mr-2 font-bold text-cyan-300">
+                            {String.fromCharCode(65 + choiceIndex)}.
+                          </span>
+                          {choice}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ))}
+          </div>
+
+          <p
+            id="quiz-submit-help"
+            className="mt-5 text-sm text-slate-400"
+          >
+            {allAnswered
+              ? "All questions are answered. You can submit your quiz."
+              : "Answer every question to enable submission."}
+          </p>
+
+          <button
+            type="submit"
+            disabled={disabled || !allAnswered}
+            aria-describedby="quiz-submit-help"
+            className={`${PRIMARY_BUTTON} mt-4`}
+          >
+            Submit Quiz
+          </button>
+        </form>
+      )}
     </section>
   );
 }
@@ -387,6 +682,9 @@ function LearningStudio() {
   const selectedOutputLabel = getOutputLabel(outputType);
   const displayedOutputLabel = getOutputLabel(
     generatedResult?.output_type || outputType
+  );
+  const selectedOutput = OUTPUT_TYPES.find(
+    (type) => type.value === outputType
   );
 
   const clearFeedback = () => {
@@ -418,7 +716,9 @@ function LearningStudio() {
       const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error("Your session has expired. Please sign in again.");
+        throw new Error(
+          "Your session has expired. Please sign in again."
+        );
       }
 
       const response = await fetch(GENERATION_ENDPOINT, {
@@ -442,7 +742,9 @@ function LearningStudio() {
       }
 
       if (!response.ok) {
-        throw new Error(getRequestErrorMessage(response.status, data));
+        throw new Error(
+          getRequestErrorMessage(response.status, data)
+        );
       }
 
       if (!isValidStudyResponse(data, request)) {
@@ -453,13 +755,15 @@ function LearningStudio() {
 
       setGeneratedResult(data);
 
-      // Remount the flashcard deck so each new result starts on question 1.
+      // New decks and quizzes start with fresh practice state.
       setResultVersion((version) => version + 1);
 
       setStatusMessage(
         request.output_type === "flashcards"
           ? "Your flashcards are ready."
-          : "Your lesson is ready."
+          : request.output_type === "quiz"
+            ? "Your quiz is ready."
+            : "Your lesson is ready."
       );
     } catch (error) {
       if (controller.signal.aborted && !timedOut) {
@@ -521,12 +825,8 @@ function LearningStudio() {
       return;
     }
 
-    const selectedType = OUTPUT_TYPES.find(
-      (type) => type.value === outputType
-    );
-
-    if (!selectedType?.available) {
-      setGenerationError("Choose Lesson or Flashcards to continue.");
+    if (!OUTPUT_TYPES.some((type) => type.value === outputType)) {
+      setGenerationError("Choose a valid output type.");
       return;
     }
 
@@ -604,8 +904,9 @@ function LearningStudio() {
         </div>
 
         <p className="mt-5 max-w-2xl leading-relaxed text-slate-400">
-          Choose a topic, set your learning goal, and generate lessons or
-          flashcards tailored to your experience level.
+          Choose a topic, set your learning goal, and generate
+          lessons, flashcards, or quizzes tailored to your
+          experience level.
         </p>
 
         <div className="mt-8 grid items-start gap-6 xl:grid-cols-2">
@@ -622,8 +923,8 @@ function LearningStudio() {
               Set Up Your Study Material
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Start with what you want to learn. Your learning goal is
-              optional.
+              Start with what you want to learn. Your learning
+              goal is optional.
             </p>
 
             <div className="mt-6">
@@ -631,7 +932,8 @@ function LearningStudio() {
                 htmlFor="learning-topic"
                 className="mb-2 block text-sm font-semibold text-slate-200"
               >
-                Topic <span className="text-cyan-300">(required)</span>
+                Topic{" "}
+                <span className="text-cyan-300">(required)</span>
               </label>
               <input
                 ref={topicRef}
@@ -661,17 +963,18 @@ function LearningStudio() {
                   topicError ? "border-red-400" : ""
                 }`}
               />
-
               <div
                 id="learning-topic-help"
                 className="mt-2 flex justify-between gap-3 text-xs text-slate-500"
               >
                 <span>
-                  Choose a subject or concept you want to understand.
+                  Choose a subject or concept you want to
+                  understand.
                 </span>
-                <span className="shrink-0">{topic.length}/200</span>
+                <span className="shrink-0">
+                  {topic.length}/200
+                </span>
               </div>
-
               {topicError && (
                 <p
                   id="learning-topic-error"
@@ -750,45 +1053,36 @@ function LearningStudio() {
                 Output Type
               </legend>
               <p className="mt-2 text-xs text-slate-400">
-                Lessons and flashcards are available now. Quizzes are
-                coming next.
+                Choose a format. Use arrow keys when a radio
+                option is focused.
               </p>
-
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {OUTPUT_TYPES.map((type) => (
                   <label
                     key={type.value}
                     className={`flex items-center gap-3 rounded-xl border p-4 transition focus-within:ring-2 focus-within:ring-cyan-400 ${
-                      !type.available || loading
+                      loading
                         ? "cursor-not-allowed"
                         : "cursor-pointer"
                     } ${
                       outputType === type.value
                         ? "border-cyan-400 bg-cyan-400/10"
                         : "border-slate-700 bg-slate-900"
-                    } ${!type.available ? "opacity-50" : ""}`}
+                    }`}
                   >
                     <input
                       type="radio"
                       name="outputType"
                       value={type.value}
                       checked={outputType === type.value}
-                      disabled={!type.available}
                       onChange={(event) => {
                         setOutputType(event.target.value);
                         clearFeedback();
                       }}
                       className="h-4 w-4 shrink-0 accent-cyan-400"
                     />
-                    <span>
-                      <span className="block text-sm font-semibold text-white">
-                        {type.label}
-                      </span>
-                      {!type.available && (
-                        <span className="mt-1 block text-xs text-slate-400">
-                          Coming soon
-                        </span>
-                      )}
+                    <span className="text-sm font-semibold text-white">
+                      {type.label}
                     </span>
                   </label>
                 ))}
@@ -796,9 +1090,7 @@ function LearningStudio() {
             </fieldset>
 
             <p className="mt-6 text-sm leading-6 text-slate-400">
-              {outputType === "flashcards"
-                ? "Generate a deck of questions and answers to practice recalling what you learn."
-                : "Generate a lesson with learning objectives, explanations, examples, and a summary."}
+              {selectedOutput?.description}
             </p>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
@@ -834,7 +1126,6 @@ function LearningStudio() {
               >
                 Your {displayedOutputLabel}
               </h2>
-
               {generatedResult && (
                 <button
                   type="button"
@@ -850,12 +1141,16 @@ function LearningStudio() {
             </div>
 
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Regenerate uses the displayed material’s study settings.
-              To use different settings, update the form and select
-              Generate.
+              Regenerate uses the displayed material’s study
+              settings. To use different settings, update the
+              form and select Generate.
             </p>
 
-            <div role="status" aria-live="polite" aria-atomic="true">
+            <div
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
               {loading ? (
                 <div className="mt-5 flex items-center gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-cyan-200">
                   <span
@@ -891,7 +1186,6 @@ function LearningStudio() {
                 <p className="mt-2 text-sm leading-6 text-red-300">
                   {generationError}
                 </p>
-
                 {lastRequest && (
                   <>
                     <p className="mt-2 text-xs text-slate-400">
@@ -955,12 +1249,22 @@ function LearningStudio() {
                   </dl>
                 </div>
 
-                {generatedResult.output_type === "lesson" ? (
+                {generatedResult.output_type === "lesson" && (
                   <LessonView lesson={generatedResult.content} />
-                ) : (
+                )}
+
+                {generatedResult.output_type === "flashcards" && (
                   <FlashcardsView
-                    key={resultVersion}
+                    key={`flashcards-${resultVersion}`}
                     deck={generatedResult.content}
+                    disabled={loading}
+                  />
+                )}
+
+                {generatedResult.output_type === "quiz" && (
+                  <QuizView
+                    key={`quiz-${resultVersion}`}
+                    quiz={generatedResult.content}
                     disabled={loading}
                   />
                 )}
@@ -971,15 +1275,15 @@ function LearningStudio() {
                   className="text-3xl text-cyan-300"
                   aria-hidden="true"
                 >
-                  {outputType === "flashcards" ? "◇" : "▤"}
+                  {selectedOutput?.icon}
                 </span>
                 <p className="mt-3 font-semibold text-slate-200">
                   Your {selectedOutputLabel.toLowerCase()} will
                   appear here
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Enter a topic, choose your output type, and select
-                  Generate to get started.
+                  Enter a topic, choose your output type, and
+                  select Generate to get started.
                 </p>
               </div>
             ) : null}
