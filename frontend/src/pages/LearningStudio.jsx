@@ -627,7 +627,7 @@ function LearningStudio() {
           or export them for later.
         </p>
 
-        <div className="mt-8 grid items-start gap-6 xl:grid-cols-2">
+        <div className="mt-8 flex flex-col gap-6">
           <form
             onSubmit={handleSubmit}
             noValidate
@@ -794,7 +794,7 @@ function LearningStudio() {
           <section
             aria-labelledby="learning-output-title"
             aria-busy={busy}
-            className="min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
+            className="w-full min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 id="learning-output-title" className="text-xl font-bold">
