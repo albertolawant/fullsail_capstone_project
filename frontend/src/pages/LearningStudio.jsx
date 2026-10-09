@@ -1,7 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import LearningMaterialView from "../components/LearningMaterialView";
+import {
+  LEARNING_STUDIO_CONTENT_TYPES,
+  LEARNING_STUDIO_LABELS,
+  getLearningMaterialFileName,
+  learningMaterialToMarkdown,
+  serializeLearningMaterial,
+  validateLearningMaterial,
+} from "../utils/learningStudioContent";
+import { exportContentAsPdf } from "../utils/exportPdf";
+import { exportContentAsMarkdown } from "../utils/exportMarkdown";
+import { exportContentAsTxt } from "../utils/exportTxt";
+import { exportContentAsDocx } from "../utils/exportDocx";
+import { addRecentActivity } from "../utils/activityStorage";
+import { notifyContentSaved } from "../utils/notifications";
 
-const GENERATION_ENDPOINT =
-  "http://127.0.0.1:8000/learning-studio/generate";
+const API_BASE_URL = "http://127.0.0.1:8000";
 const GENERATION_TIMEOUT_MS = 45000;
 
 const EXPERIENCE_LEVELS = [
@@ -34,627 +48,49 @@ const OUTPUT_TYPES = [
   },
 ];
 
+const PRIMARY_BUTTON =
+  "rounded-xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50";
+
 const SECONDARY_BUTTON =
   "rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50";
 
-const PRIMARY_BUTTON =
-  "rounded-xl bg-cyan-400 px-6 py-3 font-bold text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-50";
-
 const FIELD_CLASS =
-  "w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 disabled:cursor-not-allowed disabled:opacity-60";
+  "w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 disabled:opacity-60";
 
 function getOutputLabel(outputType) {
-  return (
-    OUTPUT_TYPES.find((type) => type.value === outputType)?.label ||
-    "Study Material"
-  );
+  return LEARNING_STUDIO_LABELS[outputType] || "Study Material";
 }
 
-function isNonEmptyText(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function isValidStudyResponse(data, request) {
-  if (
-    !data ||
-    data.output_type !== request.output_type ||
-    data.topic !== request.topic ||
-    data.learning_goal !== request.learning_goal ||
-    data.experience_level !== request.experience_level ||
-    !isNonEmptyText(data.content?.title)
-  ) {
-    return false;
-  }
-
-  const content = data.content;
-
-  if (request.output_type === "flashcards") {
-    return (
-      Array.isArray(content.cards) &&
-      content.cards.length > 0 &&
-      content.cards.length <= 20 &&
-      content.cards.every(
-        (card) =>
-          isNonEmptyText(card?.question) &&
-          isNonEmptyText(card?.answer)
-      )
-    );
-  }
-
-  if (request.output_type === "quiz") {
-    return (
-      Array.isArray(content.questions) &&
-      content.questions.length > 0 &&
-      content.questions.length <= 15 &&
-      content.questions.every(
-        (question) =>
-          isNonEmptyText(question?.question) &&
-          Array.isArray(question?.choices) &&
-          question.choices.length === 4 &&
-          question.choices.every(isNonEmptyText) &&
-          new Set(
-            question.choices.map((choice) =>
-              choice.trim().toLowerCase()
-            )
-          ).size === 4 &&
-          Number.isInteger(question.correct_answer_index) &&
-          question.correct_answer_index >= 0 &&
-          question.correct_answer_index < 4 &&
-          isNonEmptyText(question.explanation)
-      )
-    );
-  }
-
-  if (request.output_type === "lesson") {
-    return (
-      isNonEmptyText(content.introduction) &&
-      isNonEmptyText(content.summary) &&
-      Array.isArray(content.learning_objectives) &&
-      content.learning_objectives.length > 0 &&
-      content.learning_objectives.every(isNonEmptyText) &&
-      Array.isArray(content.sections) &&
-      content.sections.length > 0 &&
-      content.sections.every(
-        (section) =>
-          isNonEmptyText(section?.heading) &&
-          isNonEmptyText(section?.explanation) &&
-          Array.isArray(section?.examples) &&
-          section.examples.length > 0 &&
-          section.examples.every(
-            (example) =>
-              isNonEmptyText(example?.title) &&
-              isNonEmptyText(example?.example) &&
-              isNonEmptyText(example?.explanation)
-          )
-      )
-    );
-  }
-
-  return false;
-}
-
-function getRequestErrorMessage(status, data) {
-  if (status === 401) {
+function getErrorMessage(response, data, fallback) {
+  if (response.status === 401) {
     return "Your session has expired. Please sign in again.";
-  }
-
-  if (status === 403) {
-    return "You are not authorized to generate this study material.";
   }
 
   if (typeof data?.detail === "string") {
     return data.detail;
   }
 
-  if (status === 422) {
-    return "Please check your topic, learning goal, and experience level.";
+  if (response.status === 403) {
+    return "You are not authorized to perform this action.";
   }
 
-  if (status === 429) {
-    return "Too many generation requests. Please wait a moment and retry.";
+  if (response.status === 422) {
+    return "Please check the information you entered.";
   }
 
-  if (status === 503) {
-    return "The AI service is temporarily unavailable. Please retry shortly.";
+  if (response.status === 429) {
+    return "Too many requests. Please wait a moment and retry.";
   }
 
-  if (status === 504) {
-    return "Generation took too long. Please retry.";
+  if (response.status === 503) {
+    return "The service is temporarily unavailable. Please retry shortly.";
   }
 
-  return "Your study material could not be generated. Please retry.";
-}
+  if (response.status === 504) {
+    return "The request took too long. Please retry.";
+  }
 
-function LessonView({ lesson }) {
-  return (
-    <article className="mt-6 min-w-0 space-y-6">
-      <header>
-        <h3 className="break-words text-2xl font-bold text-white sm:text-3xl">
-          {lesson.title}
-        </h3>
-        <p className="mt-4 whitespace-pre-wrap break-words leading-7 text-slate-300">
-          {lesson.introduction}
-        </p>
-      </header>
-
-      <section className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5">
-        <h4 className="text-lg font-semibold text-cyan-200">
-          Learning Objectives
-        </h4>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-slate-300">
-          {lesson.learning_objectives.map((objective, index) => (
-            <li key={index} className="break-words leading-7">
-              {objective}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {lesson.sections.map((section, sectionIndex) => (
-        <section
-          key={sectionIndex}
-          className="min-w-0 rounded-xl border border-slate-700 bg-slate-900/60 p-5"
-        >
-          <h4 className="break-words text-xl font-bold text-cyan-200">
-            {section.heading}
-          </h4>
-          <p className="mt-3 whitespace-pre-wrap break-words leading-7 text-slate-300">
-            {section.explanation}
-          </p>
-
-          <div className="mt-5 space-y-4">
-            {section.examples.map((example, exampleIndex) => (
-              <div
-                key={exampleIndex}
-                className="min-w-0 rounded-xl border border-slate-800 bg-slate-950/70 p-4"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
-                  Example {exampleIndex + 1}
-                </p>
-                <h5 className="mt-2 break-words font-semibold text-white">
-                  {example.title}
-                </h5>
-                <pre className="mt-3 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-4 text-sm leading-6 text-cyan-100">
-                  <code>{example.example}</code>
-                </pre>
-                <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-300">
-                  {example.explanation}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
-
-      <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5">
-        <h4 className="text-lg font-semibold text-emerald-200">
-          Summary
-        </h4>
-        <p className="mt-3 whitespace-pre-wrap break-words leading-7 text-slate-300">
-          {lesson.summary}
-        </p>
-      </section>
-    </article>
-  );
-}
-
-function FlashcardsView({ deck, disabled }) {
-  const [cardIndex, setCardIndex] = useState(0);
-  const [answerVisible, setAnswerVisible] = useState(false);
-
-  const currentCard = deck.cards[cardIndex];
-  const totalCards = deck.cards.length;
-
-  const goToCard = (nextIndex) => {
-    if (
-      disabled ||
-      nextIndex < 0 ||
-      nextIndex >= totalCards ||
-      nextIndex === cardIndex
-    ) {
-      return;
-    }
-
-    setCardIndex(nextIndex);
-    setAnswerVisible(false);
-  };
-
-  const handleDeckKeyDown = (event) => {
-    if (
-      disabled ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.shiftKey
-    ) {
-      return;
-    }
-
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      goToCard(cardIndex - 1);
-    } else if (event.key === "ArrowRight") {
-      event.preventDefault();
-      goToCard(cardIndex + 1);
-    }
-  };
-
-  return (
-    <section
-      aria-labelledby="flashcard-deck-title"
-      aria-describedby="flashcard-keyboard-help"
-      tabIndex={0}
-      onKeyDown={handleDeckKeyDown}
-      className="mt-6 min-w-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950"
-    >
-      <h3
-        id="flashcard-deck-title"
-        className="break-words text-2xl font-bold text-white"
-      >
-        {deck.title}
-      </h3>
-
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="mt-4 flex flex-wrap items-center justify-between gap-3"
-      >
-        <p className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-          Card {cardIndex + 1} of {totalCards}
-        </p>
-        <p className="text-sm text-slate-400">
-          {answerVisible ? "Answer revealed" : "Question"}
-        </p>
-      </div>
-
-      <article className="mt-4 min-h-[280px] rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-cyan-950/30 to-slate-900 p-5 sm:p-7">
-        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
-          Question
-        </p>
-        <h4 className="mt-4 whitespace-pre-wrap break-words text-xl font-semibold leading-8 text-white">
-          {currentCard.question}
-        </h4>
-
-        <div
-          id="flashcard-answer"
-          hidden={!answerVisible}
-          className="mt-6 border-t border-slate-700 pt-5"
-        >
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
-            Answer
-          </p>
-          {answerVisible && (
-            <p className="mt-3 whitespace-pre-wrap break-words leading-7 text-slate-200">
-              {currentCard.answer}
-            </p>
-          )}
-        </div>
-
-        {!answerVisible && (
-          <p className="mt-6 text-sm leading-6 text-slate-400">
-            Think about your answer, then select Reveal Answer.
-          </p>
-        )}
-      </article>
-
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <button
-          type="button"
-          onClick={() => setAnswerVisible((visible) => !visible)}
-          disabled={disabled}
-          aria-expanded={answerVisible}
-          aria-controls="flashcard-answer"
-          className={PRIMARY_BUTTON}
-        >
-          {answerVisible ? "Hide Answer" : "Reveal Answer"}
-        </button>
-        <button
-          type="button"
-          onClick={() => goToCard(cardIndex - 1)}
-          disabled={disabled || cardIndex === 0}
-          className={SECONDARY_BUTTON}
-        >
-          ← Previous
-        </button>
-        <button
-          type="button"
-          onClick={() => goToCard(cardIndex + 1)}
-          disabled={disabled || cardIndex === totalCards - 1}
-          className={SECONDARY_BUTTON}
-        >
-          Next →
-        </button>
-      </div>
-
-      <p
-        id="flashcard-keyboard-help"
-        className="mt-4 text-sm leading-6 text-slate-400"
-      >
-        Keyboard: Tab to the controls and press Enter or Space to
-        activate them. Use Left and Right Arrow while focused inside
-        the deck to change cards.
-      </p>
-    </section>
-  );
-}
-
-function QuizView({ quiz, disabled }) {
-  const [selectedAnswers, setSelectedAnswers] = useState(() =>
-    quiz.questions.map(() => null)
-  );
-  const [submitted, setSubmitted] = useState(false);
-
-  const quizTitleRef = useRef(null);
-  const resultsTitleRef = useRef(null);
-
-  const totalQuestions = quiz.questions.length;
-  const answeredCount = selectedAnswers.filter(
-    (answer) => answer !== null
-  ).length;
-  const allAnswered = answeredCount === totalQuestions;
-
-  // Index 0 is a valid answer, so compare indexes directly.
-  const correctCount = quiz.questions.reduce(
-    (total, question, index) =>
-      total +
-      (selectedAnswers[index] === question.correct_answer_index
-        ? 1
-        : 0),
-    0
-  );
-  const percentage = Math.round(
-    (correctCount / totalQuestions) * 100
-  );
-
-  useEffect(() => {
-    if (submitted) {
-      resultsTitleRef.current?.focus();
-    }
-  }, [submitted]);
-
-  const handleAnswerChange = (questionIndex, choiceIndex) => {
-    if (disabled || submitted) {
-      return;
-    }
-
-    setSelectedAnswers((currentAnswers) =>
-      currentAnswers.map((answer, index) =>
-        index === questionIndex ? choiceIndex : answer
-      )
-    );
-  };
-
-  const handleSubmitQuiz = (event) => {
-    event.preventDefault();
-
-    if (disabled || submitted || !allAnswered) {
-      return;
-    }
-
-    setSubmitted(true);
-  };
-
-  const handleRetake = () => {
-    if (disabled) {
-      return;
-    }
-
-    setSelectedAnswers(quiz.questions.map(() => null));
-    setSubmitted(false);
-    quizTitleRef.current?.focus();
-  };
-
-  return (
-    <section
-      aria-labelledby="quiz-title"
-      className="mt-6 min-w-0"
-    >
-      <h3
-        ref={quizTitleRef}
-        id="quiz-title"
-        tabIndex={-1}
-        className="break-words text-2xl font-bold text-white focus:outline-none"
-      >
-        {quiz.title}
-      </h3>
-
-      {submitted ? (
-        <>
-          <div className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-5">
-            <h4
-              ref={resultsTitleRef}
-              tabIndex={-1}
-              className="text-xl font-bold text-cyan-200 focus:outline-none"
-            >
-              Quiz Results
-            </h4>
-            <p className="mt-3 text-3xl font-bold text-white">
-              {correctCount} / {totalQuestions}
-            </p>
-            <p className="mt-2 text-slate-300">
-              You answered {percentage}% correctly.
-            </p>
-            <button
-              type="button"
-              onClick={handleRetake}
-              disabled={disabled}
-              className={`${PRIMARY_BUTTON} mt-5`}
-            >
-              Retake Quiz
-            </button>
-          </div>
-
-          <div className="mt-6 space-y-5">
-            {quiz.questions.map((question, questionIndex) => {
-              const selectedIndex =
-                selectedAnswers[questionIndex];
-              const isCorrect =
-                selectedIndex === question.correct_answer_index;
-
-              return (
-                <article
-                  key={questionIndex}
-                  className={`rounded-xl border p-5 ${
-                    isCorrect
-                      ? "border-emerald-700 bg-emerald-950/20"
-                      : "border-red-800 bg-red-950/20"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-300">
-                      Question {questionIndex + 1}
-                    </p>
-                    <p
-                      className={`text-sm font-bold ${
-                        isCorrect
-                          ? "text-emerald-300"
-                          : "text-red-300"
-                      }`}
-                    >
-                      {isCorrect ? "Correct" : "Incorrect"}
-                    </p>
-                  </div>
-
-                  <h5 className="mt-3 whitespace-pre-wrap break-words text-lg font-semibold text-white">
-                    {question.question}
-                  </h5>
-
-                  <dl className="mt-4 space-y-4 text-sm">
-                    <div>
-                      <dt className="font-semibold text-slate-400">
-                        Your Answer
-                      </dt>
-                      <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-200">
-                        {question.choices[selectedIndex]}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-emerald-300">
-                        Correct Answer
-                      </dt>
-                      <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-200">
-                        {
-                          question.choices[
-                            question.correct_answer_index
-                          ]
-                        }
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-cyan-300">
-                        Explanation
-                      </dt>
-                      <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-300">
-                        {question.explanation}
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })}
-          </div>
-        </>
-      ) : (
-        <form
-          onSubmit={handleSubmitQuiz}
-          aria-labelledby="quiz-title"
-          noValidate
-          className="mt-5"
-        >
-          <p className="text-sm leading-6 text-slate-400">
-            Choose one answer for each question. Submit the quiz
-            to see your score and explanations.
-          </p>
-
-          <p
-            id="quiz-progress"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            className="mt-4 text-sm font-semibold text-cyan-200"
-          >
-            {answeredCount} of {totalQuestions} questions answered
-          </p>
-
-          <div className="mt-5 space-y-5">
-            {quiz.questions.map((question, questionIndex) => (
-              <fieldset
-                key={questionIndex}
-                disabled={disabled}
-                className="min-w-0 rounded-xl border border-slate-700 bg-slate-900/60 p-5"
-              >
-                <legend className="max-w-full whitespace-pre-wrap break-words px-1 text-lg font-semibold text-white">
-                  {questionIndex + 1}. {question.question}
-                </legend>
-
-                <div className="mt-3 space-y-3">
-                  {question.choices.map((choice, choiceIndex) => {
-                    const isSelected =
-                      selectedAnswers[questionIndex] ===
-                      choiceIndex;
-
-                    return (
-                      <label
-                        key={choiceIndex}
-                        className={`flex items-start gap-3 rounded-xl border p-4 transition focus-within:ring-2 focus-within:ring-cyan-400 ${
-                          disabled
-                            ? "cursor-not-allowed opacity-60"
-                            : "cursor-pointer"
-                        } ${
-                          isSelected
-                            ? "border-cyan-400 bg-cyan-400/10"
-                            : "border-slate-700 bg-slate-950/60 hover:border-slate-500"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={`quiz-question-${questionIndex}`}
-                          value={choiceIndex}
-                          checked={isSelected}
-                          onChange={() =>
-                            handleAnswerChange(
-                              questionIndex,
-                              choiceIndex
-                            )
-                          }
-                          className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
-                        />
-                        <span className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">
-                          <span className="mr-2 font-bold text-cyan-300">
-                            {String.fromCharCode(65 + choiceIndex)}.
-                          </span>
-                          {choice}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            ))}
-          </div>
-
-          <p
-            id="quiz-submit-help"
-            className="mt-5 text-sm text-slate-400"
-          >
-            {allAnswered
-              ? "All questions are answered. You can submit your quiz."
-              : "Answer every question to enable submission."}
-          </p>
-
-          <button
-            type="submit"
-            disabled={disabled || !allAnswered}
-            aria-describedby="quiz-submit-help"
-            className={`${PRIMARY_BUTTON} mt-4`}
-          >
-            Submit Quiz
-          </button>
-        </form>
-      )}
-    </section>
-  );
+  return fallback;
 }
 
 function LearningStudio() {
@@ -664,28 +100,115 @@ function LearningStudio() {
   const [outputType, setOutputType] = useState("lesson");
   const [topicError, setTopicError] = useState("");
   const [generationError, setGenerationError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [generatedResult, setGeneratedResult] = useState(null);
   const [lastRequest, setLastRequest] = useState(null);
-  const [statusMessage, setStatusMessage] = useState("");
   const [resultVersion, setResultVersion] = useState(0);
+
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState("");
+  const [projectsReload, setProjectsReload] = useState(0);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [saveTitle, setSaveTitle] = useState("");
+  const [savedContentId, setSavedContentId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const topicRef = useRef(null);
   const requestControllerRef = useRef(null);
+  const saveControllerRef = useRef(null);
+  const exportBusyRef = useRef(false);
+  const mountedRef = useRef(false);
 
-  useEffect(() => {
-    return () => {
-      requestControllerRef.current?.abort();
-    };
-  }, []);
-
-  const selectedOutputLabel = getOutputLabel(outputType);
-  const displayedOutputLabel = getOutputLabel(
-    generatedResult?.output_type || outputType
-  );
+  const busy = loading || saving || exporting;
   const selectedOutput = OUTPUT_TYPES.find(
     (type) => type.value === outputType
   );
+  const displayedOutputLabel = getOutputLabel(
+    generatedResult?.output_type || outputType
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      requestControllerRef.current?.abort();
+      saveControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadProjects = async () => {
+      setProjectsLoading(true);
+      setProjectsError("");
+
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          throw new Error(
+            "Your session has expired. Please sign in again."
+          );
+        }
+
+        const response = await fetch(`${API_BASE_URL}/projects/`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(
+            getErrorMessage(
+              response,
+              data,
+              "Your projects could not be loaded."
+            )
+          );
+        }
+
+        if (!Array.isArray(data)) {
+          throw new Error("The server returned invalid project information.");
+        }
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setProjects(data);
+        setSelectedProjectId((currentId) =>
+          data.some((project) => String(project.id) === currentId)
+            ? currentId
+            : ""
+        );
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setProjectsError(
+            error instanceof Error
+              ? error.message
+              : "Your projects could not be loaded."
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setProjectsLoading(false);
+        }
+      }
+    };
+
+    loadProjects();
+
+    return () => controller.abort();
+  }, [projectsReload]);
 
   const clearFeedback = () => {
     setGenerationError("");
@@ -693,7 +216,11 @@ function LearningStudio() {
   };
 
   const generateStudyMaterial = async (request) => {
-    if (requestControllerRef.current) {
+    if (
+      requestControllerRef.current ||
+      saveControllerRef.current ||
+      exportBusyRef.current
+    ) {
       return;
     }
 
@@ -706,7 +233,6 @@ function LearningStudio() {
     setLastRequest(request);
 
     let timedOut = false;
-
     const timeoutId = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
@@ -721,15 +247,18 @@ function LearningStudio() {
         );
       }
 
-      const response = await fetch(GENERATION_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(request),
-        signal: controller.signal,
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/learning-studio/generate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(request),
+          signal: controller.signal,
+        }
+      );
 
       const data = await response.json().catch(() => null);
 
@@ -737,63 +266,72 @@ function LearningStudio() {
         if (timedOut) {
           throw new Error("Generation timed out.");
         }
-
         return;
       }
 
       if (!response.ok) {
         throw new Error(
-          getRequestErrorMessage(response.status, data)
+          getErrorMessage(
+            response,
+            data,
+            "Your study material could not be generated."
+          )
         );
       }
 
-      if (!isValidStudyResponse(data, request)) {
+      validateLearningMaterial(data, request.output_type);
+
+      if (
+        data.topic !== request.topic ||
+        data.learning_goal !== request.learning_goal ||
+        data.experience_level !== request.experience_level
+      ) {
         throw new Error(
-          "The AI returned incomplete study material. Please retry generation."
+          "The generated material did not match your study settings."
         );
+      }
+
+      if (!mountedRef.current) {
+        return;
       }
 
       setGeneratedResult(data);
-
-      // New decks and quizzes start with fresh practice state.
       setResultVersion((version) => version + 1);
-
+      setSavedContentId(null);
+      setSaveTitle(data.content.title);
+      setSaveError("");
+      setSaveMessage("");
+      setExportError("");
       setStatusMessage(
-        request.output_type === "flashcards"
-          ? "Your flashcards are ready."
-          : request.output_type === "quiz"
-            ? "Your quiz is ready."
-            : "Your lesson is ready."
+        `${getOutputLabel(data.output_type)} ready. You can study, save, or export it.`
       );
     } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
+
       if (controller.signal.aborted && !timedOut) {
         return;
       }
 
-      if (timedOut) {
-        setGenerationError(
-          "Generation took too long. Your form inputs are still available. Please retry."
-        );
-      } else if (error instanceof TypeError) {
-        setGenerationError(
-          "Could not connect to the server. Make sure your backend is running, then retry."
-        );
-      } else {
-        setGenerationError(
-          error instanceof Error
-            ? error.message
-            : "Something went wrong while generating your study material."
-        );
-      }
+      setGenerationError(
+        timedOut
+          ? "Generation took too long. Your inputs are still available; please retry."
+          : error instanceof TypeError
+            ? "Could not connect to the server. Check that the backend is running."
+            : error instanceof Error
+              ? error.message
+              : "Your study material could not be generated."
+      );
     } finally {
       window.clearTimeout(timeoutId);
 
       if (requestControllerRef.current === controller) {
         requestControllerRef.current = null;
+      }
 
-        if (!controller.signal.aborted || timedOut) {
-          setLoading(false);
-        }
+      if (mountedRef.current) {
+        setLoading(false);
       }
     }
   };
@@ -801,41 +339,36 @@ function LearningStudio() {
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (requestControllerRef.current) {
+    if (busy) {
       return;
     }
+
+    clearFeedback();
+    setTopicError("");
 
     const cleanedTopic = topic.trim();
     const cleanedGoal = learningGoal.trim();
 
-    clearFeedback();
-
     if (!cleanedTopic || cleanedTopic.length > 200) {
-      setTopicError("Enter a topic between 1 and 200 characters.");
+      setTopicError("Enter a topic with between 1 and 200 characters.");
       topicRef.current?.focus();
       return;
     }
 
-    setTopicError("");
-
     if (cleanedGoal.length > 1000) {
       setGenerationError(
-        "Your learning goal must be 1,000 characters or fewer."
+        "Learning goal must be 1,000 characters or fewer."
       );
       return;
     }
 
-    if (!OUTPUT_TYPES.some((type) => type.value === outputType)) {
-      setGenerationError("Choose a valid output type.");
-      return;
-    }
-
     if (
+      !OUTPUT_TYPES.some((type) => type.value === outputType) ||
       !EXPERIENCE_LEVELS.some(
         (level) => level.value === experienceLevel
       )
     ) {
-      setGenerationError("Choose a valid experience level.");
+      setGenerationError("Choose a valid output type and experience level.");
       return;
     }
 
@@ -847,14 +380,8 @@ function LearningStudio() {
     });
   };
 
-  const handleRetry = () => {
-    if (lastRequest) {
-      generateStudyMaterial(lastRequest);
-    }
-  };
-
   const handleRegenerate = () => {
-    if (!generatedResult) {
+    if (!generatedResult || busy) {
       return;
     }
 
@@ -867,7 +394,7 @@ function LearningStudio() {
   };
 
   const handleReset = () => {
-    if (requestControllerRef.current) {
+    if (busy) {
       return;
     }
 
@@ -876,17 +403,208 @@ function LearningStudio() {
     setExperienceLevel("beginner");
     setOutputType("lesson");
     setTopicError("");
-    setGenerationError("");
     setGeneratedResult(null);
     setLastRequest(null);
-    setStatusMessage("");
+    setSavedContentId(null);
+    setSaveTitle("");
+    setSaveError("");
+    setSaveMessage("");
+    setExportError("");
+    clearFeedback();
     topicRef.current?.focus();
+  };
+
+  const handleSave = async (event) => {
+    event.preventDefault();
+
+    if (
+      !generatedResult ||
+      requestControllerRef.current ||
+      saveControllerRef.current ||
+      exportBusyRef.current
+    ) {
+      return;
+    }
+
+    setSaveError("");
+    setSaveMessage("");
+
+    const title = saveTitle.trim();
+    const project = projects.find(
+      (item) => String(item.id) === selectedProjectId
+    );
+
+    if (!title) {
+      setSaveError("Enter a title before saving.");
+      return;
+    }
+
+    if (!project) {
+      setSaveError("Choose a project before saving.");
+      return;
+    }
+
+    let body;
+
+    try {
+      body = serializeLearningMaterial(generatedResult);
+    } catch (error) {
+      setSaveError(error.message);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setSaveError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    const controller = new AbortController();
+    saveControllerRef.current = controller;
+    setSaving(true);
+
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      30000
+    );
+
+    try {
+      const response = await fetch(
+        savedContentId
+          ? `${API_BASE_URL}/content/${savedContentId}`
+          : `${API_BASE_URL}/content/`,
+        {
+          method: savedContentId ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title,
+            content_type:
+              LEARNING_STUDIO_CONTENT_TYPES[generatedResult.output_type],
+            body,
+            project_id: project.id,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (controller.signal.aborted) {
+        throw new Error("Saving took too long.");
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          getErrorMessage(
+            response,
+            data,
+            "The learning material could not be saved."
+          )
+        );
+      }
+
+      if (!Number.isInteger(data?.id)) {
+        throw new Error("The server did not confirm the saved material.");
+      }
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setSavedContentId(data.id);
+      setSaveMessage(
+        `Saved to ${project.title}. Open the Content page to study, edit, or view its history.`
+      );
+
+      // A notification failure should not turn a successful save into an error.
+      try {
+        notifyContentSaved(title);
+        addRecentActivity({
+          type: "Content Saved",
+          title: `${title} saved`,
+          description: `Saved Learning Studio material to ${project.title}.`,
+          projectName: project.title,
+        });
+      } catch (notificationError) {
+        console.error("Save notification failed:", notificationError);
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setSaveError(
+          controller.signal.aborted
+            ? "Saving took too long. Check the Content page before retrying; the server may have completed the save."
+            : error instanceof Error
+              ? error.message
+              : "The learning material could not be saved."
+        );
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+
+      if (saveControllerRef.current === controller) {
+        saveControllerRef.current = null;
+      }
+
+      if (mountedRef.current) {
+        setSaving(false);
+      }
+    }
+  };
+
+  const handleExport = async (format) => {
+    if (
+      !generatedResult ||
+      requestControllerRef.current ||
+      saveControllerRef.current ||
+      exportBusyRef.current
+    ) {
+      return;
+    }
+
+    exportBusyRef.current = true;
+    setExporting(true);
+    setExportError("");
+
+    try {
+      const title =
+        saveTitle.trim() || generatedResult.content.title;
+      const body = learningMaterialToMarkdown(generatedResult);
+      const fileName = getLearningMaterialFileName(title, format);
+
+      if (format === "pdf") {
+        exportContentAsPdf(title, body, fileName);
+      } else if (format === "md") {
+        exportContentAsMarkdown(title, body, fileName);
+      } else if (format === "txt") {
+        exportContentAsTxt(title, body, fileName);
+      } else if (format === "docx") {
+        await exportContentAsDocx(title, body, fileName);
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        setExportError(
+          error instanceof Error
+            ? error.message
+            : "The material could not be exported."
+        );
+      }
+    } finally {
+      exportBusyRef.current = false;
+
+      if (mountedRef.current) {
+        setExporting(false);
+      }
+    }
   };
 
   return (
     <main className="min-h-screen w-full bg-slate-950 p-5 text-white sm:p-8">
       <section className="rounded-2xl border border-cyan-500/20 bg-slate-900 p-6 shadow-xl sm:p-8">
-        <div className="flex items-center gap-4">
+        <header className="flex items-center gap-4">
           <div
             className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-400/10 text-3xl"
             aria-hidden="true"
@@ -901,12 +619,12 @@ function LearningStudio() {
               Learning Studio
             </h1>
           </div>
-        </div>
+        </header>
 
         <p className="mt-5 max-w-2xl leading-relaxed text-slate-400">
-          Choose a topic, set your learning goal, and generate
-          lessons, flashcards, or quizzes tailored to your
-          experience level.
+          Turn topics into lessons, flashcards, and quizzes tailored
+          to your experience level. Save your materials to a project
+          or export them for later.
         </p>
 
         <div className="mt-8 grid items-start gap-6 xl:grid-cols-2">
@@ -916,65 +634,48 @@ function LearningStudio() {
             aria-labelledby="learning-form-title"
             className="min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
           >
-            <h2
-              id="learning-form-title"
-              className="text-xl font-bold text-white"
-            >
+            <h2 id="learning-form-title" className="text-xl font-bold">
               Set Up Your Study Material
             </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Start with what you want to learn. Your learning
-              goal is optional.
+            <p className="mt-2 text-sm text-slate-400">
+              Start with what you want to learn. Your learning goal is optional.
             </p>
 
             <div className="mt-6">
               <label
                 htmlFor="learning-topic"
-                className="mb-2 block text-sm font-semibold text-slate-200"
+                className="mb-2 block text-sm font-semibold"
               >
-                Topic{" "}
-                <span className="text-cyan-300">(required)</span>
+                Topic <span className="text-cyan-300">(required)</span>
               </label>
               <input
                 ref={topicRef}
                 id="learning-topic"
-                name="topic"
                 type="text"
                 value={topic}
                 onChange={(event) => {
                   setTopic(event.target.value);
+                  setTopicError("");
                   clearFeedback();
-
-                  if (event.target.value.trim()) {
-                    setTopicError("");
-                  }
                 }}
                 required
                 maxLength={200}
-                disabled={loading}
+                disabled={busy}
                 aria-invalid={Boolean(topicError)}
                 aria-describedby={
                   topicError
                     ? "learning-topic-help learning-topic-error"
                     : "learning-topic-help"
                 }
-                placeholder="e.g. Python loops, photosynthesis, or network security"
-                className={`${FIELD_CLASS} ${
-                  topicError ? "border-red-400" : ""
-                }`}
+                placeholder="e.g. Python loops or network security"
+                className={FIELD_CLASS}
               />
-              <div
+              <p
                 id="learning-topic-help"
-                className="mt-2 flex justify-between gap-3 text-xs text-slate-500"
+                className="mt-2 text-xs text-slate-500"
               >
-                <span>
-                  Choose a subject or concept you want to
-                  understand.
-                </span>
-                <span className="shrink-0">
-                  {topic.length}/200
-                </span>
-              </div>
+                Choose a subject or concept. {topic.length}/200
+              </p>
               {topicError && (
                 <p
                   id="learning-topic-error"
@@ -989,16 +690,12 @@ function LearningStudio() {
             <div className="mt-6">
               <label
                 htmlFor="learning-goal"
-                className="mb-2 block text-sm font-semibold text-slate-200"
+                className="mb-2 block text-sm font-semibold"
               >
-                Learning Goal{" "}
-                <span className="font-normal text-slate-400">
-                  (optional)
-                </span>
+                Learning Goal (optional)
               </label>
               <textarea
                 id="learning-goal"
-                name="learningGoal"
                 value={learningGoal}
                 onChange={(event) => {
                   setLearningGoal(event.target.value);
@@ -1006,38 +703,30 @@ function LearningStudio() {
                 }}
                 rows={4}
                 maxLength={1000}
-                disabled={loading}
-                aria-describedby="learning-goal-help"
-                placeholder="e.g. Understand how to use loops in a small Python project."
+                disabled={busy}
+                placeholder="What do you want to understand or achieve?"
                 className={`${FIELD_CLASS} resize-y`}
               />
-              <div
-                id="learning-goal-help"
-                className="mt-2 flex justify-between gap-3 text-xs text-slate-500"
-              >
-                <span>Tell Tanio what you want to achieve.</span>
-                <span className="shrink-0">
-                  {learningGoal.length}/1000
-                </span>
-              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                {learningGoal.length}/1000
+              </p>
             </div>
 
             <div className="mt-6">
               <label
                 htmlFor="learning-experience"
-                className="mb-2 block text-sm font-semibold text-slate-200"
+                className="mb-2 block text-sm font-semibold"
               >
                 Experience Level
               </label>
               <select
                 id="learning-experience"
-                name="experienceLevel"
                 value={experienceLevel}
                 onChange={(event) => {
                   setExperienceLevel(event.target.value);
                   clearFeedback();
                 }}
-                disabled={loading}
+                disabled={busy}
                 className={FIELD_CLASS}
               >
                 {EXPERIENCE_LEVELS.map((level) => (
@@ -1048,22 +737,17 @@ function LearningStudio() {
               </select>
             </div>
 
-            <fieldset className="mt-6" disabled={loading}>
-              <legend className="text-sm font-semibold text-slate-200">
-                Output Type
-              </legend>
+            <fieldset className="mt-6" disabled={busy}>
+              <legend className="text-sm font-semibold">Output Type</legend>
               <p className="mt-2 text-xs text-slate-400">
-                Choose a format. Use arrow keys when a radio
-                option is focused.
+                Use arrow keys when a radio option is focused.
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {OUTPUT_TYPES.map((type) => (
                   <label
                     key={type.value}
-                    className={`flex items-center gap-3 rounded-xl border p-4 transition focus-within:ring-2 focus-within:ring-cyan-400 ${
-                      loading
-                        ? "cursor-not-allowed"
-                        : "cursor-pointer"
+                    className={`flex items-center gap-3 rounded-xl border p-4 focus-within:ring-2 focus-within:ring-cyan-400 ${
+                      busy ? "cursor-not-allowed" : "cursor-pointer"
                     } ${
                       outputType === type.value
                         ? "border-cyan-400 bg-cyan-400/10"
@@ -1079,11 +763,9 @@ function LearningStudio() {
                         setOutputType(event.target.value);
                         clearFeedback();
                       }}
-                      className="h-4 w-4 shrink-0 accent-cyan-400"
+                      className="h-4 w-4 accent-cyan-400"
                     />
-                    <span className="text-sm font-semibold text-white">
-                      {type.label}
-                    </span>
+                    <span className="text-sm font-semibold">{type.label}</span>
                   </label>
                 ))}
               </div>
@@ -1092,21 +774,16 @@ function LearningStudio() {
             <p className="mt-6 text-sm leading-6 text-slate-400">
               {selectedOutput?.description}
             </p>
-
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="submit"
-                disabled={loading}
-                className={PRIMARY_BUTTON}
-              >
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button type="submit" disabled={busy} className={PRIMARY_BUTTON}>
                 {loading
                   ? "Generating..."
-                  : `Generate ${selectedOutputLabel}`}
+                  : `Generate ${getOutputLabel(outputType)}`}
               </button>
               <button
                 type="button"
                 onClick={handleReset}
-                disabled={loading}
+                disabled={busy}
                 className={SECONDARY_BUTTON}
               >
                 Clear Form
@@ -1116,58 +793,39 @@ function LearningStudio() {
 
           <section
             aria-labelledby="learning-output-title"
-            aria-busy={loading}
+            aria-busy={busy}
             className="min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2
-                id="learning-output-title"
-                className="text-xl font-bold text-white"
-              >
+              <h2 id="learning-output-title" className="text-xl font-bold">
                 Your {displayedOutputLabel}
               </h2>
               {generatedResult && (
                 <button
                   type="button"
                   onClick={handleRegenerate}
-                  disabled={loading}
+                  disabled={busy}
                   className={SECONDARY_BUTTON}
                 >
-                  {loading
-                    ? "Generating..."
-                    : `Regenerate ${displayedOutputLabel}`}
+                  Regenerate {displayedOutputLabel}
                 </button>
               )}
             </div>
 
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Regenerate uses the displayed material’s study
-              settings. To use different settings, update the
-              form and select Generate.
+              Regenerate uses the displayed material’s study settings.
+              For different settings, update the form and select Generate.
             </p>
 
-            <div
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
+            <div role="status" aria-live="polite" aria-atomic="true">
               {loading ? (
-                <div className="mt-5 flex items-center gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-cyan-200">
-                  <span
-                    className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-cyan-800 border-t-cyan-300"
-                    aria-hidden="true"
-                  />
-                  <p className="text-sm leading-6">
-                    Generating{" "}
-                    {getOutputLabel(
-                      lastRequest?.output_type || outputType
-                    ).toLowerCase()}
-                    .{" "}
-                    {generatedResult
-                      ? "Your current material stays visible until the new result is ready."
-                      : "This may take a moment."}
-                  </p>
-                </div>
+                <p className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-200">
+                  Generating{" "}
+                  {getOutputLabel(lastRequest?.output_type).toLowerCase()}.
+                  {generatedResult
+                    ? " Your current material stays visible until the new result is ready."
+                    : " This may take a moment."}
+                </p>
               ) : statusMessage ? (
                 <p className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm text-emerald-200">
                   {statusMessage}
@@ -1183,27 +841,18 @@ function LearningStudio() {
                 <p className="font-semibold text-red-200">
                   Study material could not be generated
                 </p>
-                <p className="mt-2 text-sm leading-6 text-red-300">
-                  {generationError}
-                </p>
+                <p className="mt-2 text-sm text-red-300">{generationError}</p>
                 {lastRequest && (
                   <>
-                    <p className="mt-2 text-xs text-slate-400">
-                      Retry uses your last submitted{" "}
-                      {getOutputLabel(
-                        lastRequest.output_type
-                      ).toLowerCase()}{" "}
-                      settings for{" "}
-                      <span className="break-words">
-                        {lastRequest.topic}
-                      </span>
-                      .
+                    <p className="mt-2 break-words text-xs text-slate-400">
+                      Retry uses your last submitted settings for{" "}
+                      {lastRequest.topic}.
                     </p>
                     <button
                       type="button"
-                      onClick={handleRetry}
-                      disabled={loading}
-                      className="mt-3 rounded-lg bg-red-800 px-4 py-2 font-semibold text-white transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => generateStudyMaterial(lastRequest)}
+                      disabled={busy}
+                      className={`${SECONDARY_BUTTON} mt-3`}
                     >
                       Retry Generation
                     </button>
@@ -1214,105 +863,199 @@ function LearningStudio() {
 
             {generatedResult ? (
               <>
-                <div className="mt-5 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-                  <dl className="space-y-3 text-sm">
+                <dl className="mt-5 space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-sm">
+                  <div>
+                    <dt className="text-slate-400">Topic</dt>
+                    <dd className="mt-1 break-words font-semibold">
+                      {generatedResult.topic}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Experience Level</dt>
+                    <dd className="mt-1 capitalize">
+                      {generatedResult.experience_level}
+                    </dd>
+                  </div>
+                  {generatedResult.learning_goal && (
                     <div>
-                      <dt className="text-slate-400">Topic</dt>
-                      <dd className="mt-1 break-words font-semibold text-white">
-                        {generatedResult.topic}
+                      <dt className="text-slate-400">Learning Goal</dt>
+                      <dd className="mt-1 whitespace-pre-wrap break-words">
+                        {generatedResult.learning_goal}
                       </dd>
                     </div>
+                  )}
+                </dl>
+
+                <section className="mt-5 rounded-xl border border-slate-700 p-4">
+                  <h3 className="font-bold text-cyan-200">Save and Export</h3>
+
+                  <form onSubmit={handleSave} className="mt-4 space-y-4">
                     <div>
-                      <dt className="text-slate-400">
-                        Experience Level
-                      </dt>
-                      <dd className="mt-1 text-slate-200">
-                        {
-                          EXPERIENCE_LEVELS.find(
-                            (level) =>
-                              level.value ===
-                              generatedResult.experience_level
-                          )?.label
-                        }
-                      </dd>
+                      <label
+                        htmlFor="learning-save-title"
+                        className="mb-2 block text-sm font-semibold"
+                      >
+                        Saved Title
+                      </label>
+                      <input
+                        id="learning-save-title"
+                        value={saveTitle}
+                        onChange={(event) => {
+                          setSaveTitle(event.target.value);
+                          setSaveError("");
+                          setSaveMessage("");
+                        }}
+                        disabled={busy}
+                        className={FIELD_CLASS}
+                      />
                     </div>
-                    {generatedResult.learning_goal && (
-                      <div>
-                        <dt className="text-slate-400">
-                          Learning Goal
-                        </dt>
-                        <dd className="mt-1 whitespace-pre-wrap break-words text-slate-200">
-                          {generatedResult.learning_goal}
-                        </dd>
-                      </div>
+
+                    <div>
+                      <label
+                        htmlFor="learning-save-project"
+                        className="mb-2 block text-sm font-semibold"
+                      >
+                        Project
+                      </label>
+                      <select
+                        id="learning-save-project"
+                        value={selectedProjectId}
+                        onChange={(event) => {
+                          setSelectedProjectId(event.target.value);
+                          setSaveError("");
+                          setSaveMessage("");
+                        }}
+                        disabled={busy || projectsLoading}
+                        className={FIELD_CLASS}
+                      >
+                        <option value="">
+                          {projectsLoading
+                            ? "Loading projects..."
+                            : "Choose a project"}
+                        </option>
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {!projectsLoading &&
+                      !projectsError &&
+                      projects.length === 0 && (
+                        <p className="text-sm text-slate-400">
+                          Create a project on the Projects page, then reload
+                          the project list here.
+                        </p>
+                      )}
+
+                    {projectsError && (
+                      <p role="alert" className="text-sm text-red-300">
+                        {projectsError}
+                      </p>
                     )}
-                  </dl>
-                </div>
 
-                {generatedResult.output_type === "lesson" && (
-                  <LessonView lesson={generatedResult.content} />
-                )}
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="submit"
+                        disabled={
+                          busy ||
+                          projectsLoading ||
+                          !selectedProjectId ||
+                          !saveTitle.trim()
+                        }
+                        className={PRIMARY_BUTTON}
+                      >
+                        {saving
+                          ? "Saving..."
+                          : savedContentId
+                            ? "Update Saved Material"
+                            : "Save to Project"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProjectsReload((value) => value + 1)}
+                        disabled={busy || projectsLoading}
+                        className={SECONDARY_BUTTON}
+                      >
+                        Reload Projects
+                      </button>
+                    </div>
 
-                {generatedResult.output_type === "flashcards" && (
-                  <FlashcardsView
-                    key={`flashcards-${resultVersion}`}
-                    deck={generatedResult.content}
-                    disabled={loading}
-                  />
-                )}
+                    {savedContentId && (
+                      <p className="text-xs leading-6 text-slate-400">
+                        Saving again updates this saved item and preserves its
+                        previous version. Generating new material starts a new item.
+                      </p>
+                    )}
 
-                {generatedResult.output_type === "quiz" && (
-                  <QuizView
-                    key={`quiz-${resultVersion}`}
-                    quiz={generatedResult.content}
-                    disabled={loading}
-                  />
-                )}
+                    {saveError && (
+                      <p role="alert" className="text-sm text-red-300">
+                        {saveError}
+                      </p>
+                    )}
+                    {saveMessage && (
+                      <p role="status" className="text-sm text-emerald-300">
+                        {saveMessage}
+                      </p>
+                    )}
+                  </form>
+
+                  <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-800 pt-5">
+                    {[
+                      ["pdf", "PDF"],
+                      ["md", "Markdown"],
+                      ["txt", "TXT"],
+                      ["docx", "DOCX"],
+                    ].map(([format, label]) => (
+                      <button
+                        key={format}
+                        type="button"
+                        onClick={() => handleExport(format)}
+                        disabled={busy}
+                        className={SECONDARY_BUTTON}
+                      >
+                        Export {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="mt-3 text-xs leading-6 text-slate-400">
+                    Exports include the complete material. Quiz exports include
+                    correct answers and explanations in an answer key.
+                  </p>
+                  {exporting && (
+                    <p role="status" className="mt-2 text-sm text-cyan-200">
+                      Preparing your export...
+                    </p>
+                  )}
+                  {exportError && (
+                    <p role="alert" className="mt-2 text-sm text-red-300">
+                      {exportError}
+                    </p>
+                  )}
+                </section>
+
+                <LearningMaterialView
+                  key={resultVersion}
+                  material={generatedResult}
+                  disabled={busy}
+                />
               </>
             ) : !loading && !generationError ? (
               <div className="mt-5 rounded-xl border border-dashed border-slate-700 p-6 text-center">
-                <span
-                  className="text-3xl text-cyan-300"
-                  aria-hidden="true"
-                >
+                <span className="text-3xl text-cyan-300" aria-hidden="true">
                   {selectedOutput?.icon}
                 </span>
-                <p className="mt-3 font-semibold text-slate-200">
-                  Your {selectedOutputLabel.toLowerCase()} will
-                  appear here
+                <p className="mt-3 font-semibold">
+                  Your {getOutputLabel(outputType).toLowerCase()} will appear here
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Enter a topic, choose your output type, and
-                  select Generate to get started.
+                <p className="mt-2 text-sm text-slate-400">
+                  Enter a topic, choose a format, and select Generate.
                 </p>
               </div>
             ) : null}
-
-            {!generatedResult && (
-              <div className="mt-6 space-y-3">
-                {OUTPUT_TYPES.map((type) => (
-                  <article
-                    key={type.value}
-                    className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4"
-                  >
-                    <span
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-400/10 text-xl text-cyan-300"
-                      aria-hidden="true"
-                    >
-                      {type.icon}
-                    </span>
-                    <div>
-                      <h3 className="font-semibold text-white">
-                        {type.label}
-                      </h3>
-                      <p className="mt-1 text-sm leading-6 text-slate-400">
-                        {type.description}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
           </section>
         </div>
       </section>

@@ -1,25 +1,33 @@
 from datetime import datetime, timezone
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+
 from app.api.auth import get_current_user
 from app.db.database import get_db
+from app.models.activity_log import ActivityLog
 from app.models.content import GeneratedContent
 from app.models.content_version import ContentVersion
 from app.models.project import Project
 from app.models.user import User
-from app.models.activity_log import ActivityLog
 from app.schemas.content import (
     ContentCreate,
     ContentResponse,
     ContentUpdate,
 )
+from app.services.learning_studio_content import (
+    validate_learning_studio_body,
+    validate_learning_studio_update,
+)
+
 
 router = APIRouter(
     prefix="/content",
     tags=["Content"],
 )
+
 
 def create_activity_log(
     db: Session,
@@ -53,6 +61,7 @@ def create_activity_log(
 
     db.add(activity)
 
+
 @router.post("/", response_model=ContentResponse)
 def create_content(
     content_data: ContentCreate,
@@ -77,33 +86,69 @@ def create_content(
             detail="Not authorized to add content to this project",
         )
 
+    cleaned_title = content_data.title.strip()
+    cleaned_content_type = content_data.content_type.strip()
+
+    if not cleaned_title:
+        raise HTTPException(
+            status_code=422,
+            detail="Content title is required.",
+        )
+
+    if not cleaned_content_type:
+        raise HTTPException(
+            status_code=422,
+            detail="Content type is required.",
+        )
+
+    if not content_data.body.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Content body is required.",
+        )
+
+    validated_body = validate_learning_studio_body(
+        cleaned_content_type,
+        content_data.body,
+    )
+
     content = GeneratedContent(
-        title=content_data.title,
-        content_type=content_data.content_type,
-        body=content_data.body,
-        project_id=content_data.project_id,
+        title=cleaned_title,
+        content_type=cleaned_content_type,
+        body=validated_body,
+        project_id=project.id,
         owner_id=current_user.id,
     )
 
-    db.add(content)
-    db.flush()
+    try:
+        db.add(content)
+        db.flush()
 
-    create_activity_log(
-        db=db,
-        current_user=current_user,
-        action_type="Content Created",
-        item_type="Content",
-        item_id=content.id,
-        title=f"{content.title} created",
-        description=f"{content.content_type} was saved to {project.title}.",
-        project_id=project.id,
-        project_name=project.title,
-        new_project_id=project.id,
-        new_project_name=project.title,
-    )
+        create_activity_log(
+            db=db,
+            current_user=current_user,
+            action_type="Content Created",
+            item_type="Content",
+            item_id=content.id,
+            title=f"{content.title} created",
+            description=(
+                f"{content.content_type} was saved to {project.title}."
+            ),
+            project_id=project.id,
+            project_name=project.title,
+            new_project_id=project.id,
+            new_project_name=project.title,
+        )
 
-    db.commit()
-    db.refresh(content)
+        db.commit()
+        db.refresh(content)
+    except Exception as error:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Content could not be saved. Please try again.",
+        ) from error
 
     return content
 
@@ -126,17 +171,9 @@ def get_all_content(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Return all generated content owned by the authenticated user.
-
-    Optional query parameters:
-
-    - search: searches the title, content type, and body
-    - content_type: filters by an exact content type
-    - project_id: filters content by project
-
-    Results are returned with the newest content first.
+    Return content owned by the authenticated user,
+    with the most recently updated material first.
     """
-
     query = db.query(GeneratedContent).filter(
         GeneratedContent.owner_id == current_user.id
     )
@@ -215,6 +252,55 @@ def update_content(
             detail="Content not found",
         )
 
+    if content.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to update this content",
+        )
+
+    # Validate proposed values before changing content or history.
+    next_title = (
+        content_data.title.strip()
+        if content_data.title is not None
+        else content.title
+    )
+
+    next_content_type = (
+        content_data.content_type.strip()
+        if content_data.content_type is not None
+        else content.content_type
+    )
+
+    next_body = (
+        content_data.body
+        if content_data.body is not None
+        else content.body
+    )
+
+    if not next_title:
+        raise HTTPException(
+            status_code=422,
+            detail="Content title is required.",
+        )
+
+    if not next_content_type:
+        raise HTTPException(
+            status_code=422,
+            detail="Content type is required.",
+        )
+
+    if not next_body.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Content body is required.",
+        )
+
+    validated_body = validate_learning_studio_update(
+        content.content_type,
+        next_content_type,
+        next_body,
+    )
+
     old_project_id = content.project_id
 
     old_project = (
@@ -223,11 +309,26 @@ def update_content(
         .first()
     )
 
-    if content.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to update this content",
+    next_project_id = content.project_id
+    new_project = old_project
+
+    if content_data.project_id is not None:
+        new_project = (
+            db.query(Project)
+            .filter(
+                Project.id == content_data.project_id,
+                Project.owner_id == current_user.id,
+            )
+            .first()
         )
+
+        if not new_project:
+            raise HTTPException(
+                status_code=404,
+                detail="Project not found",
+            )
+
+        next_project_id = new_project.id
 
     latest_version = (
         db.query(ContentVersion)
@@ -236,10 +337,11 @@ def update_content(
         .first()
     )
 
-    next_version_number = 1
-
-    if latest_version:
-        next_version_number = latest_version.version_number + 1
+    next_version_number = (
+        latest_version.version_number + 1
+        if latest_version
+        else 1
+    )
 
     old_version = ContentVersion(
         content_id=content.id,
@@ -250,80 +352,74 @@ def update_content(
         owner_id=current_user.id,
     )
 
-    db.add(old_version)
+    try:
+        db.add(old_version)
 
-    if content_data.title is not None:
-        content.title = content_data.title
+        content.title = next_title
+        content.content_type = next_content_type
+        content.body = validated_body
+        content.project_id = next_project_id
+        content.updated_at = datetime.now(timezone.utc)
 
-    if content_data.content_type is not None:
-        content.content_type = content_data.content_type
+        project_changed = old_project_id != next_project_id
 
-    if content_data.body is not None:
-        content.body = content_data.body
-
-    if content_data.project_id is not None:
-        project = (
-            db.query(Project)
-            .filter(
-                Project.id == content_data.project_id,
-                Project.owner_id == current_user.id
+        if project_changed:
+            old_project_name = (
+                old_project.title if old_project else "No Project"
             )
-            .first()
-        )
-
-        if not project:
-            raise HTTPException(
-                status_code=404,
-                detail="Project not found",
+            new_project_name = (
+                new_project.title if new_project else "No Project"
             )
 
-        content.project_id = content_data.project_id
+            create_activity_log(
+                db=db,
+                current_user=current_user,
+                action_type="Content Moved",
+                item_type="Content",
+                item_id=content.id,
+                title=f"{content.title} moved",
+                description=(
+                    f"Content moved from {old_project_name} "
+                    f"to {new_project_name}."
+                ),
+                project_id=content.project_id,
+                project_name=(
+                    new_project.title if new_project else None
+                ),
+                old_project_id=old_project_id,
+                old_project_name=(
+                    old_project.title if old_project else None
+                ),
+                new_project_id=content.project_id,
+                new_project_name=(
+                    new_project.title if new_project else None
+                ),
+            )
+        else:
+            create_activity_log(
+                db=db,
+                current_user=current_user,
+                action_type="Content Updated",
+                item_type="Content",
+                item_id=content.id,
+                title=f"{content.title} updated",
+                description=f"{content.content_type} was updated.",
+                project_id=content.project_id,
+                project_name=(
+                    new_project.title if new_project else None
+                ),
+            )
 
-    content.updated_at = datetime.now(timezone.utc)
+        # Save the previous version and edited content together.
+        db.commit()
+        db.refresh(content)
+    except Exception as error:
+        db.rollback()
 
-    new_project = (
-        db.query(Project)
-        .filter(Project.id == content.project_id)
-        .first()
-    )
-
-    project_changed = old_project_id != content.project_id
-
-    if project_changed:
-        create_activity_log(
-            db=db,
-            current_user=current_user,
-            action_type="Content Moved",
-            item_type="Content",
-            item_id=content.id,
-            title=f"{content.title} moved",
-            description=(
-                f"Content moved from "
-                f"{old_project.title if old_project else 'Unknown Project'} "
-                f"to {new_project.title if new_project else 'Unknown Project'}."
-            ),
-            project_id=content.project_id,
-            project_name=new_project.title if new_project else None,
-            old_project_id=old_project_id,
-            old_project_name=old_project.title if old_project else None,
-            new_project_id=content.project_id,
-            new_project_name=new_project.title if new_project else None,
-        )
-    else:
-        create_activity_log(
-            db=db,
-            current_user=current_user,
-            action_type="Content Updated",
-            item_type="Content",
-            item_id=content.id,
-            title=f"{content.title} updated",
-            description=f"{content.content_type} was updated.",
-            project_id=content.project_id,
-            project_name=new_project.title if new_project else None,
-        )
-
-    db.commit()
-    db.refresh(content)
+        raise HTTPException(
+            status_code=500,
+            detail="Content could not be updated. Please try again.",
+        ) from error
 
     return content
 
@@ -370,20 +466,21 @@ def delete_content(
             item_type="Content",
             item_id=content.id,
             title=f"{content.title} deleted",
-            description=f"{content.content_type} was permanently deleted.",
+            description=(
+                f"{content.content_type} was permanently deleted."
+            ),
             project_id=content.project_id,
             project_name=project.title if project else None,
         )
 
         db.delete(content)
         db.commit()
-
-    except Exception:
+    except Exception as error:
         db.rollback()
 
         raise HTTPException(
             status_code=500,
             detail="Content could not be deleted. Please try again.",
-        )
+        ) from error
 
     return {"message": "Content deleted permanently"}
