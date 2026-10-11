@@ -472,7 +472,6 @@ function LearningMaterialView({ material, disabled = false }) {
     );
   }
 
-  // Remount interactive views when the material changes.
   const materialKey = JSON.stringify(material);
 
   if (material.output_type === "lesson") {
