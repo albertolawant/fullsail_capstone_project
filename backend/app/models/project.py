@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from app.db.database import Base
 
@@ -38,4 +39,10 @@ class Project(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )    
+
+    members = relationship(
+        "ProjectMember",
+        back_populates="project",
+        cascade="all, delete-orphan",
     )    

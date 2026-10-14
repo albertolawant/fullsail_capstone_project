@@ -19,6 +19,7 @@ import {
   FaTimes,
   FaTrash,
   FaEye,
+  FaUsers,
 } from "react-icons/fa";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -64,6 +65,45 @@ function formatDisplayDate(dateValue) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatLastSeen(lastSeen) {
+  if (!lastSeen) {
+    return "Last seen unavailable";
+  }
+
+  const lastSeenDate = new Date(lastSeen);
+
+  if (Number.isNaN(lastSeenDate.getTime())) {
+    return "Last seen unavailable";
+  }
+
+  const differenceMs = Date.now() - lastSeenDate.getTime();
+  const differenceMinutes = Math.floor(differenceMs / 60000);
+
+  if (differenceMinutes < 1) {
+    return "Last seen just now";
+  }
+
+  if (differenceMinutes === 1) {
+    return "Last seen 1 minute ago";
+  }
+
+  if (differenceMinutes < 60) {
+    return `Last seen ${differenceMinutes} minutes ago`;
+  }
+
+  const differenceHours = Math.floor(differenceMinutes / 60);
+
+  if (differenceHours === 1) {
+    return "Last seen 1 hour ago";
+  }
+
+  if (differenceHours < 24) {
+    return `Last seen ${differenceHours} hours ago`;
+  }
+
+  return `Last seen ${lastSeenDate.toLocaleDateString()}`;
 }
 
 function shouldShowModifiedDate(createdAt, updatedAt) {
@@ -245,6 +285,21 @@ function ProjectDetail() {
   const [logos, setLogos] = useState([]);
   const [contentSortOption, setContentSortOption] = useState(SORT_NEWEST);
   const [imageSortOption, setImageSortOption] = useState(SORT_NEWEST);
+  const [sharePanelOpen, setSharePanelOpen] = useState(false);
+  const [projectMembers, setProjectMembers] = useState(null);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState("");
+
+  const [inviteIdentifier, setInviteIdentifier] = useState("");
+  const [inviteRole, setInviteRole] = useState("viewer");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState("");
+
+  const [roleUpdatingMemberId, setRoleUpdatingMemberId] = useState(null);
+  const [removingMemberId, setRemovingMemberId] = useState(null);
+  const [memberActionError, setMemberActionError] = useState("");
+  const [memberActionSuccess, setMemberActionSuccess] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -401,6 +456,50 @@ function ProjectDetail() {
     loadProjectDetail();
   }, [loadProjectDetail]);
 
+  useEffect(() => {
+    if (!sharePanelOpen) {
+      return;
+    }
+
+    const refreshMemberPresence = async () => {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/projects/${numericProjectId}/members`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        setProjectMembers(data);
+      } catch (error) {
+        console.error("Presence refresh failed:", error);
+      }
+    };
+
+    const presenceInterval = setInterval(
+      refreshMemberPresence,
+      30 * 1000
+    );
+
+    return () => {
+      clearInterval(presenceInterval);
+    };
+  }, [sharePanelOpen, numericProjectId]);  
+
   const totalSavedItems = useMemo(() => {
     return contentItems.length + logos.length;
   }, [contentItems.length, logos.length]);
@@ -428,6 +527,308 @@ function ProjectDetail() {
       },
     });
   };
+
+  const openSharePanel = async () => {
+    const token = localStorage.getItem("token");
+
+    setSharePanelOpen(true);
+    setMembersError("");
+
+    if (!token) {
+      setMembersError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setMembersLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/projects/${numericProjectId}/members`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Unable to load project members."
+        );
+      }
+
+      const data = await response.json();
+      setProjectMembers(data);
+    } catch (requestError) {
+      console.error("Project members request failed:", requestError);
+
+      setMembersError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load project members."
+      );
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const inviteProjectMember = async (event) => {
+    event.preventDefault();
+
+    const cleanedIdentifier = inviteIdentifier.trim();
+
+    if (!cleanedIdentifier) {
+      setInviteError("Enter a Tanio username or email address.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setInviteError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setInviteLoading(true);
+    setInviteError("");
+    setInviteSuccess("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/projects/${numericProjectId}/members`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            user_identifier: cleanedIdentifier,
+            role: inviteRole,
+          }),
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Unable to add this project member."
+        );
+      }
+
+      const newMember = await response.json();
+
+      setProjectMembers((currentMembers) => {
+        if (!currentMembers) {
+          return currentMembers;
+        }
+
+        return {
+          ...currentMembers,
+          members: [...currentMembers.members, newMember],
+        };
+      });
+
+      setInviteIdentifier("");
+      setInviteRole("viewer");
+      setInviteSuccess(
+        `${newMember.username} was added as ${newMember.role}.`
+      );
+    } catch (requestError) {
+      console.error("Invite project member failed:", requestError);
+
+      setInviteError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to add this project member."
+      );
+    } finally {
+      setInviteLoading(false);
+    }
+  }; 
+
+  const updateProjectMemberRole = async (member, newRole) => {
+    if (!member || member.role === newRole) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setMemberActionError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setRoleUpdatingMemberId(member.id);
+    setMemberActionError("");
+    setMemberActionSuccess("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/projects/${numericProjectId}/members/${member.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            role: newRole,
+          }),
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Unable to update this member's role."
+        );
+      }
+
+      const updatedMember = await response.json();
+
+      setProjectMembers((currentMembers) => {
+        if (!currentMembers) {
+          return currentMembers;
+        }
+
+        return {
+          ...currentMembers,
+          members: currentMembers.members.map((currentMember) =>
+            currentMember.id === updatedMember.id
+              ? updatedMember
+              : currentMember
+          ),
+        };
+      });
+
+      setMemberActionSuccess(
+        `${updatedMember.username} is now a ${updatedMember.role}.`
+      );
+    } catch (requestError) {
+      console.error("Project member role update failed:", requestError);
+
+      setMemberActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to update this member's role."
+      );
+    } finally {
+      setRoleUpdatingMemberId(null);
+    }
+  };  
+
+  const removeProjectMember = async (member) => {
+    if (!member) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove ${member.username} from this project?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setMemberActionError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    setRemovingMemberId(member.id);
+    setMemberActionError("");
+    setMemberActionSuccess("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/projects/${numericProjectId}/members/${member.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("tanioSession");
+        localStorage.removeItem("tanioUser");
+
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Unable to remove this project member."
+        );
+      }
+
+      setProjectMembers((currentMembers) => {
+        if (!currentMembers) {
+          return currentMembers;
+        }
+
+        return {
+          ...currentMembers,
+          members: currentMembers.members.filter(
+            (currentMember) => currentMember.id !== member.id
+          ),
+        };
+      });
+
+      setMemberActionSuccess(
+        `${member.username} was removed from this project.`
+      );
+    } catch (requestError) {
+      console.error("Project member removal failed:", requestError);
+
+      setMemberActionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to remove this project member."
+      );
+    } finally {
+      setRemovingMemberId(null);
+    }
+  };  
 
   const openEditContent = (item) => {
     setEditingContent(item);
@@ -1038,9 +1439,22 @@ function ProjectDetail() {
 
                     <button
                       type="button"
+                      onClick={openSharePanel}
+                      className="mt-3 flex w-full items-center justify-between gap-4 rounded-xl border border-cyan-800/60 bg-cyan-950/30 px-4 py-3 text-sm font-semibold text-cyan-200 transition hover:border-cyan-500 hover:bg-cyan-950/50 hover:text-white"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <FaUsers />
+                        Share Project
+                      </span>
+
+                      <FaArrowRight className="text-cyan-500" />
+                    </button>                    
+
+                    <button
+                      type="button"
                       onClick={() => loadProjectDetail(true)}
                       disabled={refreshing}
-                      className="mt-3 flex w-full items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950/55 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      className="mt-2 flex w-full items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950/55 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-slate-700 hover:bg-slate-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <span className="inline-flex items-center gap-2">
                         <FaSyncAlt className={refreshing ? "animate-spin" : ""} />
@@ -1372,6 +1786,305 @@ function ProjectDetail() {
         )}
 
       </div>
+
+      {sharePanelOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setSharePanelOpen(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-project-title"
+            className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+          >
+            <header className="flex items-start justify-between gap-4 border-b border-slate-800 p-6">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-400">
+                  Collaboration
+                </p>
+
+                <h2
+                  id="share-project-title"
+                  className="mt-1 text-2xl font-bold text-white"
+                >
+                  Share {project?.title}
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-400">
+                  Invite Tanio users and manage who can access this project.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSharePanelOpen(false)}
+                aria-label="Close Share Project panel"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300 transition hover:bg-slate-700 hover:text-white"
+              >
+                <FaTimes />
+              </button>
+            </header>
+
+            <div className="p-6">
+              {membersLoading ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-8 text-center">
+                  <FaSyncAlt className="mx-auto animate-spin text-3xl text-cyan-400" />
+
+                  <p className="mt-4 font-semibold text-white">
+                    Loading project members...
+                  </p>
+                </div>
+              ) : membersError ? (
+                <div className="rounded-xl border border-red-900 bg-red-950/30 p-4 text-red-300">
+                  {membersError}
+                </div>
+              ) : projectMembers ? (
+                <div className="space-y-4">
+                  {projectMembers.current_user_role === "owner" && (
+                    <form
+                      onSubmit={inviteProjectMember}
+                      className="rounded-xl border border-slate-700 bg-slate-950/50 p-5"
+                    >
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-400">
+                          Invite User
+                        </p>
+
+                        <h3 className="mt-1 text-lg font-bold text-white">
+                          Share this project
+                        </h3>
+
+                        <p className="mt-1 text-sm text-slate-400">
+                          Enter the username or email address of a registered Tanio user.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px]">
+                        <input
+                          type="text"
+                          value={inviteIdentifier}
+                          onChange={(event) => {
+                            setInviteIdentifier(event.target.value);
+                            setInviteError("");
+                            setInviteSuccess("");
+                          }}
+                          disabled={inviteLoading}
+                          placeholder="Username or email"
+                          className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 disabled:opacity-50"
+                        />
+
+                        <select
+                          value={inviteRole}
+                          onChange={(event) => {
+                            setInviteRole(event.target.value);
+                            setInviteError("");
+                            setInviteSuccess("");
+                          }}
+                          disabled={inviteLoading}
+                          className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                        >
+                          <option value="viewer">Viewer</option>
+                          <option value="editor">Editor</option>
+                        </select>
+                      </div>
+
+                      {inviteError && (
+                        <div className="mt-3 rounded-lg border border-red-900 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+                          {inviteError}
+                        </div>
+                      )}
+
+                      {inviteSuccess && (
+                        <div className="mt-3 rounded-lg border border-emerald-800 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-300">
+                          {inviteSuccess}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={inviteLoading || !inviteIdentifier.trim()}
+                        className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <FaUsers />
+                        {inviteLoading ? "Adding User..." : "Add User"}
+                      </button>
+                    </form>
+                  )}  
+
+                  <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-400">
+                      Owner
+                    </p>
+
+                    <div className="mt-3">
+                      <p className="font-bold text-white">
+                        {projectMembers.owner_username}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-400">
+                        {projectMembers.owner_email}
+                      </p>
+
+                      <div className="mt-2 flex items-center gap-2 text-xs">
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            projectMembers.owner_is_online
+                              ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                              : "bg-slate-600"
+                          }`}
+                        />
+
+                        <span
+                          className={
+                            projectMembers.owner_is_online
+                              ? "font-semibold text-emerald-300"
+                              : "text-slate-500"
+                          }
+                        >
+                          {projectMembers.owner_is_online
+                            ? "Online"
+                            : formatLastSeen(projectMembers.owner_last_seen)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    {memberActionError && (
+                      <div className="mb-3 rounded-lg border border-red-900 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+                        {memberActionError}
+                      </div>
+                    )}
+
+                    {memberActionSuccess && (
+                      <div className="mb-3 rounded-lg border border-emerald-800 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-300">
+                        {memberActionSuccess}
+                      </div>
+                    )}
+
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="font-bold text-white">
+                        Project Members
+                      </h3>
+
+                      <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs font-semibold text-slate-400">
+                        {projectMembers.members.length}
+                      </span>
+                    </div>
+
+                    {projectMembers.members.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-center">
+                        <p className="text-sm text-slate-400">
+                          This project has not been shared with anyone yet.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {projectMembers.members.map((member) => (
+                          <div
+                            key={member.id}
+                            className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950/50 p-4"
+                          >
+                            <div>
+                              <p className="font-semibold text-white">
+                                {member.username}
+                              </p>
+
+                              <p className="mt-1 text-sm text-slate-500">
+                                {member.email}
+                              </p>
+
+                              <div className="mt-2 flex items-center gap-2 text-xs">
+                                <span
+                                  className={`h-2.5 w-2.5 rounded-full ${
+                                    member.is_online
+                                      ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                                      : "bg-slate-600"
+                                  }`}
+                                />
+
+                                <span
+                                  className={
+                                    member.is_online
+                                      ? "font-semibold text-emerald-300"
+                                      : "text-slate-500"
+                                  }
+                                >
+                                  {member.is_online
+                                    ? "Online"
+                                    : formatLastSeen(member.last_seen)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {projectMembers.current_user_role === "owner" ? (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={member.role}
+                                  onChange={(event) => {
+                                    setMemberActionError("");
+                                    setMemberActionSuccess("");
+
+                                    updateProjectMemberRole(member, event.target.value);
+                                  }}
+                                  disabled={
+                                    roleUpdatingMemberId === member.id ||
+                                    removingMemberId === member.id
+                                  }
+                                  className={`rounded-lg border px-3 py-2 text-xs font-bold capitalize outline-none transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                    member.role === "editor"
+                                      ? "border-purple-700 bg-purple-950/40 text-purple-300"
+                                      : "border-slate-700 bg-slate-800 text-slate-300"
+                                  }`}
+                                >
+                                  <option value="viewer">Viewer</option>
+                                  <option value="editor">Editor</option>
+                                </select>
+
+                                <button
+                                  type="button"
+                                  onClick={() => removeProjectMember(member)}
+                                  disabled={
+                                    removingMemberId === member.id ||
+                                    roleUpdatingMemberId === member.id
+                                  }
+                                  className="inline-flex items-center gap-2 rounded-lg border border-red-900/70 bg-red-950/30 px-3 py-2 text-xs font-bold text-red-300 transition hover:border-red-700 hover:bg-red-950/60 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <FaTrash />
+
+                                  {removingMemberId === member.id
+                                    ? "Removing..."
+                                    : "Remove"}
+                                </button>
+                              </div>
+                            ) : (
+                              <span
+                                className={`rounded-full border px-3 py-1 text-xs font-bold capitalize ${
+                                  member.role === "editor"
+                                    ? "border-purple-700 bg-purple-950/40 text-purple-300"
+                                    : "border-slate-700 bg-slate-800 text-slate-300"
+                                }`}
+                              >
+                                {member.role}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      )}      
 
       {viewingItem && (
         <div

@@ -1,4 +1,5 @@
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy.orm import relationship
 
 from app.db.database import Base
 
@@ -12,3 +13,10 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
 
     is_active = Column(Boolean, default=True)
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+
+    project_memberships = relationship(
+        "ProjectMember",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )

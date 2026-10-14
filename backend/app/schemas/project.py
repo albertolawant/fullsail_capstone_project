@@ -61,6 +61,7 @@ class ProjectResponse(BaseModel):
     ai_summary: str | None = None
     workspace_id: int | None = None
     owner_id: int
+    current_user_role: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

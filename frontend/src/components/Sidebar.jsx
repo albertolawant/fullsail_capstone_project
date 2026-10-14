@@ -17,6 +17,7 @@ import {
   FaSignOutAlt,
   FaChevronRight,
   FaChevronLeft,
+  FaUsers,
 } from "react-icons/fa";
 
 const SIDEBAR_KEY = "tanioSidebarCollapsed";
@@ -60,6 +61,11 @@ function Sidebar({
       to: "/content",
       label: "Content",
       icon: FaRobot,
+    },
+    {
+      to: "/community",
+      label: "Community",
+      icon: FaUsers,
     },
   ];
 
@@ -109,10 +115,10 @@ function Sidebar({
 
   const visibleMainNavigation = isBasicMode
     ? mainNavigation.filter(({ to }) =>
-        ["/", "/projects"].includes(to)
+        ["/", "/projects", "/community"].includes(to)
       )
     : mainNavigation;
-
+    
   const visibleSupportNavigation = isBasicMode
     ? []
     : supportNavigation;

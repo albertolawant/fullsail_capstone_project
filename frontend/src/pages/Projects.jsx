@@ -106,6 +106,7 @@ function Projects() {
 
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaces, setWorkspaces] = useState([]);
+  const [projectViewTab, setProjectViewTab] = useState("owned");
 
   const [creatingProject, setCreatingProject] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState("");
@@ -389,6 +390,20 @@ function Projects() {
     getWorkspaceName,
   ]);
 
+  const ownedProjects = useMemo(() => {
+    return filteredProjects.filter(
+      (project) => project.current_user_role === "owner"
+    );
+  }, [filteredProjects]);
+
+  const sharedProjects = useMemo(() => {
+    return filteredProjects.filter(
+      (project) =>
+        project.current_user_role === "editor" ||
+        project.current_user_role === "viewer"
+    );
+  }, [filteredProjects]);  
+
   const displayWorkspaceName =
     workspaceName ||
     (selectedWorkspaceId
@@ -646,7 +661,11 @@ function Projects() {
 
       setProjects((currentProjects) =>
         sortProjectsNewestFirst([
-          createdProject,
+          {
+            ...createdProject,
+            current_user_role:
+              createdProject.current_user_role || "owner",
+          },
           ...currentProjects,
         ])
       );
@@ -815,7 +834,10 @@ function Projects() {
       return;
     }
 
-    if (!editWorkspaceId) {
+    if (
+      editingProject?.current_user_role === "owner" &&
+      !editWorkspaceId
+    ) {
       setEditError("Please choose a workspace.");
       return;
     }
@@ -848,7 +870,11 @@ function Projects() {
             body: JSON.stringify({
               title: cleanedTitle,
               description: cleanedDescription,
-              workspace_id: Number(editWorkspaceId),
+              ...(editingProject.current_user_role === "owner"
+                ? {
+                    workspace_id: Number(editWorkspaceId),
+                  }
+                : {}),
             }),
           }
         );
@@ -871,7 +897,12 @@ function Projects() {
         sortProjectsNewestFirst(
           currentProjects.map((project) =>
             project.id === updatedProject.id
-              ? updatedProject
+              ? {
+                  ...updatedProject,
+                  current_user_role:
+                    updatedProject.current_user_role ||
+                    project.current_user_role,
+                }
               : project
           )
         )
@@ -1249,6 +1280,282 @@ function Projects() {
         </div>
       )}
 
+      {/* Project Tabs */}
+      {!loading &&
+        !error &&
+        filteredProjects.length > 0 && (
+          <section>
+            <div className="mb-6 flex flex-wrap items-center gap-3 border-b border-slate-800 pb-4">
+              <button
+                type="button"
+                onClick={() => setProjectViewTab("owned")}
+                className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+                  projectViewTab === "owned"
+                    ? "bg-cyan-500 text-slate-950"
+                    : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                My Projects
+                <span className="ml-2 rounded-full bg-black/20 px-2 py-0.5 text-xs">
+                  {ownedProjects.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setProjectViewTab("shared")}
+                className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+                  projectViewTab === "shared"
+                    ? "bg-purple-500 text-white"
+                    : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                Shared With Me
+                <span className="ml-2 rounded-full bg-black/20 px-2 py-0.5 text-xs">
+                  {sharedProjects.length}
+                </span>
+              </button>
+            </div>
+
+            {projectViewTab === "owned" ? (
+              ownedProjects.length > 0 ? (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                  {ownedProjects.map((project) => (
+                    <article
+                      key={project.id}
+                      className="flex min-h-[28rem] flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
+                      data-testid={`project-${project.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+                              Project
+                            </p>
+
+                            <h3 className="mt-1 text-xl font-semibold text-white">
+                              {project.title}
+                            </h3>
+                          </div>
+
+                          {project.current_user_role && (
+                            <span
+                              className={`shrink-0 rounded-full border px-3 py-1 text-xs font-bold capitalize ${
+                                project.current_user_role === "owner"
+                                  ? "border-cyan-700 bg-cyan-950/40 text-cyan-300"
+                                  : project.current_user_role === "editor"
+                                    ? "border-purple-700 bg-purple-950/40 text-purple-300"
+                                    : "border-slate-700 bg-slate-800 text-slate-300"
+                              }`}
+                            >
+                              {project.current_user_role}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-5 space-y-4">
+                          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Description
+                            </p>
+
+                            <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
+                              {project.description ||
+                                "No project description provided."}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
+                              AI Summary
+                            </p>
+
+                            <p className="mt-2 line-clamp-3 text-sm leading-6 text-cyan-100">
+                              {createProjectSummaryFallback(
+                                project
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 border-t border-slate-800 pt-4">
+                        {/* Workspace label only shown when viewing ALL projects */}
+                        {!selectedWorkspaceId && (
+                          <div className="mb-4">
+                            <span className="text-sm text-slate-500">
+                              Workspace:{" "}
+                              <span className="font-medium text-slate-300">
+                                {getWorkspaceName(project.workspace_id)}
+                              </span>
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openProject(project)
+                            }
+                            className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                          >
+                            Open Project
+                            <FaArrowRight className="text-xs" />
+                          </button>
+
+                          <div className="flex items-center justify-center gap-4">
+                            <button
+                              type="button"
+                              onClick={() => startEditing(project)}
+                              className="text-sm font-medium text-slate-300 transition hover:text-white"
+                              data-testid={`edit-project-${project.id}`}
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => startDeleting(project)}
+                              className="text-sm font-medium text-red-400 transition hover:text-red-300"
+                              data-testid={`delete-project-${project.id}`}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
+                  <h3 className="text-xl font-semibold text-white">
+                    No owned projects
+                  </h3>
+
+                  <p className="mt-2 text-slate-400">
+                    Projects you create will appear here.
+                  </p>
+                </div>
+              )
+            ) : sharedProjects.length > 0 ? (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {sharedProjects.map((project) => (
+                  <article
+                    key={project.id}
+                    className="flex min-h-[28rem] flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
+                    data-testid={`project-${project.id}`}
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+                            Project
+                          </p>
+
+                          <h3 className="mt-1 text-xl font-semibold text-white">
+                            {project.title}
+                          </h3>
+                        </div>
+
+                        {project.current_user_role && (
+                          <span
+                            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-bold capitalize ${
+                              project.current_user_role === "owner"
+                                ? "border-cyan-700 bg-cyan-950/40 text-cyan-300"
+                                : project.current_user_role === "editor"
+                                  ? "border-purple-700 bg-purple-950/40 text-purple-300"
+                                  : "border-slate-700 bg-slate-800 text-slate-300"
+                            }`}
+                          >
+                            {project.current_user_role}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-5 space-y-4">
+                        <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Description
+                          </p>
+
+                          <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
+                            {project.description ||
+                              "No project description provided."}
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
+                            AI Summary
+                          </p>
+
+                          <p className="mt-2 line-clamp-3 text-sm leading-6 text-cyan-100">
+                            {createProjectSummaryFallback(
+                              project
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 border-t border-slate-800 pt-4">
+                      {/* Workspace label only shown when viewing ALL projects */}
+                      {!selectedWorkspaceId && (
+                        <div className="mb-4">
+                          <span className="text-sm text-slate-500">
+                            Workspace:{" "}
+                            <span className="font-medium text-slate-300">
+                              {getWorkspaceName(project.workspace_id)}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openProject(project)
+                          }
+                          className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                        >
+                          Open Project
+                          <FaArrowRight className="text-xs" />
+                        </button>
+
+                        {project.current_user_role === "editor" && (
+                          <div className="flex items-center justify-center gap-4">
+                            <button
+                              type="button"
+                              onClick={() => startEditing(project)}
+                              className="text-sm font-medium text-slate-300 transition hover:text-white"
+                              data-testid={`edit-project-${project.id}`}
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </article>                      
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
+                <h3 className="text-xl font-semibold text-white">
+                  Nothing shared with you yet
+                </h3>
+
+                <p className="mt-2 text-slate-400">
+                  Projects shared by other Tanio users will appear here.
+                </p>
+              </div>
+            )}
+          </section>
+        )}      
+
       {/* Empty State - All Projects */}
       {!loading &&
         !error &&
@@ -1314,114 +1621,6 @@ function Projects() {
             >
               Clear Search
             </button>
-          </div>
-        )}
-
-      {/* Project Cards */}
-      {!loading &&
-        !error &&
-        filteredProjects.length > 0 && (
-          <div
-            className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3"
-            data-testid="project-list"
-          >
-            {filteredProjects.map((project) => (
-              <article
-                key={project.id}
-                className="flex min-h-[28rem] flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
-                data-testid={`project-${project.id}`}
-              >
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
-                        Project
-                      </p>
-
-                      <h3 className="mt-1 text-xl font-semibold text-white">
-                        {project.title}
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 space-y-4">
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        Description
-                      </p>
-
-                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
-                        {project.description ||
-                          "No project description provided."}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
-                        AI Summary
-                      </p>
-
-                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-cyan-100">
-                        {createProjectSummaryFallback(
-                          project
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 border-t border-slate-800 pt-4">
-                  {/* Workspace label only shown when viewing ALL projects */}
-                  {!selectedWorkspaceId && (
-                    <div className="mb-4">
-                      <span className="text-sm text-slate-500">
-                        Workspace:{" "}
-                        <span className="font-medium text-slate-300">
-                          {getWorkspaceName(project.workspace_id)}
-                        </span>
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openProject(project)
-                      }
-                      className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-                    >
-                      Open Project
-                      <FaArrowRight className="text-xs" />
-                    </button>
-
-                    <div className="flex items-center justify-center gap-4">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          startEditing(project)
-                        }
-                        className="text-sm font-medium text-slate-300 transition hover:text-white"
-                        data-testid={`edit-project-${project.id}`}
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          startDeleting(project)
-                        }
-                        className="text-sm font-medium text-red-400 transition hover:text-red-300"
-                        data-testid={`delete-project-${project.id}`}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            ))}
           </div>
         )}
 
@@ -1823,119 +2022,123 @@ function Projects() {
                 data-testid="edit-project-description"
               />
             </div>
-
-            <div className="mt-5">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <label
-                  htmlFor="edit-project-workspace"
-                  className="block text-sm text-slate-300"
-                >
-                  Workspace
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateWorkspaceForEdit((currentValue) => !currentValue);
-                    setEditError("");
-                  }}
-                  disabled={saving || creatingEditWorkspace}
-                  className="text-sm font-semibold text-cyan-400 transition hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {showCreateWorkspaceForEdit
-                    ? "Choose existing workspace"
-                    : "Create new workspace"}
-                </button>
-              </div>
-
-              {!showCreateWorkspaceForEdit ? (
-                <select
-                  id="edit-project-workspace"
-                  value={editWorkspaceId}
-                  onChange={(event) => {
-                    setEditWorkspaceId(event.target.value);
-                    setEditError("");
-                  }}
-                  disabled={saving || creatingEditWorkspace}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none disabled:opacity-50"
-                >
-                  <option value="">
-                    Choose a workspace
-                  </option>
-
-                  {availableWorkspaces.map((workspace) => (
-                    <option key={workspace.id} value={workspace.id}>
-                      {workspace.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
-                  <div>
+            
+            {editingProject?.current_user_role === "owner" && (
+              <>    
+                <div className="mt-5">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <label
-                      htmlFor="edit-new-workspace-name"
-                      className="mb-2 block text-sm text-slate-300"
+                      htmlFor="edit-project-workspace"
+                      className="block text-sm text-slate-300"
                     >
-                      New Workspace Name
+                      Workspace
                     </label>
 
-                    <input
-                      id="edit-new-workspace-name"
-                      type="text"
-                      value={editNewWorkspaceName}
-                      onChange={(event) => {
-                        setEditNewWorkspaceName(event.target.value);
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreateWorkspaceForEdit((currentValue) => !currentValue);
                         setEditError("");
                       }}
-                      disabled={creatingEditWorkspace}
-                      placeholder="Example: Client Projects"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
-                    />
-                  </div>
-
-                  <div className="mt-4">
-                    <label
-                      htmlFor="edit-new-workspace-description"
-                      className="mb-2 block text-sm text-slate-300"
+                      disabled={saving || creatingEditWorkspace}
+                      className="text-sm font-semibold text-cyan-400 transition hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Workspace Description
-                    </label>
-
-                    <textarea
-                      id="edit-new-workspace-description"
-                      value={editNewWorkspaceDescription}
-                      onChange={(event) => {
-                        setEditNewWorkspaceDescription(event.target.value);
-                        setEditError("");
-                      }}
-                      disabled={creatingEditWorkspace}
-                      rows="3"
-                      placeholder="Describe what this workspace will be used for..."
-                      className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
-                    />
+                      {showCreateWorkspaceForEdit
+                        ? "Choose existing workspace"
+                        : "Create new workspace"}
+                    </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={createWorkspaceForEditProject}
-                    disabled={creatingEditWorkspace || !editNewWorkspaceName.trim()}
-                    className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {creatingEditWorkspace ? "Creating Workspace..." : "Create Workspace"}
-                  </button>
+                  {!showCreateWorkspaceForEdit ? (
+                    <select
+                      id="edit-project-workspace"
+                      value={editWorkspaceId}
+                      onChange={(event) => {
+                        setEditWorkspaceId(event.target.value);
+                        setEditError("");
+                      }}
+                      disabled={saving || creatingEditWorkspace}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">
+                        Choose a workspace
+                      </option>
+
+                      {availableWorkspaces.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+                      <div>
+                        <label
+                          htmlFor="edit-new-workspace-name"
+                          className="mb-2 block text-sm text-slate-300"
+                        >
+                          New Workspace Name
+                        </label>
+
+                        <input
+                          id="edit-new-workspace-name"
+                          type="text"
+                          value={editNewWorkspaceName}
+                          onChange={(event) => {
+                            setEditNewWorkspaceName(event.target.value);
+                            setEditError("");
+                          }}
+                          disabled={creatingEditWorkspace}
+                          placeholder="Example: Client Projects"
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label
+                          htmlFor="edit-new-workspace-description"
+                          className="mb-2 block text-sm text-slate-300"
+                        >
+                          Workspace Description
+                        </label>
+
+                        <textarea
+                          id="edit-new-workspace-description"
+                          value={editNewWorkspaceDescription}
+                          onChange={(event) => {
+                            setEditNewWorkspaceDescription(event.target.value);
+                            setEditError("");
+                          }}
+                          disabled={creatingEditWorkspace}
+                          rows="3"
+                          placeholder="Describe what this workspace will be used for..."
+                          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-600 focus:border-cyan-500 focus:outline-none disabled:opacity-50"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={createWorkspaceForEditProject}
+                        disabled={creatingEditWorkspace || !editNewWorkspaceName.trim()}
+                        className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {creatingEditWorkspace ? "Creating Workspace..." : "Create Workspace"}
+                      </button>
+                    </div>
+                  )}
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    Moving this project will place it under the selected workspace.
+                  </p>
+
+                  {showCreateWorkspaceForEdit && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Create the workspace first, then save the project move.
+                    </p>
+                  )}
                 </div>
-              )}
-
-              <p className="mt-2 text-xs text-slate-500">
-                Moving this project will place it under the selected workspace.
-              </p>
-
-              {showCreateWorkspaceForEdit && (
-                <p className="mt-2 text-xs text-slate-500">
-                  Create the workspace first, then save the project move.
-                </p>
-              )}
-            </div>
+              </>
+            )}  
 
             {editError && (
               <p

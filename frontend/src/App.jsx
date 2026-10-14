@@ -16,6 +16,7 @@ import Workspaces from "./pages/Workspaces";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Content from "./pages/Content";
+import Community from "./pages/Community";
 import Settings from "./pages/Settings";
 import ProductArchitect from "./pages/ProductArchitect";
 import TabletopCreator from "./pages/TabletopCreator";
@@ -263,6 +264,45 @@ function App() {
     };
   }, [isSignedIn, isSignInPage]);
 
+  useEffect(() => {
+    if (!isSignedIn || isSignInPage) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      return;
+    }
+
+    const sendHeartbeat = async () => {
+      try {
+        await fetch(
+          "http://127.0.0.1:8000/auth/presence/heartbeat",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      } catch (error) {
+        console.error("Presence heartbeat failed:", error);
+      }
+    };
+
+    sendHeartbeat();
+
+    const heartbeatInterval = setInterval(
+      sendHeartbeat,
+      2 * 60 * 1000
+    );
+
+    return () => {
+      clearInterval(heartbeatInterval);
+    };
+  }, [isSignedIn, isSignInPage]);
+
   const handleDashboardModeChange = (mode) => {
     setDashboardMode(mode);
 
@@ -363,6 +403,11 @@ function App() {
               path="/content"
               element={<Content />}
             />
+
+            <Route
+              path="/community"
+              element={<Community />}
+            />            
 
             <Route
               path="/product-architect"
