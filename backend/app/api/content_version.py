@@ -1,24 +1,47 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.db.database import get_db
 from app.models.content import GeneratedContent
 from app.models.content_version import ContentVersion
 from app.models.user import User
+from app.schemas.content import ContentResponse
 from app.schemas.content_version import (
     ContentVersionCreate,
     ContentVersionResponse,
 )
-from app.schemas.content import ContentResponse
-from app.api.auth import get_current_user
+from app.services.learning_studio_content import (
+    validate_learning_studio_body,
+    validate_learning_studio_update,
+)
 
 
 router = APIRouter(
     prefix="/content",
     tags=["Content Versions"],
 )
+
+
+def get_next_version_number(
+    db: Session,
+    content_id: int,
+) -> int:
+    latest_version = (
+        db.query(ContentVersion)
+        .filter(ContentVersion.content_id == content_id)
+        .order_by(ContentVersion.version_number.desc())
+        .first()
+    )
+
+    return (
+        latest_version.version_number + 1
+        if latest_version
+        else 1
+    )
 
 
 @router.post(
@@ -49,47 +72,50 @@ def create_content_version(
             detail="Not authorized to version this content",
         )
 
-    latest_version = (
-        db.query(ContentVersion)
-        .filter(
-            ContentVersion.content_id == content_id,
-            ContentVersion.owner_id == current_user.id,
-        )
-        .order_by(ContentVersion.version_number.desc())
-        .first()
-    )
-
-    next_version_number = 1
-
-    if latest_version:
-        next_version_number = latest_version.version_number + 1
-
     version_body = content.body
     regeneration_instructions = None
 
-    if version_data:
+    if version_data is not None:
         if version_data.body is not None:
             version_body = version_data.body
 
-        regeneration_instructions = (
-            version_data.regeneration_instructions.strip()
-            if version_data.regeneration_instructions
-            else None
+        if version_data.regeneration_instructions:
+            regeneration_instructions = (
+                version_data.regeneration_instructions.strip() or None
+            )
+
+    if not version_body.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Version body is required.",
         )
+
+    validated_body = validate_learning_studio_body(
+        content.content_type,
+        version_body,
+    )
 
     version = ContentVersion(
         content_id=content.id,
         title=content.title,
         content_type=content.content_type,
-        body=version_body,
-        version_number=next_version_number,
+        body=validated_body,
+        version_number=get_next_version_number(db, content.id),
         regeneration_instructions=regeneration_instructions,
         owner_id=current_user.id,
     )
 
-    db.add(version)
-    db.commit()
-    db.refresh(version)
+    try:
+        db.add(version)
+        db.commit()
+        db.refresh(version)
+    except Exception as error:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Content version could not be saved. Please try again.",
+        ) from error
 
     return version
 
@@ -121,7 +147,7 @@ def get_content_versions(
             detail="Not authorized to view versions for this content",
         )
 
-    versions = (
+    return (
         db.query(ContentVersion)
         .filter(
             ContentVersion.content_id == content_id,
@@ -130,8 +156,6 @@ def get_content_versions(
         .order_by(ContentVersion.version_number.asc())
         .all()
     )
-
-    return versions
 
 
 @router.post(
@@ -179,11 +203,60 @@ def restore_content_version(
             detail="Not authorized to restore this content",
         )
 
-    content.title = version.title
-    content.content_type = version.content_type
-    content.body = version.body
+    # Validate before changing the active content or its history.
+    if not version.title.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="The saved version has an empty title.",
+        )
 
-    db.commit()
-    db.refresh(content)
+    if not version.content_type.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="The saved version has an empty content type.",
+        )
+
+    if not version.body.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="The saved version has an empty body.",
+        )
+
+    validated_body = validate_learning_studio_update(
+        content.content_type,
+        version.content_type,
+        version.body,
+    )
+
+    # Keep a snapshot of the current content so it can be recovered.
+    current_snapshot = ContentVersion(
+        content_id=content.id,
+        title=content.title,
+        content_type=content.content_type,
+        body=content.body,
+        version_number=get_next_version_number(db, content.id),
+        regeneration_instructions=(
+            f"Snapshot before restoring version {version.version_number}."
+        ),
+        owner_id=current_user.id,
+    )
+
+    try:
+        db.add(current_snapshot)
+
+        content.title = version.title
+        content.content_type = version.content_type
+        content.body = validated_body
+        content.updated_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(content)
+    except Exception as error:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Content version could not be restored. Please try again.",
+        ) from error
 
     return content

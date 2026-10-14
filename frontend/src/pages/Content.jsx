@@ -1,12 +1,31 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import FormattingHelp from "../components/FormattingHelp";
+import LearningMaterialView from "../components/LearningMaterialView";
+import LearningMaterialEditor from "../components/LearningMaterialEditor";
+import {
+  getLearningMaterialFileName,
+  getLearningMaterialPreview,
+  isLearningStudioContent,
+  learningMaterialToMarkdown,
+  parseLearningMaterial,
+  serializeLearningMaterial,
+} from "../utils/learningStudioContent";
+import { exportContentAsPdf } from "../utils/exportPdf";
+import { exportContentAsMarkdown } from "../utils/exportMarkdown";
+import { exportContentAsTxt } from "../utils/exportTxt";
+import { exportContentAsDocx } from "../utils/exportDocx";
 import {
   FaBrain,
   FaDiceD20,
   FaDownload,
-  FaExclamationTriangle,
   FaEye,
   FaFileAlt,
   FaFolderOpen,
@@ -20,332 +39,422 @@ const API_BASE_URL = "http://127.0.0.1:8000";
 const CATEGORY_ALL = "All";
 const CATEGORY_PRODUCT = "Product Architect";
 const CATEGORY_TABLETOP = "Tabletop Creator";
-const CATEGORY_PROBLEM_SOLVER = "Problem Solver";
+const CATEGORY_PROBLEM = "Problem Solver";
+const CATEGORY_LEARNING = "Learning Studio";
 const CATEGORY_LOGOS = "Saved Logos";
 const CATEGORY_OTHER = "Other";
 
-const SORT_NEWEST = "newest";
-const SORT_OLDEST = "oldest";
-const SORT_TITLE_ASC = "title-asc";
-const SORT_TITLE_DESC = "title-desc";
-const SORT_TYPE_ASC = "type-asc";
+const FIELD_CLASS =
+  "w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 disabled:opacity-50";
+
+const BUTTON_CLASS =
+  "rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50";
+
+const PRIMARY_BUTTON =
+  "rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50";
+
+const MARKDOWN_CLASSES = `
+  break-words text-slate-200 leading-relaxed
+  [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mb-6
+  [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-8 [&_h2]:mb-4
+  [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-cyan-400 [&_h3]:mt-6 [&_h3]:mb-3
+  [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:mt-5 [&_h4]:mb-3
+  [&_p]:mb-4 [&_p]:leading-relaxed
+  [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-4 [&_ul]:space-y-2
+  [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-4 [&_ol]:space-y-2
+  [&_strong]:font-semibold [&_strong]:text-white
+  [&_hr]:border-slate-700 [&_hr]:my-8
+  [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-500
+  [&_blockquote]:pl-4 [&_blockquote]:my-4
+  [&_code]:rounded [&_code]:bg-slate-950 [&_code]:text-cyan-300
+  [&_pre]:my-6 [&_pre]:overflow-x-auto [&_pre]:rounded-xl
+  [&_pre]:border [&_pre]:border-slate-800 [&_pre]:bg-slate-950 [&_pre]:p-4
+  [&_table]:my-6 [&_table]:w-full [&_table]:border-collapse
+  [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800
+  [&_th]:px-4 [&_th]:py-3 [&_th]:text-left
+  [&_td]:border [&_td]:border-slate-700 [&_td]:px-4 [&_td]:py-3
+`;
 
 function determineCategory(contentType = "") {
-  const normalizedType = contentType.trim().toLowerCase();
+  if (isLearningStudioContent(contentType)) {
+    return CATEGORY_LEARNING;
+  }
 
-  const tabletopKeywords = [
-    "campaign",
-    "npc",
-    "quest",
-    "encounter",
-    "location",
-    "character",
-    "world",
-    "item",
-    "tabletop",
-  ];
+  const normalized = contentType
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
 
-  const productKeywords = [
-    "product",
-    "requirement",
-    "prd",
-    "persona",
-    "user stor",
-    "feature",
-    "architecture",
-    "roadmap",
-    "risk",
-    "swot",
-    "market",
-    "technical",
-  ];
+  if (normalized.includes("problem solver")) {
+    return CATEGORY_PROBLEM;
+  }
 
-  if (tabletopKeywords.some((keyword) => normalizedType.includes(keyword))) {
+  if (
+    [
+      "campaign", "npc", "quest", "encounter", "location",
+      "character", "world", "item", "tabletop",
+    ].some((keyword) => normalized.includes(keyword))
+  ) {
     return CATEGORY_TABLETOP;
   }
 
-  if (productKeywords.some((keyword) => normalizedType.includes(keyword))) {
+  if (
+    [
+      "product", "requirement", "prd", "persona", "user stor",
+      "feature", "architecture", "roadmap", "risk", "swot",
+      "market", "technical",
+    ].some((keyword) => normalized.includes(keyword))
+  ) {
     return CATEGORY_PRODUCT;
-  }
-
-  if (normalizedType.includes("problem solver")) {
-    return CATEGORY_PROBLEM_SOLVER;
   }
 
   return CATEGORY_OTHER;
 }
 
 function getCategoryIcon(category) {
-  if (category === CATEGORY_PRODUCT) {
-    return <FaBrain />;
-  }
-
   if (category === CATEGORY_TABLETOP) {
     return <FaDiceD20 />;
   }
 
-  if (category === CATEGORY_PROBLEM_SOLVER) {
+  if (
+    category === CATEGORY_PRODUCT ||
+    category === CATEGORY_PROBLEM ||
+    category === CATEGORY_LEARNING
+  ) {
     return <FaBrain />;
-  }
-
-  if (category === CATEGORY_LOGOS) {
-    return <FaFileAlt />;
   }
 
   return <FaFileAlt />;
 }
 
 function getCategoryBadgeClasses(category) {
-  if (category === CATEGORY_PRODUCT) {
-    return "border-cyan-800 bg-cyan-950/50 text-cyan-300";
-  }
+  const classes = {
+    [CATEGORY_PRODUCT]: "border-cyan-800 bg-cyan-950/50 text-cyan-300",
+    [CATEGORY_TABLETOP]: "border-purple-800 bg-purple-950/50 text-purple-300",
+    [CATEGORY_PROBLEM]: "border-amber-800 bg-amber-950/50 text-amber-300",
+    [CATEGORY_LEARNING]: "border-sky-800 bg-sky-950/50 text-sky-300",
+    [CATEGORY_LOGOS]: "border-emerald-800 bg-emerald-950/50 text-emerald-300",
+  };
 
-  if (category === CATEGORY_TABLETOP) {
-    return "border-purple-800 bg-purple-950/50 text-purple-300";
-  }
-
-  if (category === CATEGORY_PROBLEM_SOLVER) {
-    return "border-amber-800 bg-amber-950/50 text-amber-300";
-  }
-
-  if (category === CATEGORY_LOGOS) {
-    return "border-emerald-800 bg-emerald-950/50 text-emerald-300";
-  }
-
-  return "border-slate-700 bg-slate-800 text-slate-300";
+  return classes[category] || "border-slate-700 bg-slate-800 text-slate-300";
 }
 
-function createPreview(body = "", maximumLength = 220) {
-  const plainText = body
+function createPreview(item) {
+  if (isLearningStudioContent(item.content_type)) {
+    return getLearningMaterialPreview(item.body, item.content_type);
+  }
+
+  const text = String(item.body || "")
     .replace(/[#*_>`~-]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!plainText) {
+  if (!text) {
     return "No preview is available for this content.";
   }
 
-  if (plainText.length <= maximumLength) {
-    return plainText;
-  }
-
-  return `${plainText.slice(0, maximumLength).trim()}...`;
+  return text.length <= 220 ? text : `${text.slice(0, 220).trim()}…`;
 }
 
-function formatDisplayDate(dateValue) {
-  if (!dateValue) {
+function formatDate(value) {
+  if (!value) {
     return "";
   }
 
-  const date = new Date(dateValue);
+  const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
 }
 
-function shouldShowModifiedDate(createdAt, updatedAt) {
-  if (!createdAt || !updatedAt) {
-    return false;
-  }
+function getTimestamp(item) {
+  const value = new Date(
+    item.updated_at || item.created_at || 0
+  ).getTime();
 
-  const createdDate = new Date(createdAt);
-  const updatedDate = new Date(updatedAt);
-
-  if (
-    Number.isNaN(createdDate.getTime()) ||
-    Number.isNaN(updatedDate.getTime())
-  ) {
-    return false;
-  }
-
-  return updatedDate.getTime() > createdDate.getTime();
+  return Number.isNaN(value) ? 0 : value;
 }
 
-function renderSavedDateMetadata(item) {
-  const createdDate = formatDisplayDate(item?.created_at || item?.createdAt);
-  const updatedDate = formatDisplayDate(item?.updated_at || item?.updatedAt);
-
-  if (!createdDate && !updatedDate) {
-    return null;
-  }
+function SavedDates({ item }) {
+  const created = formatDate(item.created_at);
+  const updated = formatDate(item.updated_at);
+  const wasModified =
+    item.created_at &&
+    item.updated_at &&
+    new Date(item.updated_at).getTime() >
+      new Date(item.created_at).getTime();
 
   return (
     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-      {createdDate && (
-        <span className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-1.5">
-          Date Created: {createdDate}
-        </span>
-      )}
-
-      {shouldShowModifiedDate(
-        item?.created_at || item?.createdAt,
-        item?.updated_at || item?.updatedAt
-      ) && (
-        <span className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-violet-200">
-          Date Modified: {updatedDate}
-        </span>
+      {created && <span>Date Created: {created}</span>}
+      {updated && wasModified && (
+        <span className="text-violet-300">Date Modified: {updated}</span>
       )}
     </div>
   );
 }
 
-function sortNewestFirst(items = []) {
-  return [...items].sort((firstItem, secondItem) => {
-    const firstDate = new Date(
-      firstItem.updated_at ||
-        firstItem.updatedAt ||
-        firstItem.created_at ||
-        firstItem.createdAt ||
-        0
-    );
+async function apiRequest(path, options = {}) {
+  const token = localStorage.getItem("token");
 
-    const secondDate = new Date(
-      secondItem.updated_at ||
-        secondItem.updatedAt ||
-        secondItem.created_at ||
-        secondItem.createdAt ||
-        0
-    );
+  if (!token) {
+    throw new Error("Your session has expired. Please sign in again.");
+  }
 
-    return secondDate - firstDate;
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      Accept: "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...options.headers,
+      Authorization: `Bearer ${token}`,
+    },
   });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+
+    throw new Error(
+      typeof data?.detail === "string"
+        ? data.detail
+        : `The request could not be completed (${response.status}).`
+    );
+  }
+
+  return data;
 }
 
-function sortContentItems(items = [], sortOption = SORT_NEWEST) {
-  return [...items].sort((firstItem, secondItem) => {
-    const firstDate = new Date(
-      firstItem.updated_at ||
-        firstItem.updatedAt ||
-        firstItem.created_at ||
-        firstItem.createdAt ||
-        0
-    );
+function Modal({ title, onClose, busy, children, footer, wide = false }) {
+  const titleId = `modal-${title.toLowerCase().replace(/\W+/g, "-")}`;
 
-    const secondDate = new Date(
-      secondItem.updated_at ||
-        secondItem.updatedAt ||
-        secondItem.created_at ||
-        secondItem.createdAt ||
-        0
-    );
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
-    const firstTitle = (firstItem.title || "").toLowerCase();
-    const secondTitle = (secondItem.title || "").toLowerCase();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !busy) {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    };
 
-    const firstType = (firstItem.content_type || "").toLowerCase();
-    const secondType = (secondItem.content_type || "").toLowerCase();
+    document.addEventListener("keydown", handleKeyDown);
 
-    if (sortOption === SORT_OLDEST) {
-      return firstDate - secondDate;
-    }
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [busy, onClose]);
 
-    if (sortOption === SORT_TITLE_ASC) {
-      return firstTitle.localeCompare(secondTitle);
-    }
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !busy) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl ${
+          wide ? "max-w-5xl" : "max-w-xl"
+        }`}
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-slate-800 p-5">
+          <h2 id={titleId} className="text-2xl font-bold text-white">
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label={`Close ${title}`}
+            className={BUTTON_CLASS}
+            autoFocus
+          >
+            <FaTimes />
+          </button>
+        </header>
 
-    if (sortOption === SORT_TITLE_DESC) {
-      return secondTitle.localeCompare(firstTitle);
-    }
+        <div className="min-h-0 overflow-y-auto p-5">{children}</div>
 
-    if (sortOption === SORT_TYPE_ASC) {
-      return firstType.localeCompare(secondType);
-    }
-
-    return secondDate - firstDate;
-  });
+        {footer && (
+          <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
+            {footer}
+          </footer>
+        )}
+      </section>
+    </div>
+  );
 }
 
-const contentMarkdownClasses = `
-  text-slate-200 leading-relaxed
-  [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mb-6
-  [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-8 [&_h2]:mb-4
-  [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-cyan-400 [&_h3]:mt-6 [&_h3]:mb-3
-  [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-cyan-200 [&_h4]:mt-5 [&_h4]:mb-3
-  [&_p]:text-slate-200 [&_p]:leading-relaxed [&_p]:mb-4
-  [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:text-slate-200 [&_ul]:mb-4 [&_ul]:space-y-2
-  [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:text-slate-200 [&_ol]:mb-4 [&_ol]:space-y-2
-  [&_li]:leading-relaxed
-  [&_strong]:font-semibold [&_strong]:text-white
-  [&_em]:italic
-  [&_hr]:border-slate-700 [&_hr]:my-8
-  [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-500
-  [&_blockquote]:pl-4 [&_blockquote]:my-4
-  [&_blockquote]:text-slate-300 [&_blockquote]:italic
-  [&_code]:rounded [&_code]:bg-slate-950
-  [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-cyan-300
-  [&_pre]:my-6 [&_pre]:overflow-x-auto [&_pre]:rounded-xl
-  [&_pre]:border [&_pre]:border-slate-800 [&_pre]:bg-slate-950 [&_pre]:p-4
-  [&_table]:my-6 [&_table]:w-full [&_table]:border-collapse
-  [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800
-  [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:text-white
-  [&_td]:border [&_td]:border-slate-700
-  [&_td]:px-4 [&_td]:py-3 [&_td]:text-slate-200
-`;
+function ErrorMessage({ children }) {
+  if (!children) {
+    return null;
+  }
+
+  return (
+    <p
+      role="alert"
+      className="mt-4 rounded-lg border border-red-800 bg-red-950/40 p-4 text-sm text-red-300"
+    >
+      {children}
+    </p>
+  );
+}
+
+function SavedMaterial({ item, disabled }) {
+  if (item.isLogo) {
+    return (
+      <>
+        <img
+          src={`data:image/png;base64,${item.image_base64}`}
+          alt={`${item.title} saved logo`}
+          className="mx-auto max-h-[60vh] rounded-xl border border-slate-700 bg-white object-contain"
+        />
+        <dl className="mt-6 space-y-3 text-sm">
+          {[
+            ["Style", item.style || "default"],
+            ["Preferred Colors", item.preferred_colors || "Default"],
+            ["Logo Ideas / Symbols", item.logo_ideas || "None"],
+            ["Branding Direction", item.branding_direction || "Default"],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-slate-500">{label}</dt>
+              <dd className="mt-1 whitespace-pre-wrap text-slate-200">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </>
+    );
+  }
+
+  if (isLearningStudioContent(item.content_type)) {
+    let material;
+
+    try {
+      material = parseLearningMaterial(item.body, item.content_type);
+    } catch (error) {
+      return <ErrorMessage>{error.message}</ErrorMessage>;
+    }
+
+    return (
+      <>
+        <dl className="space-y-3 rounded-xl bg-slate-900/60 p-4 text-sm">
+          <div>
+            <dt className="text-slate-400">Topic</dt>
+            <dd className="mt-1 break-words text-white">{material.topic}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Experience Level</dt>
+            <dd className="mt-1 capitalize text-white">
+              {material.experience_level}
+            </dd>
+          </div>
+          {material.learning_goal && (
+            <div>
+              <dt className="text-slate-400">Learning Goal</dt>
+              <dd className="mt-1 whitespace-pre-wrap break-words text-white">
+                {material.learning_goal}
+              </dd>
+            </div>
+          )}
+        </dl>
+        <LearningMaterialView material={material} disabled={disabled} />
+      </>
+    );
+  }
+
+  return (
+    <div className={MARKDOWN_CLASSES}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {item.body || ""}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 function Content() {
   const [contentItems, setContentItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [workspaces, setWorkspaces] = useState([]);
-  const [selectedContent, setSelectedContent] = useState(null);
-  const [selectedContentVersions, setSelectedContentVersions] = useState([]);
-  const [selectedVersionIndex, setSelectedVersionIndex] = useState(-1);
-  const [versionHistoryLoading, setVersionHistoryLoading] = useState(false);
-  const [versionHistoryError, setVersionHistoryError] = useState("");
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ALL);
-  const [sortOption, setSortOption] = useState(SORT_NEWEST);
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  // Edit content state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ALL);
+  const [sortOption, setSortOption] = useState("newest");
+
+  const [selectedContent, setSelectedContent] = useState(null);
+  const [versions, setVersions] = useState([]);
+  const [selectedVersionId, setSelectedVersionId] = useState("");
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [versionsError, setVersionsError] = useState("");
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreMessage, setRestoreMessage] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+
   const [editingContent, setEditingContent] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [editBody, setEditBody] = useState("");
+  const [editMaterial, setEditMaterial] = useState(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
-  const [editSuccess, setEditSuccess] = useState("");
 
-  // Delete state
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
-  const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
-
-  // Move state
   const [moveTarget, setMoveTarget] = useState(null);
   const [moveProjectId, setMoveProjectId] = useState("");
   const [moveLoading, setMoveLoading] = useState(false);
   const [moveError, setMoveError] = useState("");
-  const [showMoveCreateProject, setShowMoveCreateProject] = useState(false);
-  const [moveNewProjectTitle, setMoveNewProjectTitle] = useState("");
-  const [moveNewProjectDescription, setMoveNewProjectDescription] = useState("");
-  const [moveNewProjectWorkspaceId, setMoveNewProjectWorkspaceId] = useState("");
-  const [showMoveCreateWorkspace, setShowMoveCreateWorkspace] = useState(false);
-  const [moveNewWorkspaceName, setMoveNewWorkspaceName] = useState("");
-  const [moveNewWorkspaceDescription, setMoveNewWorkspaceDescription] = useState("");
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [newProjectTitle, setNewProjectTitle] = useState("");
+  const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [newProjectWorkspaceId, setNewProjectWorkspaceId] = useState("");
+  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("");
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteText, setDeleteText] = useState("");
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const libraryControllerRef = useRef(null);
+  const versionsControllerRef = useRef(null);
+  const actionBusyRef = useRef(false);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      libraryControllerRef.current?.abort();
+      versionsControllerRef.current?.abort();
+    };
+  }, []);
 
   const loadLibrary = useCallback(async (isRefresh = false) => {
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setError("Your session has expired. Please sign in again.");
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
+    libraryControllerRef.current?.abort();
+    const controller = new AbortController();
+    libraryControllerRef.current = controller;
 
     if (isRefresh) {
       setRefreshing(true);
@@ -356,165 +465,91 @@ function Content() {
     setError("");
 
     try {
-      const requestOptions = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      };
-
-      const [
-        contentResponse,
-        projectsResponse,
-        workspacesResponse,
-        preservedLogosResponse,
-      ] = await Promise.all([
-        fetch(`${API_BASE_URL}/content/`, requestOptions),
-        fetch(`${API_BASE_URL}/projects/`, requestOptions),
-        fetch(`${API_BASE_URL}/workspaces/`, requestOptions),
-        fetch(`${API_BASE_URL}/projects/preserved-logos`, requestOptions),
-      ]);
-
-      if (
-        contentResponse.status === 401 ||
-        projectsResponse.status === 401 ||
-        workspacesResponse.status === 401 ||
-        preservedLogosResponse.status === 401
-      ) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("tanioSession");
-        localStorage.removeItem("tanioUser");
-
-        throw new Error("Your session has expired. Please sign in again.");
-      }
-
-      if (!contentResponse.ok) {
-        const errorData = await contentResponse.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail || "Unable to load your saved content."
-        );
-      }
-
-      if (!projectsResponse.ok) {
-        const errorData = await projectsResponse.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail || "Unable to load project information."
-        );
-      }
-
-      if (!workspacesResponse.ok) {
-        const errorData = await workspacesResponse.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail || "Unable to load workspace information."
-        );
-      }      
-
-      if (!preservedLogosResponse.ok) {
-        const errorData = await preservedLogosResponse.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail || "Unable to load preserved logos."
-        );
-      }
-
-      const [contentData, projectData, workspaceData, preservedLogosData] =
+      const options = { signal: controller.signal };
+      const [contents, loadedProjects, loadedWorkspaces, preserved] =
         await Promise.all([
-          contentResponse.json(),
-          projectsResponse.json(),
-          workspacesResponse.json(),
-          preservedLogosResponse.json(),
+          apiRequest("/content/", options),
+          apiRequest("/projects/", options),
+          apiRequest("/workspaces/", options),
+          apiRequest("/projects/preserved-logos", options),
         ]);
 
-      const safeProjects = Array.isArray(projectData) ? projectData : [];
-      const safeWorkspaces = Array.isArray(workspaceData) ? workspaceData : [];
+      if (
+        !Array.isArray(contents) ||
+        !Array.isArray(loadedProjects) ||
+        !Array.isArray(loadedWorkspaces)
+      ) {
+        throw new Error("The server returned invalid library information.");
+      }
 
-      const logoRequests = await Promise.all(
-        safeProjects.map(async (project) => {
+      const logoGroups = await Promise.all(
+        loadedProjects.map(async (project) => {
           try {
-            const logoResponse = await fetch(
-              `${API_BASE_URL}/product-architect/logos/${project.id}`,
-              requestOptions
+            const data = await apiRequest(
+              `/product-architect/logos/${project.id}`,
+              options
             );
 
-            if (!logoResponse.ok) {
-              return [];
-            }
-
-            const logoData = await logoResponse.json();
-
-            return Array.isArray(logoData?.logos)
-              ? logoData.logos.map((logo) => ({
+            return Array.isArray(data?.logos)
+              ? data.logos.map((logo) => ({
+                  ...logo,
                   id: `logo-${logo.id}`,
-                  project_id: logo.project_id,
                   title: `${project.title} Logo`,
                   content_type: "Saved Logo",
                   body: "",
-                  image_base64: logo.image_base64,
-                  style: logo.style,
-                  preferred_colors: logo.preferred_colors,
-                  logo_ideas: logo.logo_ideas,
-                  branding_direction: logo.branding_direction,
-                  created_at: logo.created_at,
+                  project_id: logo.project_id,
                   isLogo: true,
                 }))
               : [];
-          } catch {
+          } catch (requestError) {
+            if (controller.signal.aborted) {
+              throw requestError;
+            }
             return [];
           }
         })
       );
 
-      const logoItems = logoRequests.flat();
-
-      const preservedLogoItems = Array.isArray(preservedLogosData?.logos)
-        ? preservedLogosData.logos.map((logo) => ({
+      const preservedLogos = Array.isArray(preserved?.logos)
+        ? preserved.logos.map((logo) => ({
+            ...logo,
             id: `logo-${logo.id}`,
-            project_id: null,
             title: "Saved Logo",
             content_type: "Saved Logo",
             body: "",
-            image_base64: logo.image_base64,
-            style: logo.style,
-            preferred_colors: logo.preferred_colors,
-            logo_ideas: logo.logo_ideas,
-            branding_direction: logo.branding_direction,
-            created_at: logo.created_at,
+            project_id: null,
             isLogo: true,
           }))
         : [];
 
-      const savedContentItems = sortNewestFirst(
-        Array.isArray(contentData) ? contentData : []
-      );
+      if (!controller.signal.aborted && mountedRef.current) {
+        const uniqueItems = new Map(
+          [...contents, ...logoGroups.flat(), ...preservedLogos].map(
+            (item) => [String(item.id), item]
+          )
+        );
 
-      const sortedLogoItems = sortNewestFirst([
-        ...logoItems,
-        ...preservedLogoItems,
-      ]);
-
-      setContentItems(
-        sortNewestFirst([
-          ...savedContentItems,
-          ...sortedLogoItems,
-        ])
-      );
-
-      setProjects(safeProjects);
-      setWorkspaces(safeWorkspaces);
+        setContentItems([...uniqueItems.values()]);
+        setProjects(loadedProjects);
+        setWorkspaces(loadedWorkspaces);
+      }
     } catch (requestError) {
-      console.error("Content Library request failed:", requestError);
-
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load the Content Library."
-      );
+      if (!controller.signal.aborted && mountedRef.current) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Your Content Library could not be loaded."
+        );
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (libraryControllerRef.current === controller) {
+        libraryControllerRef.current = null;
+      }
+
+      if (!controller.signal.aborted && mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -522,32 +557,11 @@ function Content() {
     loadLibrary();
   }, [loadLibrary]);
 
-  useEffect(() => {
-    if (!selectedContent) {
-      return undefined;
-    }
-
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        closeSelectedContent();
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [selectedContent]);
-
-  const projectNames = useMemo(() => {
-    return projects.reduce((lookup, project) => {
-      lookup[project.id] = project.title;
-      return lookup;
-    }, {});
-  }, [projects]);
-
   const preparedContent = useMemo(() => {
+    const names = new Map(
+      projects.map((project) => [String(project.id), project.title])
+    );
+
     return contentItems.map((item) => ({
       ...item,
       category: item.isLogo
@@ -556,1812 +570,1236 @@ function Content() {
       projectName:
         item.project_id == null
           ? "No Project"
-          : projectNames[item.project_id] || `Project #${item.project_id}`,
+          : names.get(String(item.project_id)) || `Project #${item.project_id}`,
     }));
-  }, [contentItems, projectNames]);
+  }, [contentItems, projects]);
 
-  const availableCategories = useMemo(() => {
-    const categories = new Set(preparedContent.map((item) => item.category));
+  const categories = useMemo(() => {
+    const available = new Set(preparedContent.map((item) => item.category));
 
     return [
       CATEGORY_ALL,
       CATEGORY_PRODUCT,
       CATEGORY_TABLETOP,
-      ...(categories.has(CATEGORY_PROBLEM_SOLVER)
-        ? [CATEGORY_PROBLEM_SOLVER]
-        : []),
-      ...(categories.has(CATEGORY_LOGOS) ? [CATEGORY_LOGOS] : []),
-      ...(categories.has(CATEGORY_OTHER) ? [CATEGORY_OTHER] : []),
+      CATEGORY_LEARNING,
+      ...[CATEGORY_PROBLEM, CATEGORY_LOGOS, CATEGORY_OTHER].filter(
+        (category) => available.has(category)
+      ),
     ];
   }, [preparedContent]);
 
-  const filteredContent = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+  const visibleContent = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
 
-    return preparedContent.filter((item) => {
-      const categoryMatches =
-        selectedCategory === CATEGORY_ALL ||
-        item.category === selectedCategory;
-
-      if (!categoryMatches) {
+    const filtered = preparedContent.filter((item) => {
+      if (
+        selectedCategory !== CATEGORY_ALL &&
+        item.category !== selectedCategory
+      ) {
         return false;
       }
 
-      if (!normalizedSearch) {
-        return true;
-      }
-
       return (
-        item.title?.toLowerCase().includes(normalizedSearch) ||
-        item.content_type?.toLowerCase().includes(normalizedSearch) ||
-        item.body?.toLowerCase().includes(normalizedSearch) ||
-        item.projectName?.toLowerCase().includes(normalizedSearch) ||
-        item.style?.toLowerCase().includes(normalizedSearch) ||
-        item.preferred_colors?.toLowerCase().includes(normalizedSearch) ||
-        item.logo_ideas?.toLowerCase().includes(normalizedSearch) ||
-        item.branding_direction?.toLowerCase().includes(normalizedSearch)
+        !search ||
+        [
+          item.title, item.content_type, item.body, item.projectName,
+          item.category, item.style, item.preferred_colors,
+          item.logo_ideas, item.branding_direction,
+        ].some((value) => String(value || "").toLowerCase().includes(search))
       );
     });
-  }, [preparedContent, searchTerm, selectedCategory]);
 
-  const visibleContent = useMemo(() => {
-    return sortContentItems(filteredContent, sortOption);
-  }, [filteredContent, sortOption]);
+    return filtered.sort((first, second) => {
+      if (sortOption === "oldest") {
+        return getTimestamp(first) - getTimestamp(second);
+      }
+      if (sortOption === "title-asc") {
+        return first.title.localeCompare(second.title);
+      }
+      if (sortOption === "title-desc") {
+        return second.title.localeCompare(first.title);
+      }
+      if (sortOption === "type-asc") {
+        return first.content_type.localeCompare(second.content_type);
+      }
+      return getTimestamp(second) - getTimestamp(first);
+    });
+  }, [preparedContent, searchTerm, selectedCategory, sortOption]);
 
-  const clearFilters = () => {
-    setSearchTerm("");
-    setSelectedCategory(CATEGORY_ALL);
-  };
+  const closeView = useCallback(() => {
+    if (actionBusyRef.current) {
+      return;
+    }
 
-  // -------------------------------------------------------
-  // VIEW SAVED CONTENT + PROBLEM SOLVER VERSION HISTORY
-  // -------------------------------------------------------
-
-  const closeSelectedContent = () => {
+    versionsControllerRef.current?.abort();
     setSelectedContent(null);
-    setSelectedContentVersions([]);
-    setSelectedVersionIndex(-1);
-    setVersionHistoryLoading(false);
-    setVersionHistoryError("");
-  };
+    setVersions([]);
+    setSelectedVersionId("");
+    setVersionsLoading(false);
+    setVersionsError("");
+    setRestoreMessage("");
+    setExportError("");
+  }, []);
 
-  const openSelectedContent = async (item) => {
-    setSelectedContent(item);
-    setSelectedContentVersions([]);
-    setSelectedVersionIndex(-1);
-    setVersionHistoryError("");
-
-    if (item.isLogo || item.category !== CATEGORY_PROBLEM_SOLVER) {
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setVersionHistoryError("Your session has expired. Please sign in again.");
-      return;
-    }
-
-    setVersionHistoryLoading(true);
+  const loadVersions = async (item) => {
+    versionsControllerRef.current?.abort();
+    const controller = new AbortController();
+    versionsControllerRef.current = controller;
+    setVersionsLoading(true);
+    setVersionsError("");
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/content/${item.id}/versions`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
+      const data = await apiRequest(`/content/${item.id}/versions`, {
+        signal: controller.signal,
+      });
 
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("tanioSession");
-        localStorage.removeItem("tanioUser");
-
-        throw new Error("Your session has expired. Please sign in again.");
+      if (!Array.isArray(data)) {
+        throw new Error("The server returned invalid version information.");
       }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail || "Unable to load this solution's version history."
+      if (!controller.signal.aborted && mountedRef.current) {
+        setVersions(
+          [...data].sort((a, b) => a.version_number - b.version_number)
         );
+
+        // Problem Solver uses saved versions for its generated history.
+        // Learning Studio opens the active content by default.
+        if (item.category === CATEGORY_PROBLEM && data.length > 0) {
+          const latest = [...data].sort(
+            (a, b) => b.version_number - a.version_number
+          )[0];
+          setSelectedVersionId(String(latest.id));
+        }
       }
-
-      const data = await response.json();
-      const versions = Array.isArray(data)
-        ? [...data].sort(
-            (firstVersion, secondVersion) =>
-              firstVersion.version_number - secondVersion.version_number
-          )
-        : [];
-
-      setSelectedContentVersions(versions);
-      setSelectedVersionIndex(versions.length > 0 ? versions.length - 1 : -1);
     } catch (requestError) {
-      console.error("Problem Solver version history request failed:", requestError);
-
-      setVersionHistoryError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load this solution's version history."
-      );
+      if (!controller.signal.aborted && mountedRef.current) {
+        setVersionsError(requestError.message);
+      }
     } finally {
-      setVersionHistoryLoading(false);
+      if (!controller.signal.aborted && mountedRef.current) {
+        setVersionsLoading(false);
+      }
     }
   };
 
-  const selectedVersion =
-    selectedVersionIndex >= 0
-      ? selectedContentVersions[selectedVersionIndex]
-      : null;
+  const openView = (item) => {
+    setSelectedContent(item);
+    setVersions([]);
+    setSelectedVersionId("");
+    setVersionsError("");
+    setRestoreMessage("");
+    setExportError("");
 
-  // -------------------------------------------------------
-  // EDIT SAVED CONTENT
-  // -------------------------------------------------------
+    if (!item.isLogo) {
+      loadVersions(item);
+    }
+  };
 
-  const openEditContent = (item) => {
-    if (item.isLogo) {
+  const selectedVersion = versions.find(
+    (version) => String(version.id) === selectedVersionId
+  );
+
+  const displayedContent = selectedContent
+    ? selectedVersion
+      ? {
+          ...selectedContent,
+          title: selectedVersion.title,
+          content_type: selectedVersion.content_type,
+          body: selectedVersion.body,
+        }
+      : selectedContent
+    : null;
+
+  const replaceContent = (updated) => {
+    setContentItems((items) =>
+      items.map((item) =>
+        String(item.id) === String(updated.id) ? updated : item
+      )
+    );
+  };
+
+  const restoreVersion = async () => {
+    if (!selectedVersion || actionBusyRef.current) {
       return;
+    }
+
+    actionBusyRef.current = true;
+    setRestoreLoading(true);
+    setVersionsError("");
+    setRestoreMessage("");
+
+    try {
+      const updated = await apiRequest(
+        `/content/versions/${selectedVersion.id}/restore`,
+        { method: "POST" }
+      );
+
+      if (!updated?.id) {
+        throw new Error("The server did not confirm the restored content.");
+      }
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      const prepared = {
+        ...selectedContent,
+        ...updated,
+        category: determineCategory(updated.content_type),
+      };
+
+      replaceContent(updated);
+      setSelectedContent(prepared);
+      await loadVersions(prepared);
+
+      if (mountedRef.current) {
+        setSelectedVersionId("");
+        setRestoreMessage(
+          "Version restored. The previous active content was preserved in history."
+        );
+      }
+    } catch (requestError) {
+      if (mountedRef.current) {
+        setVersionsError(requestError.message);
+      }
+    } finally {
+      actionBusyRef.current = false;
+      if (mountedRef.current) {
+        setRestoreLoading(false);
+      }
+    }
+  };
+
+  const downloadLogo = (item) => {
+    const link = document.createElement("a");
+    link.href = `data:image/png;base64,${item.image_base64}`;
+    link.download = getLearningMaterialFileName(item.title, "png");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const exportContent = async (format) => {
+    if (!displayedContent || actionBusyRef.current) {
+      return;
+    }
+
+    actionBusyRef.current = true;
+    setExporting(true);
+    setExportError("");
+
+    try {
+      const item = displayedContent;
+      const body = isLearningStudioContent(item.content_type)
+        ? learningMaterialToMarkdown(
+            parseLearningMaterial(item.body, item.content_type)
+          )
+        : item.body;
+
+      const fileName = getLearningMaterialFileName(item.title, format);
+
+      if (format === "pdf") {
+        exportContentAsPdf(item.title, body, fileName);
+      } else if (format === "md") {
+        exportContentAsMarkdown(item.title, body, fileName);
+      } else if (format === "txt") {
+        exportContentAsTxt(item.title, body, fileName);
+      } else if (format === "docx") {
+        await exportContentAsDocx(item.title, body, fileName);
+      }
+    } catch (requestError) {
+      if (mountedRef.current) {
+        setExportError(requestError.message);
+      }
+    } finally {
+      actionBusyRef.current = false;
+      if (mountedRef.current) {
+        setExporting(false);
+      }
+    }
+  };
+
+  const openEdit = (item) => {
+    let material = null;
+    let parsingError = "";
+
+    if (isLearningStudioContent(item.content_type)) {
+      try {
+        material = parseLearningMaterial(item.body, item.content_type);
+      } catch (requestError) {
+        parsingError = requestError.message;
+      }
     }
 
     setEditingContent(item);
     setEditTitle(item.title || "");
     setEditBody(item.body || "");
-    setEditError("");
-    setEditSuccess("");
+    setEditMaterial(material);
+    setEditError(parsingError);
   };
 
-  const closeEditContent = () => {
-    if (editLoading) {
-      return;
+  const closeEdit = () => {
+    if (!actionBusyRef.current) {
+      setEditingContent(null);
+      setEditMaterial(null);
+      setEditError("");
     }
-
-    setEditingContent(null);
-    setEditTitle("");
-    setEditBody("");
-    setEditError("");
-    setEditSuccess("");
   };
 
-  const saveContentEdits = async (event) => {
+  const saveEdits = async (event) => {
     event.preventDefault();
 
-    if (!editingContent) {
+    if (!editingContent || actionBusyRef.current) {
       return;
     }
 
-    const cleanedTitle = editTitle.trim();
-    const cleanedBody = editBody.trim();
-
-    if (!cleanedTitle) {
-      setEditError("Content title is required.");
-      return;
-    }
-
-    if (!cleanedBody) {
-      setEditError("Content body is required.");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setEditError("Your session has expired. Please sign in again.");
-      return;
-    }
-
-    setEditLoading(true);
     setEditError("");
-    setEditSuccess("");
+    const title = editTitle.trim();
+    let body;
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/content/${editingContent.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            title: cleanedTitle,
-            body: cleanedBody,
-            project_id: editingContent.project_id,
-          }),
-        }
-      );
-
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("tanioSession");
-        localStorage.removeItem("tanioUser");
-
-        throw new Error("Your session has expired. Please sign in again.");
+      if (!title) {
+        throw new Error("Content title is required.");
       }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
+      body = isLearningStudioContent(editingContent.content_type)
+        ? serializeLearningMaterial(editMaterial)
+        : editBody.trim();
 
-        throw new Error(
-          errorData?.detail ||
-            "This content could not be updated. Please try again."
-        );
+      if (!body) {
+        throw new Error("Content body is required.");
       }
+    } catch (requestError) {
+      setEditError(requestError.message);
+      return;
+    }
 
-      const updatedContent = await response.json();
+    actionBusyRef.current = true;
+    setEditLoading(true);
 
-      setContentItems((currentItems) =>
-        currentItems.map((item) =>
-          String(item.id) === String(updatedContent.id)
-            ? updatedContent
-            : item
-        )
-      );
-
-      setSelectedContent((currentSelected) => {
-        if (
-          !currentSelected ||
-          String(currentSelected.id) !== String(updatedContent.id)
-        ) {
-          return currentSelected;
-        }
-
-        return {
-          ...currentSelected,
-          ...updatedContent,
-        };
+    try {
+      const updated = await apiRequest(`/content/${editingContent.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ title, body }),
       });
 
-      setEditingContent((currentEditing) => ({
-        ...currentEditing,
-        ...updatedContent,
-      }));
+      if (!updated?.id) {
+        throw new Error("The server did not confirm the saved changes.");
+      }
 
-      setEditTitle(updatedContent.title || cleanedTitle);
-      setEditBody(updatedContent.body || cleanedBody);
-      setEditSuccess("Content updated successfully.");
-
-      setTimeout(() => {
+      if (mountedRef.current) {
+        replaceContent(updated);
         setEditingContent(null);
-        setEditTitle("");
-        setEditBody("");
-        setEditError("");
-        setEditSuccess("");
-      }, 600);
+        setEditMaterial(null);
+      }
     } catch (requestError) {
-      console.error("Content edit failed:", requestError);
-
-      setEditError(
-        requestError instanceof Error
-          ? requestError.message
-          : "This content could not be updated. Please try again."
-      );
+      if (mountedRef.current) {
+        setEditError(requestError.message);
+      }
     } finally {
-      setEditLoading(false);
+      actionBusyRef.current = false;
+      if (mountedRef.current) {
+        setEditLoading(false);
+      }
     }
   };
 
-  // -------------------------------------------------------
-  // MOVE CONTENT
-  // -------------------------------------------------------
-
-  const openMoveContent = (item) => {
+  const openMove = (item) => {
     setMoveTarget(item);
     setMoveProjectId(String(item.project_id || ""));
-    setShowMoveCreateProject(false);
-    setMoveNewProjectTitle("");
-    setMoveNewProjectDescription("");
-    setMoveNewProjectWorkspaceId("");
-    setShowMoveCreateWorkspace(false);
-    setMoveNewWorkspaceName("");
-    setMoveNewWorkspaceDescription("");
     setMoveError("");
+    setShowCreateProject(false);
+    setShowCreateWorkspace(false);
+    setNewProjectTitle("");
+    setNewProjectDescription("");
+    setNewProjectWorkspaceId("");
+    setNewWorkspaceName("");
+    setNewWorkspaceDescription("");
   };
 
-  const closeMoveContent = () => {
-    if (moveLoading) {
-      return;
+  const closeMove = () => {
+    if (!actionBusyRef.current) {
+      setMoveTarget(null);
+      setMoveError("");
     }
-
-    setMoveTarget(null);
-    setMoveProjectId("");
-    setShowMoveCreateProject(false);
-    setMoveNewProjectTitle("");
-    setMoveNewProjectDescription("");
-    setMoveNewProjectWorkspaceId("");
-    setShowMoveCreateWorkspace(false);
-    setMoveNewWorkspaceName("");
-    setMoveNewWorkspaceDescription("");
-    setMoveError("");
   };
 
-  const handleCreateMoveWorkspace = async () => {
-    const cleanedName = moveNewWorkspaceName.trim();
-    const cleanedDescription = moveNewWorkspaceDescription.trim();
-
-    if (!cleanedName) {
-      setMoveError("Workspace name is required.");
+  const createWorkspace = async () => {
+    if (actionBusyRef.current || !newWorkspaceName.trim()) {
       return;
     }
 
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setMoveError("Your session has expired. Please sign in again.");
-      return;
-    }
-
+    actionBusyRef.current = true;
     setMoveLoading(true);
     setMoveError("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/workspaces/`, {
+      const workspace = await apiRequest("/workspaces/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
         body: JSON.stringify({
-          name: cleanedName,
-          description: cleanedDescription || null,
+          name: newWorkspaceName.trim(),
+          description: newWorkspaceDescription.trim() || null,
         }),
       });
 
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("tanioSession");
-        localStorage.removeItem("tanioUser");
-
-        throw new Error("Your session has expired. Please sign in again.");
+      if (!workspace?.id) {
+        throw new Error("The workspace could not be confirmed.");
       }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail || "This workspace could not be created. Please try again."
-        );
+      if (mountedRef.current) {
+        setWorkspaces((items) => [workspace, ...items]);
+        setNewProjectWorkspaceId(String(workspace.id));
+        setShowCreateWorkspace(false);
+        setNewWorkspaceName("");
+        setNewWorkspaceDescription("");
       }
-
-      const newWorkspace = await response.json();
-
-      setWorkspaces((currentWorkspaces) =>
-        sortNewestFirst([newWorkspace, ...currentWorkspaces])
-      );
-
-      setMoveNewProjectWorkspaceId(String(newWorkspace.id));
-      setShowMoveCreateWorkspace(false);
-      setMoveNewWorkspaceName("");
-      setMoveNewWorkspaceDescription("");
     } catch (requestError) {
-      console.error("Create move workspace failed:", requestError);
-
-      setMoveError(
-        requestError instanceof Error
-          ? requestError.message
-          : "This workspace could not be created. Please try again."
-      );
+      if (mountedRef.current) {
+        setMoveError(requestError.message);
+      }
     } finally {
-      setMoveLoading(false);
+      actionBusyRef.current = false;
+      if (mountedRef.current) {
+        setMoveLoading(false);
+      }
     }
-  };  
+  };
 
-  const handleCreateMoveProject = async () => {
-    const cleanedTitle = moveNewProjectTitle.trim();
-    const cleanedDescription = moveNewProjectDescription.trim();
-
-    if (cleanedTitle.length < 2) {
-      setMoveError("Project name must be at least 2 characters.");
+  const createProject = async () => {
+    if (actionBusyRef.current) {
       return;
     }
 
-    if (cleanedTitle.length > 100) {
-      setMoveError("Project name must be 100 characters or fewer.");
+    const title = newProjectTitle.trim();
+    const description = newProjectDescription.trim();
+
+    if (
+      title.length < 2 ||
+      title.length > 100 ||
+      description.length > 5000 ||
+      !newProjectWorkspaceId
+    ) {
+      setMoveError(
+        "Enter a project name with 2–100 characters, a description of at most 5,000 characters, and choose a workspace."
+      );
       return;
     }
 
-    if (cleanedDescription.length > 5000) {
-      setMoveError("Project description must be 5000 characters or fewer.");
-      return;
-    }
-
-    if (!moveNewProjectWorkspaceId) {
-      setMoveError("Please choose a workspace for the new project.");
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setMoveError("Your session has expired. Please sign in again.");
-      return;
-    }
-
+    actionBusyRef.current = true;
     setMoveLoading(true);
     setMoveError("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/`, {
+      const project = await apiRequest("/projects/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
         body: JSON.stringify({
-          title: cleanedTitle,
-          description: cleanedDescription,
-          workspace_id: Number(moveNewProjectWorkspaceId),
+          title,
+          description,
+          workspace_id: Number(newProjectWorkspaceId),
         }),
       });
 
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("tanioSession");
-        localStorage.removeItem("tanioUser");
-
-        throw new Error("Your session has expired. Please sign in again.");
+      if (!project?.id) {
+        throw new Error("The project could not be confirmed.");
       }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail || "This project could not be created. Please try again."
-        );
+      if (mountedRef.current) {
+        setProjects((items) => [project, ...items]);
+        setMoveProjectId(String(project.id));
+        setShowCreateProject(false);
       }
-
-      const newProject = await response.json();
-
-      setProjects((currentProjects) =>
-        sortNewestFirst([newProject, ...currentProjects])
-      );
-
-      setMoveProjectId(String(newProject.id));
-      setShowMoveCreateProject(false);
-      setMoveNewProjectTitle("");
-      setMoveNewProjectDescription("");
-      setMoveNewProjectWorkspaceId("");
     } catch (requestError) {
-      console.error("Create move project failed:", requestError);
-
-      setMoveError(
-        requestError instanceof Error
-          ? requestError.message
-          : "This project could not be created. Please try again."
-      );
+      if (mountedRef.current) {
+        setMoveError(requestError.message);
+      }
     } finally {
-      setMoveLoading(false);
+      actionBusyRef.current = false;
+      if (mountedRef.current) {
+        setMoveLoading(false);
+      }
     }
-  };  
+  };
 
-  const handleMoveContent = async () => {
-    if (!moveTarget || !moveProjectId) {
-      setMoveError("Please choose a project.");
+  const moveContent = async () => {
+    if (!moveTarget || !moveProjectId || actionBusyRef.current) {
       return;
     }
 
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setMoveError("Your session has expired. Please sign in again.");
+    if (!projects.some((project) => String(project.id) === moveProjectId)) {
+      setMoveError("Choose one of your projects.");
       return;
     }
 
+    actionBusyRef.current = true;
     setMoveLoading(true);
     setMoveError("");
 
     try {
-      const endpoint = moveTarget.isLogo
-        ? `${API_BASE_URL}/product-architect/logos/${String(
-            moveTarget.id
-          ).replace("logo-", "")}`
-        : `${API_BASE_URL}/content/${moveTarget.id}`;
+      const path = moveTarget.isLogo
+        ? `/product-architect/logos/${String(moveTarget.id).replace("logo-", "")}`
+        : `/content/${moveTarget.id}`;
 
-      const response = await fetch(endpoint, {
+      await apiRequest(path, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          project_id: Number(moveProjectId),
-        }),
+        body: JSON.stringify({ project_id: Number(moveProjectId) }),
       });
 
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("tanioSession");
-        localStorage.removeItem("tanioUser");
-
-        throw new Error("Your session has expired. Please sign in again.");
+      if (mountedRef.current) {
+        setMoveTarget(null);
+        await loadLibrary(true);
       }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail ||
-            "This item could not be moved. Please try again."
-        );
-      }
-
-      const updatedItem = await response.json();
-
-      setContentItems((previousItems) =>
-        previousItems.map((item) => {
-          if (String(item.id) !== String(moveTarget.id)) {
-            return item;
-          }
-
-          if (moveTarget.isLogo) {
-            const newProject = projects.find(
-              (project) =>
-                Number(project.id) === Number(updatedItem.project_id)
-            );
-
-            return {
-              ...item,
-              project_id: updatedItem.project_id,
-              title: `${newProject?.title || "Project"} Logo`,
-              image_base64: updatedItem.image_base64,
-              style: updatedItem.style,
-              preferred_colors: updatedItem.preferred_colors,
-              logo_ideas: updatedItem.logo_ideas,
-              branding_direction: updatedItem.branding_direction,
-              created_at: updatedItem.created_at,
-              isLogo: true,
-            };
-          }
-
-          return updatedItem;
-        })
-      );
-
-      if (selectedContent?.id === moveTarget.id) {
-        setSelectedContent((previousContent) => {
-          if (!previousContent) {
-            return previousContent;
-          }
-
-          if (moveTarget.isLogo) {
-            const newProject = projects.find(
-              (project) =>
-                Number(project.id) === Number(updatedItem.project_id)
-            );
-
-            return {
-              ...previousContent,
-              project_id: updatedItem.project_id,
-              projectName:
-                newProject?.title || `Project #${updatedItem.project_id}`,
-              title: `${newProject?.title || "Project"} Logo`,
-              image_base64: updatedItem.image_base64,
-              style: updatedItem.style,
-              preferred_colors: updatedItem.preferred_colors,
-              logo_ideas: updatedItem.logo_ideas,
-              branding_direction: updatedItem.branding_direction,
-              created_at: updatedItem.created_at,
-              isLogo: true,
-            };
-          }
-
-          return updatedItem;
-        });
-      }
-
-      closeMoveContent();
     } catch (requestError) {
-      console.error("Move content failed:", requestError);
-
-      setMoveError(
-        requestError instanceof Error
-          ? requestError.message
-          : "This item could not be moved. Please try again."
-      );
+      if (mountedRef.current) {
+        setMoveError(requestError.message);
+      }
     } finally {
-      setMoveLoading(false);
+      actionBusyRef.current = false;
+      if (mountedRef.current) {
+        setMoveLoading(false);
+      }
     }
   };
 
-  // -------------------------------------------------------
-  // DELETE CONTENT
-  // -------------------------------------------------------
-
-  const openDeleteConfirmation = (item) => {
+  const openDelete = (item) => {
     setDeleteTarget(item);
-    setDeleteConfirmationText("");
-    setDeleteFinalConfirmed(false);
+    setDeleteText("");
+    setDeleteConfirmed(false);
     setDeleteError("");
   };
 
-  const closeDeleteConfirmation = () => {
-    if (deleteLoading) {
-      return;
+  const closeDelete = () => {
+    if (!actionBusyRef.current) {
+      setDeleteTarget(null);
+      setDeleteError("");
     }
-
-    setDeleteTarget(null);
-    setDeleteConfirmationText("");
-    setDeleteFinalConfirmed(false);
-    setDeleteError("");
   };
 
-  const handleDeleteContentItem = async () => {
+  const deleteContent = async () => {
     if (
       !deleteTarget ||
-      deleteConfirmationText !== "DELETE" ||
-      !deleteFinalConfirmed
+      deleteText !== "DELETE" ||
+      !deleteConfirmed ||
+      actionBusyRef.current
     ) {
       return;
     }
 
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setDeleteError("Your session has expired. Please sign in again.");
-      return;
-    }
-
+    actionBusyRef.current = true;
     setDeleteLoading(true);
     setDeleteError("");
 
     try {
-      const endpoint = deleteTarget.isLogo
-        ? `${API_BASE_URL}/product-architect/logos/${String(
-            deleteTarget.id
-          ).replace("logo-", "")}`
-        : `${API_BASE_URL}/content/${deleteTarget.id}`;
+      const path = deleteTarget.isLogo
+        ? `/product-architect/logos/${String(deleteTarget.id).replace("logo-", "")}`
+        : `/content/${deleteTarget.id}`;
 
-      const response = await fetch(endpoint, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
+      await apiRequest(path, { method: "DELETE" });
 
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("tanioSession");
-        localStorage.removeItem("tanioUser");
-
-        throw new Error("Your session has expired. Please sign in again.");
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(
-          errorData?.detail ||
-            "This item could not be deleted. Please try again."
+      if (mountedRef.current) {
+        setContentItems((items) =>
+          items.filter((item) => String(item.id) !== String(deleteTarget.id))
         );
+        setDeleteTarget(null);
       }
-
-      setContentItems((previousItems) =>
-        previousItems.filter(
-          (item) => String(item.id) !== String(deleteTarget.id)
-        )
-      );
-
-      if (selectedContent?.id === deleteTarget.id) {
-        setSelectedContent(null);
-      }
-
-      closeDeleteConfirmation();
     } catch (requestError) {
-      console.error("Delete content failed:", requestError);
-
-      setDeleteError(
-        requestError instanceof Error
-          ? requestError.message
-          : "This item could not be deleted. Please try again."
-      );
+      if (mountedRef.current) {
+        setDeleteError(requestError.message);
+      }
     } finally {
-      setDeleteLoading(false);
+      actionBusyRef.current = false;
+      if (mountedRef.current) {
+        setDeleteLoading(false);
+      }
     }
   };
 
-  const handleDownloadImage = (item) => {
-    if (!item?.image_base64) {
-      return;
-    }
-
-    try {
-      const safeTitle =
-        String(item.title || item.projectName || "tanio-image")
-          .replace(/[^a-zA-Z0-9-_ ]/g, "")
-          .trim()
-          .replace(/\s+/g, "-") || "tanio-image";
-
-      const link = document.createElement("a");
-      link.href = `data:image/png;base64,${item.image_base64}`;
-      link.download = `${safeTitle}.png`;
-
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Image download failed:", error);
-    }
-  };  
+  const viewBusy = restoreLoading || exporting;
 
   return (
-    <main className="flex-1 p-6 md:p-10">
-      <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+    <main className="min-h-screen bg-slate-950 p-5 text-white sm:p-8">
+      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-cyan-500/20 bg-slate-900 p-6">
         <div>
-          <h2 className="text-4xl font-bold">Content Library</h2>
+          <h1 className="flex items-center gap-3 text-3xl font-bold">
+            <FaFolderOpen className="text-cyan-400" />
+            Content Vault
+          </h1>
           <p className="mt-2 text-slate-400">
-            View all AI-generated content saved across your Tanio AI projects.
+            Revisit, edit, organize, and export your saved Tanio content.
           </p>
         </div>
-
         <button
           type="button"
           onClick={() => loadLibrary(true)}
-          disabled={refreshing}
-          className="flex w-fit items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={loading || refreshing}
+          className={`${BUTTON_CLASS} inline-flex items-center gap-2`}
         >
           <FaSyncAlt className={refreshing ? "animate-spin" : ""} />
           {refreshing ? "Refreshing..." : "Refresh"}
         </button>
-      </div>
+      </header>
 
-      <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-        <div className="relative">
-          <FaSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-
-          <input
-            type="search"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by title, type, project, content, or logo details..."
-            className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500"
-          />
-        </div>
-
-        <div className="mt-5 flex items-center gap-2">
-          <p className="text-sm font-semibold text-slate-300">
-            Filter by module
-          </p>
-
-          <div className="group relative">
-            <span
-              className="flex h-6 w-6 cursor-help items-center justify-center rounded-full border border-slate-700 bg-slate-950 text-xs font-bold text-slate-400 transition group-hover:border-cyan-500 group-hover:text-cyan-300"
-              aria-label="Module filter help"
-            >
-              ?
-            </span>
-
-            <div className="pointer-events-none absolute left-0 top-8 z-20 hidden w-72 rounded-xl border border-slate-700 bg-slate-950 p-4 shadow-2xl group-hover:block">
-              <p className="text-sm font-semibold text-white">
-                What does this filter do?
-              </p>
-
-              <p className="mt-2 text-sm leading-6 text-slate-400">
-                Choose a module to show only that type of saved content. Select
-                All to view everything in your Content Library.
-              </p>
+      <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="content-search" className="mb-2 block text-sm">
+              Search saved content
+            </label>
+            <div className="relative">
+              <FaSearch className="pointer-events-none absolute left-3 top-4 text-slate-500" />
+              <input
+                id="content-search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by title, topic, type, or project..."
+                className={`${FIELD_CLASS} pl-10`}
+              />
             </div>
+          </div>
+          <div>
+            <label htmlFor="content-sort" className="mb-2 block text-sm">
+              Sort by
+            </label>
+            <select
+              id="content-sort"
+              value={sortOption}
+              onChange={(event) => setSortOption(event.target.value)}
+              className={FIELD_CLASS}
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="title-asc">Title A–Z</option>
+              <option value="title-desc">Title Z–A</option>
+              <option value="type-asc">Content type A–Z</option>
+            </select>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {availableCategories.map((category) => {
-            const isActive = selectedCategory === category;
-
-            return (
-              <button
-                key={category}
-                type="button"
-                onClick={() => setSelectedCategory(category)}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                  isActive
-                    ? "border-cyan-500 bg-cyan-500 text-slate-950"
-                    : "border-slate-700 bg-slate-950 text-slate-300 hover:border-cyan-700 hover:text-cyan-300"
-                }`}
-              >
-                {category}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-5 flex flex-col gap-2 sm:max-w-xs">
-          <label
-            htmlFor="content-sort"
-            className="text-sm font-semibold text-slate-300"
+        <div className="mt-4 flex flex-wrap gap-2" aria-label="Content categories">
+          {categories.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setSelectedCategory(category)}
+              aria-pressed={selectedCategory === category}
+              className={
+                selectedCategory === category ? PRIMARY_BUTTON : BUTTON_CLASS
+              }
+            >
+              {category}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setSelectedCategory(CATEGORY_ALL);
+            }}
+            className={BUTTON_CLASS}
           >
-            Sort by
-          </label>
-
-          <select
-            id="content-sort"
-            value={sortOption}
-            onChange={(event) => setSortOption(event.target.value)}
-            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none transition focus:border-cyan-500"
-          >
-            <option value={SORT_NEWEST}>Newest First</option>
-            <option value={SORT_OLDEST}>Oldest First</option>
-            <option value={SORT_TITLE_ASC}>Title A-Z</option>
-            <option value={SORT_TITLE_DESC}>Title Z-A</option>
-            <option value={SORT_TYPE_ASC}>Type A-Z</option>
-          </select>
+            Clear Filters
+          </button>
         </div>
-
       </section>
 
-      {loading && (
-        <section className="flex min-h-80 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900">
-          <div className="text-center">
-            <FaSyncAlt className="mx-auto mb-4 animate-spin text-3xl text-cyan-400" />
-            <p className="font-semibold text-white">
-              Loading your Content Library...
-            </p>
-          </div>
-        </section>
-      )}
+      <ErrorMessage>{error}</ErrorMessage>
 
-      {!loading && error && (
-        <section className="flex min-h-80 items-center justify-center rounded-2xl border border-red-900 bg-red-950/20 p-8">
-          <div className="max-w-lg text-center">
-            <FaExclamationTriangle className="mx-auto mb-4 text-4xl text-red-400" />
-
-            <h3 className="text-xl font-bold text-white">
-              Content could not be loaded
-            </h3>
-
-            <p className="mt-2 text-red-300">{error}</p>
-
-            <button
-              type="button"
-              onClick={() => loadLibrary()}
-              className="mt-6 rounded-lg bg-red-500 px-5 py-2 font-semibold text-white transition hover:bg-red-400"
-            >
-              Try Again
-            </button>
-          </div>
-        </section>
-      )}
-
-      {!loading && !error && preparedContent.length === 0 && (
-        <section className="flex min-h-80 items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-8">
-          <div className="max-w-lg text-center">
-            <FaFolderOpen className="mx-auto mb-4 text-5xl text-slate-500" />
-
-            <h3 className="text-2xl font-bold text-white">
-              No saved content yet
-            </h3>
-
-            <p className="mt-2 text-slate-400">
-              Generate and save content or logos from Product Architect,
-              Tabletop Creator, or Problem Solver, and it will appear here.
-            </p>
-          </div>
-        </section>
-      )}
-
-      {!loading &&
-        !error &&
-        preparedContent.length > 0 &&
-        filteredContent.length === 0 && (
-          <section className="flex min-h-72 items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-8">
-            <div className="max-w-lg text-center">
-              <FaSearch className="mx-auto mb-4 text-4xl text-slate-500" />
-
-              <h3 className="text-xl font-bold text-white">
-                No matching content
-              </h3>
-
-              <p className="mt-2 text-slate-400">
-                Try another search or select a different category.
-              </p>
-
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-5 rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400"
+      {loading ? (
+        <p role="status" className="mt-6 text-slate-400">
+          Loading saved content...
+        </p>
+      ) : visibleContent.length === 0 ? (
+        <p className="mt-6 rounded-xl border border-dashed border-slate-700 p-8 text-center text-slate-400">
+          No saved content matches your filters.
+        </p>
+      ) : (
+        <>
+          <p className="mt-5 text-sm text-slate-400">
+            {visibleContent.length} saved{" "}
+            {visibleContent.length === 1 ? "item" : "items"}
+          </p>
+          <div className="mt-4 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {visibleContent.map((item) => (
+              <article
+                key={item.id}
+                className="flex min-w-0 flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5"
               >
-                Clear Filters
-              </button>
-            </div>
-          </section>
-        )}
-
-    {!loading && !error && visibleContent.length > 0 && (
-      <section>
-        <div className="mb-4 flex items-center gap-3">
-          <span className="text-xl text-cyan-400">
-            {selectedCategory === CATEGORY_ALL ? <FaFileAlt /> : getCategoryIcon(selectedCategory)}
-          </span>
-
-          <h3 className="text-2xl font-bold">
-            {selectedCategory === CATEGORY_ALL ? "All Saved Content" : selectedCategory}
-          </h3>
-
-          <span className="rounded-full bg-slate-800 px-3 py-1 text-sm text-slate-300">
-            {visibleContent.length}
-          </span>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-          {visibleContent.map((item) => (
-            <article
-              key={item.id}
-              className="flex min-h-72 flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5 transition hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-xl"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <h4 className="break-words text-xl font-bold text-white">
-                    {item.title}
-                  </h4>
-
-                  {item.project_id == null ? (
-                    <span className="mt-2 inline-flex items-center rounded-md border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs font-semibold text-slate-300">
-                      No Project
-                    </span>
-                  ) : (
-                    <p className="mt-1 text-sm text-slate-500">
-                      {item.projectName}
-                    </p>
-                  )}
+                <div className="flex items-center gap-3">
+                  <span className="text-xl text-cyan-300">
+                    {getCategoryIcon(item.category)}
+                  </span>
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs ${getCategoryBadgeClasses(item.category)}`}
+                  >
+                    {item.category}
+                  </span>
                 </div>
+                <h2 className="mt-4 break-words text-xl font-bold">{item.title}</h2>
+                <p className="mt-2 text-sm text-slate-400">{item.content_type}</p>
+                <p className="mt-2 text-sm text-slate-500">{item.projectName}</p>
+                <SavedDates item={item} />
 
-                <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getCategoryBadgeClasses(
-                    item.category
-                  )}`}
-                >
-                  {getCategoryIcon(item.category)}
-                </span>
-              </div>
-
-              <div className="mt-4">
-                <span
-                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getCategoryBadgeClasses(
-                    item.category
-                  )}`}
-                >
-                  {item.content_type}
-                </span>
-              </div>
-
-              {renderSavedDateMetadata(item)}
-
-              {item.isLogo ? (
-                <div className="mt-4 flex-1">
+                {item.isLogo ? (
                   <img
                     src={`data:image/png;base64,${item.image_base64}`}
-                    alt={`${item.projectName} saved logo`}
-                    className="h-40 w-full rounded-xl border border-slate-700 bg-white object-contain"
+                    alt={item.title}
+                    className="mt-4 h-48 w-full rounded-lg bg-white object-contain"
                   />
-
-                  <p className="mt-3 text-sm text-slate-400">
-                    Style: {item.style || "default"}
-                  </p>
-
-                  {(item.preferred_colors ||
-                    item.logo_ideas ||
-                    item.branding_direction) && (
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
-                      {[
-                        item.preferred_colors,
-                        item.logo_ideas,
-                        item.branding_direction,
-                      ]
-                        .filter(Boolean)
-                        .join(" • ")}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-4 flex-1 text-sm leading-6 text-slate-400">
-                  {createPreview(item.body)}
-                </p>
-              )}
-
-              <div className="mt-5 border-t border-slate-800 pt-4">
-                <button
-                  type="button"
-                  onClick={() => openSelectedContent(item)}
-                  className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-                >
-                  <FaEye />
-                  View
-                </button>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  {!item.isLogo && (
-                    <button
-                      type="button"
-                      onClick={() => openEditContent(item)}
-                      className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                    >
-                      Edit
-                    </button>
-                  )}
-
-                  {item.isLogo && (
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadImage(item)}
-                      className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                    >
-                      <FaDownload />
-                      Download
-                    </button>
-                  )}                  
-
-                  <button
-                    type="button"
-                    onClick={() => openMoveContent(item)}
-                    className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                  >
-                    Move
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => openDeleteConfirmation(item)}
-                    className="ml-auto rounded-lg bg-red-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-    )}
-
-      {/* VIEW CONTENT MODAL */}
-      {selectedContent && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeSelectedContent();
-            }
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="content-dialog-title"
-            className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
-          >
-            <header className="flex items-start justify-between gap-5 border-b border-slate-800 p-6">
-              <div className="min-w-0">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getCategoryBadgeClasses(
-                      selectedContent.category
-                    )}`}
-                  >
-                    {selectedContent.content_type}
-                  </span>
-
-                  {selectedContent.project_id == null ? (
-                    <span className="inline-flex items-center rounded-md border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-xs font-semibold text-slate-300">
-                      No Project
-                    </span>
-                  ) : (
-                    <span className="text-sm text-slate-500">
-                      {selectedContent.projectName}
-                    </span>
-                  )}
-                </div>
-
-                <h3
-                  id="content-dialog-title"
-                  className="break-words text-2xl font-bold text-white"
-                >
-                  {selectedContent.title}
-                </h3>
-
-                {renderSavedDateMetadata(selectedContent)}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => closeSelectedContent()}
-                aria-label="Close content details"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300 transition hover:bg-slate-700 hover:text-white"
-              >
-                <FaTimes />
-              </button>
-            </header>
-
-            <div className="overflow-y-auto p-6">
-              <div className="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-5 shadow-inner shadow-black/15 sm:p-7">
-                {selectedContent.isLogo ? (
-                  <div>
-                    <img
-                      src={`data:image/png;base64,${selectedContent.image_base64}`}
-                      alt={`${selectedContent.projectName} saved logo`}
-                      className="mx-auto max-h-[60vh] rounded-xl border border-slate-700 bg-white object-contain"
-                    />
-
-                    <dl className="mt-6 space-y-3 text-sm">
-                      <div>
-                        <dt className="text-slate-500">Style</dt>
-                        <dd className="mt-1 capitalize text-slate-200">
-                          {selectedContent.style || "default"}
-                        </dd>
-                      </div>
-
-                      <div>
-                        <dt className="text-slate-500">Preferred Colors</dt>
-                        <dd className="mt-1 text-slate-200">
-                          {selectedContent.preferred_colors || "Default"}
-                        </dd>
-                      </div>
-
-                      <div>
-                        <dt className="text-slate-500">
-                          Logo Ideas / Symbols
-                        </dt>
-                        <dd className="mt-1 text-slate-200">
-                          {selectedContent.logo_ideas || "None"}
-                        </dd>
-                      </div>
-
-                      <div>
-                        <dt className="text-slate-500">
-                          Branding Direction
-                        </dt>
-                        <dd className="mt-1 text-slate-200">
-                          {selectedContent.branding_direction || "Default"}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                ) : selectedContent.category === CATEGORY_PROBLEM_SOLVER ? (
-                  <div>
-                    <div className="mb-5 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <h4 className="font-bold text-white">Solution Versions</h4>
-                          <p className="mt-1 text-sm text-slate-500">
-                            Switch between the original solution and regenerated versions.
-                          </p>
-                        </div>
-
-                        {!versionHistoryLoading &&
-                          selectedContentVersions.length > 0 && (
-                            <span className="text-sm text-slate-400">
-                              Version {selectedVersionIndex + 1} of{" "}
-                              {selectedContentVersions.length}
-                            </span>
-                          )}
-                      </div>
-
-                      {versionHistoryLoading ? (
-                        <div className="mt-4 flex items-center gap-2 text-sm text-slate-400">
-                          <FaSyncAlt className="animate-spin" />
-                          Loading version history...
-                        </div>
-                      ) : versionHistoryError ? (
-                        <div className="mt-4 rounded-lg border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">
-                          {versionHistoryError}
-                        </div>
-                      ) : selectedContentVersions.length > 0 ? (
-                        <>
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {selectedContentVersions.map((version, index) => (
-                              <button
-                                key={version.id}
-                                type="button"
-                                onClick={() => setSelectedVersionIndex(index)}
-                                className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                                  selectedVersionIndex === index
-                                    ? "border-cyan-500 bg-cyan-950/50 text-cyan-300"
-                                    : "border-slate-700 bg-slate-950 text-slate-300 hover:border-cyan-700 hover:text-cyan-300"
-                                }`}
-                              >
-                                Version {version.version_number}
-                                {version.version_number === 1 ? " · Original" : ""}
-                              </button>
-                            ))}
-                          </div>
-
-                          {selectedVersion?.regeneration_instructions && (
-                            <div className="mt-4 rounded-lg border border-slate-700 bg-slate-950 p-4">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Regeneration Instructions
-                              </p>
-                              <p className="mt-2 text-sm leading-6 text-slate-200">
-                                {selectedVersion.regeneration_instructions}
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <p className="mt-4 text-sm text-slate-500">
-                          No saved version history is available for this solution.
-                        </p>
-                      )}
-                    </div>
-
-                    <div className={contentMarkdownClasses}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {selectedVersion?.body || selectedContent.body}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
                 ) : (
-                  <div className={contentMarkdownClasses}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {selectedContent.body}
-                    </ReactMarkdown>
-                  </div>
+                  <p className="mt-4 flex-1 break-words text-sm leading-6 text-slate-400">
+                    {createPreview(item)}
+                  </p>
                 )}
-              </div>
-            </div>
 
-            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
-              {selectedContent.isLogo && (
+                <div className="mt-5 border-t border-slate-800 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => openView(item)}
+                    className={`${PRIMARY_BUTTON} mb-3 flex w-full items-center justify-center gap-2`}
+                  >
+                    <FaEye /> View
+                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {item.isLogo ? (
+                      <button
+                        type="button"
+                        onClick={() => downloadLogo(item)}
+                        className={BUTTON_CLASS}
+                      >
+                        Download
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(item)}
+                        className={BUTTON_CLASS}
+                      >
+                        Edit
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openMove(item)}
+                      className={BUTTON_CLASS}
+                    >
+                      Move
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openDelete(item)}
+                      className="ml-auto rounded-lg bg-red-800 px-4 py-2 font-semibold hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+
+      {selectedContent && (
+        <Modal
+          title="Saved Content"
+          wide
+          busy={viewBusy}
+          onClose={closeView}
+          footer={
+            <>
+              {selectedContent.isLogo ? (
                 <button
                   type="button"
-                  onClick={() => handleDownloadImage(selectedContent)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400"
+                  onClick={() => downloadLogo(selectedContent)}
+                  className={PRIMARY_BUTTON}
                 >
-                  <FaDownload />
+                  <FaDownload className="mr-2 inline" />
                   Download Image
                 </button>
+              ) : (
+                <>
+                  {[
+                    ["pdf", "PDF"], ["md", "Markdown"],
+                    ["txt", "TXT"], ["docx", "DOCX"],
+                  ].map(([format, label]) => (
+                    <button
+                      key={format}
+                      type="button"
+                      onClick={() => exportContent(format)}
+                      disabled={viewBusy || versionsLoading}
+                      className={BUTTON_CLASS}
+                    >
+                      Export {label}
+                    </button>
+                  ))}
+                </>
               )}
-
               <button
                 type="button"
-                onClick={() => closeSelectedContent()}
-                className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700"
+                onClick={closeView}
+                disabled={viewBusy}
+                className={BUTTON_CLASS}
               >
                 Close
               </button>
-            </footer>
-          </section>
-        </div>
-      )}
-
-      {/* EDIT SAVED CONTENT MODAL */}
-      {editingContent && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeEditContent();
-            }
-          }}
+            </>
+          }
         >
-          <form
-            onSubmit={saveContentEdits}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-content-title"
-            className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
-          >
-            <header className="flex items-start justify-between gap-5 border-b border-slate-800 p-6">
-              <div>
-                <h3
-                  id="edit-content-title"
-                  className="text-2xl font-bold text-white"
-                >
-                  Edit Saved Content
-                </h3>
+          <h3 className="break-words text-2xl font-bold">
+            {displayedContent.title}
+          </h3>
+          <p className="mt-2 text-sm text-slate-400">
+            {displayedContent.content_type} · {selectedContent.projectName}
+          </p>
+          <SavedDates item={selectedContent} />
 
-                <p className="mt-2 text-slate-400">
-                  Update the saved title or content body.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeEditContent}
-                disabled={editLoading}
-                aria-label="Close edit content"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300 transition hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <FaTimes />
-              </button>
-            </header>
-
-            <div className="space-y-5 overflow-y-auto p-6">
-              <div>
-                <label
-                  htmlFor="edit-content-name"
-                  className="block text-sm font-semibold text-slate-300"
-                >
-                  Title
-                </label>
-
-                <input
-                  id="edit-content-name"
-                  type="text"
-                  value={editTitle}
-                  onChange={(event) => {
-                    setEditTitle(event.target.value);
-                    setEditError("");
-                    setEditSuccess("");
-                  }}
-                  disabled={editLoading}
-                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500 disabled:opacity-50"
-                  placeholder="Saved content title"
-                />
-              </div>
-
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <label
-                    htmlFor="edit-content-body"
-                    className="block text-sm font-semibold text-slate-300"
-                  >
-                    Content Body
-                  </label>
-
-                  <FormattingHelp />
-                </div>
-
-                <textarea
-                  id="edit-content-body"
-                  value={editBody}
-                  onChange={(event) => {
-                    setEditBody(event.target.value);
-                    setEditError("");
-                    setEditSuccess("");
-                  }}
-                  disabled={editLoading}
-                  rows={18}
-                  className="mt-2 min-h-80 w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-4 font-mono text-sm leading-6 text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-cyan-500 disabled:opacity-50"
-                  placeholder="Edit your saved content..."
-                />
-              </div>
-
-              {editError && (
-                <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-red-300">
-                  {editError}
-                </div>
-              )}
-
-              {editSuccess && (
-                <div className="rounded-lg border border-emerald-800 bg-emerald-950/40 p-4 text-emerald-300">
-                  {editSuccess}
-                </div>
-              )}
-            </div>
-
-            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
-              <button
-                type="button"
-                onClick={closeEditContent}
-                disabled={editLoading}
-                className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                disabled={
-                  editLoading || !editTitle.trim() || !editBody.trim()
-                }
-                className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {editLoading ? "Saving..." : "Save Changes"}
-              </button>
-            </footer>
-          </form>
-        </div>
-      )}
-
-      {/* MOVE CONTENT MODAL */}
-      {moveTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeMoveContent();
-            }
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="move-dialog-title"
-            className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
-          >
-            <header className="border-b border-slate-800 p-6">
-              <h3
-                id="move-dialog-title"
-                className="text-2xl font-bold text-white"
-              >
-                Move content
-              </h3>
-
-              <p className="mt-2 text-slate-400">
-                Choose the project this content should belong to. The workspace
-                will update based on that project.
+          {!selectedContent.isLogo && (
+            <section className="mt-5 rounded-xl border border-slate-700 p-4">
+              <h4 className="font-bold">Version History</h4>
+              <p className="mt-2 text-sm text-slate-400">
+                View the active material or a preserved version.
+                Restoring keeps a snapshot of the active material.
               </p>
-            </header>
 
-            <div className="space-y-5 p-6">
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-sm text-slate-500">Item</p>
-                <p className="mt-1 font-semibold text-white">
-                  {moveTarget.title}
+              {versionsLoading ? (
+                <p role="status" className="mt-3 text-sm text-slate-400">
+                  Loading versions...
                 </p>
-
-                <p className="mt-3 text-sm text-slate-500">Current Project</p>
-                <p className="mt-1 text-slate-300">
-                  {moveTarget.projectName}
-                </p>
-              </div>
-
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label
-                    htmlFor="move-project-select"
-                    className="block text-sm font-semibold text-slate-300"
-                  >
-                    Move to project
-                  </label>
-
+              ) : (
+                <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      setShowMoveCreateProject((currentValue) => !currentValue);
-                      setMoveError("");
+                      setSelectedVersionId("");
+                      setExportError("");
                     }}
-                    disabled={moveLoading}
-                    className="text-sm font-semibold text-cyan-400 transition hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={viewBusy}
+                    className={!selectedVersionId ? PRIMARY_BUTTON : BUTTON_CLASS}
                   >
-                    {showMoveCreateProject ? "Choose existing project" : "Create new project"}
+                    Current Material
+                  </button>
+                  {versions.map((version) => (
+                    <button
+                      key={version.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedVersionId(String(version.id));
+                        setRestoreMessage("");
+                        setExportError("");
+                      }}
+                      disabled={viewBusy}
+                      className={
+                        selectedVersionId === String(version.id)
+                          ? PRIMARY_BUTTON
+                          : BUTTON_CLASS
+                      }
+                    >
+                      Version {version.version_number}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!versionsLoading && versions.length === 0 && (
+                <p className="mt-3 text-sm text-slate-500">
+                  No previous versions yet. Editing and saving creates history.
+                </p>
+              )}
+
+              {selectedVersion?.regeneration_instructions && (
+                <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">
+                  {selectedVersion.regeneration_instructions}
+                </p>
+              )}
+
+              {selectedVersion && (
+                <button
+                  type="button"
+                  onClick={restoreVersion}
+                  disabled={viewBusy || versionsLoading}
+                  className={`${BUTTON_CLASS} mt-4`}
+                >
+                  {restoreLoading ? "Restoring..." : "Restore This Version"}
+                </button>
+              )}
+
+              <ErrorMessage>{versionsError}</ErrorMessage>
+              {versionsError && (
+                <button
+                  type="button"
+                  onClick={() => loadVersions(selectedContent)}
+                  disabled={viewBusy || versionsLoading}
+                  className={`${BUTTON_CLASS} mt-3`}
+                >
+                  Retry Version History
+                </button>
+              )}
+              {restoreMessage && (
+                <p role="status" className="mt-3 text-sm text-emerald-300">
+                  {restoreMessage}
+                </p>
+              )}
+            </section>
+          )}
+
+          <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/40 p-5">
+            <SavedMaterial
+              key={`${selectedContent.id}-${selectedVersionId}-${displayedContent.body}`}
+              item={displayedContent}
+              disabled={viewBusy}
+            />
+          </div>
+
+          {isLearningStudioContent(displayedContent.content_type) && (
+            <p className="mt-4 text-xs leading-6 text-slate-400">
+              Quiz exports include all choices, correct answers, and explanations.
+              Flashcard exports include both questions and answers.
+            </p>
+          )}
+          {exporting && (
+            <p role="status" className="mt-3 text-sm text-cyan-200">
+              Preparing your export...
+            </p>
+          )}
+          <ErrorMessage>{exportError}</ErrorMessage>
+        </Modal>
+      )}
+
+      {editingContent && (
+        <Modal
+          title="Edit Saved Content"
+          wide
+          busy={editLoading}
+          onClose={closeEdit}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={closeEdit}
+                disabled={editLoading}
+                className={BUTTON_CLASS}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="content-edit-form"
+                disabled={
+                  editLoading ||
+                  !editTitle.trim() ||
+                  (isLearningStudioContent(editingContent.content_type)
+                    ? !editMaterial
+                    : !editBody.trim())
+                }
+                className={PRIMARY_BUTTON}
+              >
+                {editLoading ? "Saving..." : "Save Changes"}
+              </button>
+            </>
+          }
+        >
+          <form id="content-edit-form" onSubmit={saveEdits} noValidate>
+            <label htmlFor="edit-title" className="mb-2 block text-sm font-semibold">
+              Saved Title
+            </label>
+            <input
+              id="edit-title"
+              value={editTitle}
+              onChange={(event) => {
+                setEditTitle(event.target.value);
+                setEditError("");
+              }}
+              disabled={editLoading}
+              className={FIELD_CLASS}
+            />
+
+            <div className="mt-5">
+              {isLearningStudioContent(editingContent.content_type) ? (
+                editMaterial ? (
+                  <LearningMaterialEditor
+                    material={editMaterial}
+                    onChange={(material) => {
+                      setEditMaterial(material);
+                      setEditError("");
+                    }}
+                    disabled={editLoading}
+                  />
+                ) : (
+                  <p className="text-sm text-red-300">
+                    This material cannot be edited because its saved structure is invalid.
+                  </p>
+                )
+              ) : (
+                <>
+                  <FormattingHelp />
+                  <label
+                    htmlFor="edit-body"
+                    className="mb-2 mt-4 block text-sm font-semibold"
+                  >
+                    Content Body
+                  </label>
+                  <textarea
+                    id="edit-body"
+                    value={editBody}
+                    onChange={(event) => {
+                      setEditBody(event.target.value);
+                      setEditError("");
+                    }}
+                    disabled={editLoading}
+                    rows={18}
+                    className={`${FIELD_CLASS} font-mono text-sm leading-6`}
+                  />
+                </>
+              )}
+            </div>
+            <ErrorMessage>{editError}</ErrorMessage>
+          </form>
+        </Modal>
+      )}
+
+      {moveTarget && (
+        <Modal
+          title="Move Content"
+          busy={moveLoading}
+          onClose={closeMove}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={closeMove}
+                disabled={moveLoading}
+                className={BUTTON_CLASS}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={moveContent}
+                disabled={moveLoading || !moveProjectId || showCreateProject}
+                className={PRIMARY_BUTTON}
+              >
+                {moveLoading ? "Working..." : "Move Content"}
+              </button>
+            </>
+          }
+        >
+          <p className="break-words font-semibold">{moveTarget.title}</p>
+          <p className="mt-2 text-sm text-slate-400">
+            Current project: {moveTarget.projectName}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowCreateProject((value) => !value);
+              setMoveError("");
+            }}
+            disabled={moveLoading}
+            className={`${BUTTON_CLASS} mt-4`}
+          >
+            {showCreateProject ? "Choose Existing Project" : "Create New Project"}
+          </button>
+
+          {!showCreateProject ? (
+            <div className="mt-4">
+              <label htmlFor="move-project" className="mb-2 block text-sm">
+                Destination Project
+              </label>
+              <select
+                id="move-project"
+                value={moveProjectId}
+                onChange={(event) => setMoveProjectId(event.target.value)}
+                disabled={moveLoading}
+                className={FIELD_CLASS}
+              >
+                <option value="">Choose a project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.title} — Workspace {project.workspace_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              <div>
+                <label htmlFor="new-project-title" className="mb-2 block text-sm">
+                  New Project Name
+                </label>
+                <input
+                  id="new-project-title"
+                  value={newProjectTitle}
+                  onChange={(event) => setNewProjectTitle(event.target.value)}
+                  maxLength={100}
+                  disabled={moveLoading}
+                  className={FIELD_CLASS}
+                />
+              </div>
+              <div>
+                <label htmlFor="new-project-description" className="mb-2 block text-sm">
+                  Project Description
+                </label>
+                <textarea
+                  id="new-project-description"
+                  value={newProjectDescription}
+                  onChange={(event) => setNewProjectDescription(event.target.value)}
+                  maxLength={5000}
+                  rows={3}
+                  disabled={moveLoading}
+                  className={FIELD_CLASS}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCreateWorkspace((value) => !value)}
+                disabled={moveLoading}
+                className={BUTTON_CLASS}
+              >
+                {showCreateWorkspace
+                  ? "Choose Existing Workspace"
+                  : "Create New Workspace"}
+              </button>
+
+              {showCreateWorkspace ? (
+                <div className="space-y-4 rounded-xl border border-slate-700 p-4">
+                  <div>
+                    <label htmlFor="new-workspace-name" className="mb-2 block text-sm">
+                      New Workspace Name
+                    </label>
+                    <input
+                      id="new-workspace-name"
+                      value={newWorkspaceName}
+                      onChange={(event) => setNewWorkspaceName(event.target.value)}
+                      disabled={moveLoading}
+                      className={FIELD_CLASS}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="new-workspace-description" className="mb-2 block text-sm">
+                      Workspace Description
+                    </label>
+                    <textarea
+                      id="new-workspace-description"
+                      value={newWorkspaceDescription}
+                      onChange={(event) =>
+                        setNewWorkspaceDescription(event.target.value)
+                      }
+                      rows={3}
+                      disabled={moveLoading}
+                      className={FIELD_CLASS}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={createWorkspace}
+                    disabled={moveLoading || !newWorkspaceName.trim()}
+                    className={PRIMARY_BUTTON}
+                  >
+                    Create Workspace
                   </button>
                 </div>
-
-                {!showMoveCreateProject ? (
+              ) : (
+                <div>
+                  <label htmlFor="new-project-workspace" className="mb-2 block text-sm">
+                    Workspace
+                  </label>
                   <select
-                    id="move-project-select"
-                    value={moveProjectId}
-                    onChange={(event) => {
-                      setMoveProjectId(event.target.value);
-                      setMoveError("");
-                    }}
+                    id="new-project-workspace"
+                    value={newProjectWorkspaceId}
+                    onChange={(event) =>
+                      setNewProjectWorkspaceId(event.target.value)
+                    }
                     disabled={moveLoading}
-                    className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
+                    className={FIELD_CLASS}
                   >
-                    <option value="">Choose a project</option>
-
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.title} — Workspace {project.workspace_id}
+                    <option value="">Choose a workspace</option>
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>
+                        {workspace.name || `Workspace #${workspace.id}`}
                       </option>
                     ))}
                   </select>
-                ) : (
-                  <div className="mt-3 space-y-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                    <div>
-                      <label
-                        htmlFor="move-new-project-title"
-                        className="block text-sm font-semibold text-slate-300"
-                      >
-                        New project name
-                      </label>
-
-                      <input
-                        id="move-new-project-title"
-                        type="text"
-                        value={moveNewProjectTitle}
-                        onChange={(event) => {
-                          setMoveNewProjectTitle(event.target.value);
-                          setMoveError("");
-                        }}
-                        disabled={moveLoading}
-                        maxLength={100}
-                        className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
-                        placeholder="Example: Campaign Forge AI"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="move-new-project-description"
-                        className="block text-sm font-semibold text-slate-300"
-                      >
-                        Description
-                      </label>
-
-                      <textarea
-                        id="move-new-project-description"
-                        value={moveNewProjectDescription}
-                        onChange={(event) => {
-                          setMoveNewProjectDescription(event.target.value);
-                          setMoveError("");
-                        }}
-                        disabled={moveLoading}
-                        rows={3}
-                        maxLength={5000}
-                        className="mt-2 w-full resize-y rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
-                        placeholder="Describe what this project is for..."
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label
-                          htmlFor="move-new-project-workspace"
-                          className="block text-sm font-semibold text-slate-300"
-                        >
-                          Workspace
-                        </label>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowMoveCreateWorkspace((currentValue) => !currentValue);
-                            setMoveError("");
-                          }}
-                          disabled={moveLoading}
-                          className="text-sm font-semibold text-cyan-400 transition hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {showMoveCreateWorkspace ? "Choose existing workspace" : "Create new workspace"}
-                        </button>
-                      </div>
-
-                      {!showMoveCreateWorkspace ? (
-                        <select
-                          id="move-new-project-workspace"
-                          value={moveNewProjectWorkspaceId}
-                          onChange={(event) => {
-                            setMoveNewProjectWorkspaceId(event.target.value);
-                            setMoveError("");
-                          }}
-                          disabled={moveLoading}
-                          className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
-                        >
-                          <option value="">Choose a workspace</option>
-
-                          {workspaces.map((workspace) => (
-                            <option key={workspace.id} value={workspace.id}>
-                              {workspace.name || `Workspace #${workspace.id}`}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <div className="mt-3 space-y-4 rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
-                          <div>
-                            <label
-                              htmlFor="move-new-workspace-name"
-                              className="block text-sm font-semibold text-slate-300"
-                            >
-                              New workspace name
-                            </label>
-
-                            <input
-                              id="move-new-workspace-name"
-                              type="text"
-                              value={moveNewWorkspaceName}
-                              onChange={(event) => {
-                                setMoveNewWorkspaceName(event.target.value);
-                                setMoveError("");
-                              }}
-                              disabled={moveLoading}
-                              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
-                              placeholder="Example: Client Projects"
-                            />
-                          </div>
-
-                          <div>
-                            <label
-                              htmlFor="move-new-workspace-description"
-                              className="block text-sm font-semibold text-slate-300"
-                            >
-                              Workspace description
-                            </label>
-
-                            <textarea
-                              id="move-new-workspace-description"
-                              value={moveNewWorkspaceDescription}
-                              onChange={(event) => {
-                                setMoveNewWorkspaceDescription(event.target.value);
-                                setMoveError("");
-                              }}
-                              disabled={moveLoading}
-                              rows={3}
-                              className="mt-2 w-full resize-y rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none transition focus:border-cyan-500 disabled:opacity-50"
-                              placeholder="Describe what this workspace is for..."
-                            />
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={handleCreateMoveWorkspace}
-                            disabled={moveLoading || !moveNewWorkspaceName.trim()}
-                            className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {moveLoading ? "Creating..." : "Create Workspace"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleCreateMoveProject}
-                      disabled={
-                        moveLoading ||
-                        showMoveCreateWorkspace ||
-                        !moveNewProjectTitle.trim() ||
-                        !moveNewProjectWorkspaceId
-                      }
-                      className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {moveLoading ? "Creating..." : "Create Project"}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {moveError && (
-                <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-red-300">
-                  {moveError}
                 </div>
               )}
+
+              <button
+                type="button"
+                onClick={createProject}
+                disabled={
+                  moveLoading ||
+                  showCreateWorkspace ||
+                  !newProjectTitle.trim() ||
+                  !newProjectWorkspaceId
+                }
+                className={PRIMARY_BUTTON}
+              >
+                Create Project
+              </button>
             </div>
-
-            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
-              <button
-                type="button"
-                onClick={closeMoveContent}
-                disabled={moveLoading}
-                className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleMoveContent}
-                disabled={moveLoading || !moveProjectId || showMoveCreateProject}
-                className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {moveLoading ? "Moving..." : "Move Content"}
-              </button>
-            </footer>
-          </section>
-        </div>
+          )}
+          <ErrorMessage>{moveError}</ErrorMessage>
+        </Modal>
       )}
 
-      {/* DELETE CONTENT MODAL */}
       {deleteTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeDeleteConfirmation();
-            }
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-dialog-title"
-            className="w-full max-w-xl rounded-2xl border border-red-900 bg-slate-900 shadow-2xl"
-          >
-            <header className="border-b border-red-900/60 p-6">
-              <h3
-                id="delete-dialog-title"
-                className="text-2xl font-bold text-white"
-              >
-                Delete this item?
-              </h3>
-
-              <p className="mt-2 text-red-300">
-                This action is permanent. This item will be removed from your
-                Content Vault and cannot be restored.
-              </p>
-            </header>
-
-            <div className="space-y-5 p-6">
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-sm text-slate-500">Item</p>
-                <p className="mt-1 font-semibold text-white">
-                  {deleteTarget.title}
-                </p>
-
-                <p className="mt-3 text-sm text-slate-500">Type</p>
-                <p className="mt-1 text-slate-300">
-                  {deleteTarget.content_type}
-                </p>
-
-                <p className="mt-3 text-sm text-slate-500">Project</p>
-                <p className="mt-1 text-slate-300">
-                  {deleteTarget.projectName}
-                </p>
-              </div>
-
-              {deleteError && (
-                <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-red-300">
-                  {deleteError}
-                </div>
-              )}
-
-              <div>
-                <label
-                  htmlFor="delete-confirmation-text"
-                  className="block text-sm font-semibold text-slate-300"
-                >
-                  Type DELETE to confirm.
-                </label>
-
-                <input
-                  id="delete-confirmation-text"
-                  type="text"
-                  value={deleteConfirmationText}
-                  onChange={(event) =>
-                    setDeleteConfirmationText(event.target.value)
-                  }
-                  disabled={deleteLoading}
-                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-red-500 disabled:opacity-50"
-                  placeholder="DELETE"
-                />
-              </div>
-
-              <label className="flex items-start gap-3 rounded-xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-200">
-                <input
-                  type="checkbox"
-                  checked={deleteFinalConfirmed}
-                  onChange={(event) =>
-                    setDeleteFinalConfirmed(event.target.checked)
-                  }
-                  disabled={deleteLoading}
-                  className="mt-1"
-                />
-
-                <span>
-                  I understand I am about to permanently delete this item from
-                  the Content Vault.
-                </span>
-              </label>
-            </div>
-
-            <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
+        <Modal
+          title="Delete This Item?"
+          busy={deleteLoading}
+          onClose={closeDelete}
+          footer={
+            <>
               <button
                 type="button"
-                onClick={closeDeleteConfirmation}
+                onClick={closeDelete}
                 disabled={deleteLoading}
-                className="rounded-lg bg-slate-800 px-5 py-2 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className={BUTTON_CLASS}
               >
                 Cancel
               </button>
-
               <button
                 type="button"
-                onClick={handleDeleteContentItem}
+                onClick={deleteContent}
                 disabled={
                   deleteLoading ||
-                  deleteConfirmationText !== "DELETE" ||
-                  !deleteFinalConfirmed
+                  deleteText !== "DELETE" ||
+                  !deleteConfirmed
                 }
-                className="rounded-lg bg-red-700 px-5 py-2 font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-red-700 px-4 py-2 font-semibold text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {deleteLoading
-                  ? "Deleting..."
-                  : "I understand, permanently delete this item"}
+                {deleteLoading ? "Deleting..." : "Permanently Delete"}
               </button>
-            </footer>
-          </section>
-        </div>
+            </>
+          }
+        >
+          <p className="break-words font-semibold">{deleteTarget.title}</p>
+          <p className="mt-2 text-sm text-slate-400">
+            {deleteTarget.content_type} · {deleteTarget.projectName}
+          </p>
+          <p className="mt-4 text-sm leading-6 text-red-300">
+            This permanently deletes the item and its saved versions.
+          </p>
+          <label htmlFor="delete-confirmation" className="mb-2 mt-5 block text-sm">
+            Type DELETE to confirm.
+          </label>
+          <input
+            id="delete-confirmation"
+            value={deleteText}
+            onChange={(event) => setDeleteText(event.target.value)}
+            disabled={deleteLoading}
+            className={FIELD_CLASS}
+          />
+          <label className="mt-4 flex items-start gap-3 text-sm leading-6 text-red-200">
+            <input
+              type="checkbox"
+              checked={deleteConfirmed}
+              onChange={(event) => setDeleteConfirmed(event.target.checked)}
+              disabled={deleteLoading}
+              className="mt-1"
+            />
+            <span>I understand this item will be permanently deleted.</span>
+          </label>
+          <ErrorMessage>{deleteError}</ErrorMessage>
+        </Modal>
       )}
     </main>
   );

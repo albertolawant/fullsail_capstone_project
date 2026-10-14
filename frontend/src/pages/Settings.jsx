@@ -27,6 +27,11 @@ const TANIO_MODULES = [
     name: "Problem Solver",
     description: "Structured analysis and practical solutions for complex problems.",
   },
+  {
+    id: "learning-studio",
+    name: "Learning Studio",
+    description: "AI-generated lessons, flashcards, and quizzes for studying new topics.",
+  },
 ];
 
 const VALID_MODULE_IDS = TANIO_MODULES.map((module) => module.id);
@@ -67,7 +72,6 @@ const DEFAULT_SETTINGS = {
     activityUpdates: true,
     emailNotifications: false,
   },
-
   account: {
     displayName: "Tanio User",
     defaultWorkspace: "",
@@ -78,14 +82,11 @@ const DEFAULT_SETTINGS = {
 function Settings() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [savedSettings, setSavedSettings] = useState(DEFAULT_SETTINGS);
-
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const [selectedModules, setSelectedModules] = useState(
-    getStoredModules
-  );
+  const [selectedModules, setSelectedModules] = useState(getStoredModules);
   const [moduleSaving, setModuleSaving] = useState(false);
   const [moduleError, setModuleError] = useState("");
   const [moduleSuccess, setModuleSuccess] = useState("");
@@ -209,6 +210,10 @@ function Settings() {
   }, []);
 
   const saveSelectedModules = async (modulesToSave) => {
+    if (moduleSaving) {
+      return;
+    }
+
     if (modulesToSave.length === 0) {
       setModuleError("Keep at least one module enabled.");
       setModuleSuccess("");
@@ -244,9 +249,19 @@ function Settings() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.detail || "Unable to update your modules."
-        );
+        let message = "Unable to update your modules.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (Array.isArray(errorData?.detail)) {
+          message =
+            errorData.detail
+              .map((item) => item.msg)
+              .filter(Boolean)
+              .join(" ") || message;
+        }
+
+        throw new Error(message);
       }
 
       const data = await response.json();
@@ -257,15 +272,18 @@ function Settings() {
         : modulesToSave;
 
       setSelectedModules(savedModules);
+
       localStorage.setItem(
         SELECTED_MODULES_KEY,
         JSON.stringify(savedModules)
       );
+
       window.dispatchEvent(
         new CustomEvent("tanio-modules-updated", {
           detail: savedModules,
         })
       );
+
       setModuleSuccess("Your enabled modules were updated.");
     } catch (requestError) {
       setModuleError(
@@ -279,6 +297,10 @@ function Settings() {
   };
 
   const handleModuleToggle = (moduleId) => {
+    if (moduleSaving) {
+      return;
+    }
+
     const nextModules = selectedModules.includes(moduleId)
       ? selectedModules.filter((selectedId) => selectedId !== moduleId)
       : [...selectedModules, moduleId];
@@ -315,9 +337,7 @@ function Settings() {
           JSON.stringify(updatedSettings)
         );
 
-        window.dispatchEvent(
-          new Event("tanio-settings-updated")
-        );
+        window.dispatchEvent(new Event("tanio-settings-updated"));
 
         setSavedSettings(updatedSettings);
         setError("");
@@ -329,7 +349,7 @@ function Settings() {
 
       return updatedSettings;
     });
-  };  
+  };
 
   const handleProfileImageUpload = (event) => {
     const file = event.target.files?.[0];
@@ -409,14 +429,10 @@ function Settings() {
         JSON.stringify(cleanedSettings)
       );
 
-      // Notify the rest of Tanio that settings changed.
-      window.dispatchEvent(
-        new Event("tanio-settings-updated")
-      );
+      window.dispatchEvent(new Event("tanio-settings-updated"));
 
       setSettings(cleanedSettings);
       setSavedSettings(cleanedSettings);
-
       setSuccessMessage("Settings saved successfully.");
     } catch {
       setError("Unable to save your settings.");
@@ -444,10 +460,7 @@ function Settings() {
         JSON.stringify(DEFAULT_SETTINGS)
       );
 
-      // Notify the rest of Tanio that settings were reset.
-      window.dispatchEvent(
-        new Event("tanio-settings-updated")
-      );
+      window.dispatchEvent(new Event("tanio-settings-updated"));
 
       setSavedSettings(DEFAULT_SETTINGS);
       setSuccessMessage("Settings reset to defaults.");
@@ -655,7 +668,6 @@ function Settings() {
           <h1 className="text-4xl font-bold text-white">
             Settings
           </h1>
-
           <p className="mt-2 text-slate-400">
             Manage your Tanio AI preferences and default settings.
           </p>
@@ -673,7 +685,6 @@ function Settings() {
         </div>
       </div>
 
-      {/* Feedback */}
       {error && (
         <div
           className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-red-300"
@@ -699,12 +710,10 @@ function Settings() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
               <FaSave />
             </div>
-
             <div>
               <h2 className="text-xl font-bold text-white">
                 Auto-Save
               </h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Automatically save generated module content when it finishes.
               </p>
@@ -731,12 +740,10 @@ function Settings() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
               <FaRobot />
             </div>
-
             <div>
               <h2 className="text-xl font-bold text-white">
                 Enabled Modules
               </h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Choose which Tanio AI tools appear on your dashboard and sidebar.
               </p>
@@ -775,12 +782,10 @@ function Settings() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
               <FaPalette />
             </div>
-
             <div>
               <h2 className="text-xl font-bold text-white">
                 Appearance
               </h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Customize how Tanio AI looks and feels.
               </p>
@@ -794,7 +799,6 @@ function Settings() {
             >
               Theme
             </label>
-
             <select
               id="theme"
               value={settings.appearance.theme}
@@ -811,7 +815,6 @@ function Settings() {
               <option value="light">Light</option>
               <option value="system">System Default</option>
             </select>
-
             <p className="mt-2 text-xs text-slate-500">
               Choose how Tanio AI appears across the application.
             </p>
@@ -822,7 +825,6 @@ function Settings() {
               <h3 className="font-semibold text-white">
                 Compact Layout
               </h3>
-
               <p className="mt-1 text-sm text-slate-400">
                 Reduce spacing to show more content on screen.
               </p>
@@ -862,12 +864,10 @@ function Settings() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
               <FaRobot />
             </div>
-
             <div>
               <h2 className="text-xl font-bold text-white">
                 AI Generation Defaults
               </h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Choose your default preferences for AI-generated content.
               </p>
@@ -982,12 +982,10 @@ function Settings() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
               <FaBell />
             </div>
-
             <div>
               <h2 className="text-xl font-bold text-white">
                 Notifications
               </h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Control which application updates you want to receive.
               </p>
@@ -998,9 +996,7 @@ function Settings() {
             <SettingToggle
               title="Generation Complete"
               description="Notify me when AI content finishes generating."
-              enabled={
-                settings.notifications.generationComplete
-              }
+              enabled={settings.notifications.generationComplete}
               onToggle={() =>
                 autoSaveSetting(
                   "notifications",
@@ -1026,9 +1022,7 @@ function Settings() {
             <SettingToggle
               title="Email Notifications"
               description="Allow Tanio AI to send important updates by email."
-              enabled={
-                settings.notifications.emailNotifications
-              }
+              enabled={settings.notifications.emailNotifications}
               onToggle={() =>
                 autoSaveSetting(
                   "notifications",
@@ -1046,12 +1040,10 @@ function Settings() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-700/50 bg-cyan-950/40 text-cyan-400">
               <FaUserCog />
             </div>
-
             <div>
               <h2 className="text-xl font-bold text-white">
                 Account Settings
               </h2>
-
               <p className="mt-1 text-sm text-slate-400">
                 Manage your general account preferences.
               </p>
@@ -1060,9 +1052,11 @@ function Settings() {
 
           <div className="space-y-5">
             <div>
-
               <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                <label className="mb-3 block text-sm font-medium text-slate-300">
+                <label
+                  htmlFor="profile-image"
+                  className="mb-3 block text-sm font-medium text-slate-300"
+                >
                   Profile Image
                 </label>
 
@@ -1095,7 +1089,9 @@ function Settings() {
                     {settings.account.profileImage && (
                       <button
                         type="button"
-                        onClick={() => updateSetting("account", "profileImage", "")}
+                        onClick={() =>
+                          updateSetting("account", "profileImage", "")
+                        }
                         className="mt-3 text-xs font-semibold text-red-400 transition hover:text-red-300 hover:underline"
                       >
                         Remove Profile Image
@@ -1130,10 +1126,7 @@ function Settings() {
 
               <div className="mt-2 flex justify-between text-xs text-slate-500">
                 <span>2–50 characters</span>
-
-                <span>
-                  {settings.account.displayName.length}/50
-                </span>
+                <span>{settings.account.displayName.length}/50</span>
               </div>
             </div>
 
@@ -1164,7 +1157,7 @@ function Settings() {
                 Leave blank if you do not want a default workspace.
               </p>
             </div>
-          </div>   
+          </div>
 
           <div className="mt-6 flex flex-col gap-3 border-t border-slate-800 pt-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -1200,7 +1193,6 @@ function Settings() {
               className="flex min-w-44 items-center justify-center gap-2 rounded-lg bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FaSave />
-
               {saving ? "Saving..." : "Save Account Settings"}
             </button>
           </div>
@@ -1229,7 +1221,6 @@ function Settings() {
                 >
                   Update Email
                 </h2>
-
                 <p className="mt-1 text-sm text-slate-400">
                   Enter and confirm the new email for your account.
                 </p>
@@ -1272,7 +1263,6 @@ function Settings() {
                 >
                   New Email
                 </label>
-
                 <input
                   id="new-email"
                   type="email"
@@ -1293,7 +1283,6 @@ function Settings() {
                 >
                   Confirm New Email
                 </label>
-
                 <input
                   id="confirm-email"
                   type="email"
@@ -1317,7 +1306,6 @@ function Settings() {
               >
                 Cancel
               </button>
-
               <button
                 type="button"
                 onClick={handleUpdateEmail}
@@ -1353,7 +1341,6 @@ function Settings() {
                 >
                   Change Password
                 </h2>
-
                 <p className="mt-1 text-sm text-slate-400">
                   Enter your current password and choose a new one.
                 </p>
@@ -1396,7 +1383,6 @@ function Settings() {
                 >
                   Current Password
                 </label>
-
                 <input
                   id="current-password"
                   type={showPasswords ? "text" : "password"}
@@ -1420,7 +1406,6 @@ function Settings() {
                 >
                   New Password
                 </label>
-
                 <input
                   id="new-password"
                   type={showPasswords ? "text" : "password"}
@@ -1435,7 +1420,6 @@ function Settings() {
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-cyan-500"
                   placeholder="Enter a new password"
                 />
-
                 <p className="mt-2 text-xs text-slate-500">
                   Must be at least 6 characters.
                 </p>
@@ -1448,7 +1432,6 @@ function Settings() {
                 >
                   Confirm New Password
                 </label>
-
                 <input
                   id="confirm-password"
                   type={showPasswords ? "text" : "password"}
@@ -1487,16 +1470,13 @@ function Settings() {
               >
                 Cancel
               </button>
-
               <button
                 type="button"
                 onClick={handleUpdatePassword}
                 disabled={passwordSaving}
                 className="rounded-lg bg-cyan-500 px-4 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {passwordSaving
-                  ? "Updating..."
-                  : "Update Password"}
+                {passwordSaving ? "Updating..." : "Update Password"}
               </button>
             </div>
           </div>
@@ -1519,7 +1499,6 @@ function SettingToggle({
         <h3 className="font-semibold text-white">
           {title}
         </h3>
-
         <p className="mt-1 text-sm text-slate-400">
           {description}
         </p>
@@ -1528,6 +1507,7 @@ function SettingToggle({
       <button
         type="button"
         role="switch"
+        aria-label={title}
         aria-checked={enabled}
         onClick={onToggle}
         disabled={disabled}

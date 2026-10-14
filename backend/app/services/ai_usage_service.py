@@ -7,7 +7,7 @@ from app.models.ai_usage import AIUsage
 def log_ai_usage(
     db: Session,
     user_id: int,
-    project_id: int,
+    project_id: int | None,
     feature_type: str,
     content_type: str,
     status: str = "success",

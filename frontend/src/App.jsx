@@ -21,6 +21,7 @@ import Settings from "./pages/Settings";
 import ProductArchitect from "./pages/ProductArchitect";
 import TabletopCreator from "./pages/TabletopCreator";
 import ProblemSolver from "./pages/ProblemSolver";
+import LearningStudio from "./pages/LearningStudio";
 import HelpGuide from "./pages/HelpGuide";
 
 const SETTINGS_KEY = "tanioSettings";
@@ -32,6 +33,7 @@ const VALID_MODULE_IDS = [
   "product-architect",
   "tabletop-creator",
   "problem-solver",
+  "learning-studio",
 ];
 
 function getStoredAppearance() {
@@ -436,6 +438,17 @@ function App() {
               element={
                 isModuleEnabled("problem-solver") ? (
                   <ProblemSolver />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
+            />
+
+            <Route
+              path="/learning-studio"
+              element={
+                isModuleEnabled("learning-studio") ? (
+                  <LearningStudio />
                 ) : (
                   <Navigate to="/" replace />
                 )

@@ -6,10 +6,12 @@ from app.api import auth
 from app.api import activity_log as activity_log_api
 from app.api import content as content_api
 from app.api import content_version as content_version_api
+from app.api import dashboard
+from app.api import learning_studio
+from app.api import problem_solver
 from app.api import product_architect
 from app.api import project as project_api
 from app.api import tabletop_creator
-from app.api import problem_solver
 from app.api import workspace as workspace_api
 from app.api import project_members as project_members_api
 from app.api import project_activity as project_activity_api
@@ -27,7 +29,7 @@ from app.models import (
     workspace,
 )
 from app.models.content_version import ContentVersion
-from app.api import dashboard
+
 
 app = FastAPI(title="Tanio AI API")
 
@@ -58,6 +60,8 @@ app.include_router(problem_solver.router)
 app.include_router(project_members_api.router)
 app.include_router(project_activity_api.router)
 app.include_router(discord_api.router)
+app.include_router(learning_studio.router)
+
 
 @app.get("/")
 def root():

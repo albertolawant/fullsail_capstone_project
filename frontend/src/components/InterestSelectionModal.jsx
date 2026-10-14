@@ -24,6 +24,13 @@ const MODULES = [
       "Break down complex problems and generate practical, organized solutions.",
     icon: "◎",
   },
+  {
+    id: "learning-studio",
+    name: "Learning Studio",
+    description:
+      "Explore topics through AI-generated lessons, flashcards, and quizzes.",
+    icon: "🎓",
+  },
 ];
 
 const VALID_MODULE_IDS = MODULES.map((module) => module.id);
@@ -62,6 +69,10 @@ function InterestSelectionModal({ onComplete }) {
   }, []);
 
   const toggleModule = (moduleId) => {
+    if (saving) {
+      return;
+    }
+
     setError("");
 
     setSelectedModules((currentModules) => {
@@ -76,6 +87,10 @@ function InterestSelectionModal({ onComplete }) {
   };
 
   const saveModules = async (modulesToSave) => {
+    if (saving) {
+      return;
+    }
+
     const token = localStorage.getItem("token");
 
     if (!token) {
@@ -84,6 +99,10 @@ function InterestSelectionModal({ onComplete }) {
       );
       return;
     }
+
+    const validModulesToSave = modulesToSave.filter((moduleId) =>
+      VALID_MODULE_IDS.includes(moduleId)
+    );
 
     setSaving(true);
     setError("");
@@ -98,7 +117,7 @@ function InterestSelectionModal({ onComplete }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            selected_modules: modulesToSave,
+            selected_modules: validModulesToSave,
           }),
         }
       );
@@ -108,19 +127,28 @@ function InterestSelectionModal({ onComplete }) {
           .json()
           .catch(() => null);
 
-        throw new Error(
-          errorData?.detail ||
-            "Unable to save your selections."
-        );
+        let message = "Unable to save your selections.";
+
+        if (typeof errorData?.detail === "string") {
+          message = errorData.detail;
+        } else if (Array.isArray(errorData?.detail)) {
+          message =
+            errorData.detail
+              .map((item) => item.msg)
+              .filter(Boolean)
+              .join(" ") || message;
+        }
+
+        throw new Error(message);
       }
 
       const data = await response.json();
 
-      const savedModules = Array.isArray(
-        data.selected_modules
-      )
-        ? data.selected_modules
-        : modulesToSave;
+      const savedModules = Array.isArray(data.selected_modules)
+        ? data.selected_modules.filter((moduleId) =>
+            VALID_MODULE_IDS.includes(moduleId)
+          )
+        : validModulesToSave;
 
       localStorage.setItem(
         SELECTED_MODULES_KEY,
@@ -140,6 +168,10 @@ function InterestSelectionModal({ onComplete }) {
   };
 
   const handleContinue = () => {
+    if (saving) {
+      return;
+    }
+
     if (selectedModules.length === 0) {
       setError("Select at least one module to continue.");
       return;
@@ -149,7 +181,11 @@ function InterestSelectionModal({ onComplete }) {
   };
 
   const handleShowEverything = () => {
-    setSelectedModules(VALID_MODULE_IDS);
+    if (saving) {
+      return;
+    }
+
+    setSelectedModules([...VALID_MODULE_IDS]);
     saveModules(VALID_MODULE_IDS);
   };
 
@@ -159,6 +195,8 @@ function InterestSelectionModal({ onComplete }) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="interest-modal-title"
+      aria-describedby="interest-modal-description"
+      aria-busy={saving}
     >
       <div className="my-auto w-full max-w-4xl rounded-2xl border border-slate-700 bg-[#07142F] p-5 shadow-2xl sm:p-8">
         <div className="mx-auto max-w-2xl text-center">
@@ -173,13 +211,16 @@ function InterestSelectionModal({ onComplete }) {
             What are you interested in?
           </h1>
 
-          <p className="mt-3 text-sm leading-6 text-slate-400 sm:text-base">
+          <p
+            id="interest-modal-description"
+            className="mt-3 text-sm leading-6 text-slate-400 sm:text-base"
+          >
             Select one or more Tanio AI modules, or choose
             Show Me Everything to enable them all.
           </p>
         </div>
 
-        <div className="mt-7 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="mt-7 grid grid-cols-1 gap-4 md:grid-cols-2">
           {MODULES.map((module) => {
             const isSelected = selectedModules.includes(
               module.id
@@ -192,7 +233,7 @@ function InterestSelectionModal({ onComplete }) {
                 onClick={() => toggleModule(module.id)}
                 disabled={saving}
                 aria-pressed={isSelected}
-                className={`relative min-h-52 rounded-xl border p-5 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`relative min-h-52 rounded-xl border p-5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60 ${
                   isSelected
                     ? "border-cyan-400 bg-cyan-400/10 shadow-lg shadow-cyan-950/30"
                     : "border-slate-700 bg-slate-900/60 hover:border-slate-500 hover:bg-slate-900"
@@ -237,15 +278,15 @@ function InterestSelectionModal({ onComplete }) {
             type="button"
             onClick={handleShowEverything}
             disabled={saving}
-            className="w-full rounded-xl border border-cyan-400/50 bg-cyan-400/10 px-6 py-4 text-left transition hover:border-cyan-400 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50 sm:text-center"
+            className="w-full rounded-xl border border-cyan-400/50 bg-cyan-400/10 px-6 py-4 text-left transition hover:border-cyan-400 hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50 sm:text-center"
           >
             <span className="block font-semibold text-cyan-300">
               Show Me Everything
             </span>
 
             <span className="mt-1 block text-sm text-slate-400">
-              Enable Product Architect, Tabletop Creator, and
-              Problem Solver.
+              Enable Product Architect, Tabletop Creator, Problem Solver,
+              and Learning Studio.
             </span>
           </button>
         </div>
@@ -275,7 +316,7 @@ function InterestSelectionModal({ onComplete }) {
             disabled={
               selectedModules.length === 0 || saving
             }
-            className="w-full rounded-lg bg-cyan-500 px-7 py-3 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+            className="w-full rounded-lg bg-cyan-500 px-7 py-3 font-semibold text-slate-950 transition-colors hover:bg-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
           >
             {saving ? "Saving..." : "Continue"}
           </button>
