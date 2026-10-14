@@ -11,8 +11,21 @@ from app.api import project as project_api
 from app.api import tabletop_creator
 from app.api import problem_solver
 from app.api import workspace as workspace_api
+from app.api import project_members as project_members_api
+from app.api import project_activity as project_activity_api
+from app.api import discord as discord_api
 from app.db.database import Base, engine
-from app.models import ai_usage, content, product_logo, project, user, workspace, activity_log
+from app.models import (
+    activity_log,
+    ai_usage,
+    content,
+    product_logo,
+    project,
+    project_activity,
+    project_member,
+    user,
+    workspace,
+)
 from app.models.content_version import ContentVersion
 from app.api import dashboard
 
@@ -42,6 +55,9 @@ app.include_router(tabletop_creator.router)
 app.include_router(dashboard.router)
 app.include_router(activity_log_api.router)
 app.include_router(problem_solver.router)
+app.include_router(project_members_api.router)
+app.include_router(project_activity_api.router)
+app.include_router(discord_api.router)
 
 @app.get("/")
 def root():

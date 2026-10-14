@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from openai import OpenAI
 from sqlalchemy.orm import Session
+from app.services.project_permissions import require_project_edit_access
 
 from app.api.auth import get_current_user
 from app.core.config import settings
@@ -309,20 +310,11 @@ def get_selected_project(
     if project_id is None:
         return None
 
-    project = (
-        db.query(Project)
-        .filter(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-        )
-        .first()
+    project, role = require_project_edit_access(
+        db=db,
+        project_id=project_id,
+        current_user=current_user,
     )
-
-    if not project:
-        raise HTTPException(
-            status_code=404,
-            detail="Selected project was not found.",
-        )
 
     return project
 
@@ -547,12 +539,13 @@ For each NPC, include these exact labeled sections:
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as error:
+        print("NPC generation failed:", error)
+
         raise HTTPException(
             status_code=500,
             detail="Unable to generate NPC content.",
         )
-
 
 @router.post(
     "/generate-quest",

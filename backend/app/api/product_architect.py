@@ -1,5 +1,10 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from app.services.project_permissions import (
+    require_project_access,
+    require_project_edit_access,
+    require_project_owner,
+)
 
 from openai import (
     APIConnectionError,
@@ -216,13 +221,10 @@ def get_or_create_user_project(
     cleaned_description = description.strip()
 
     if project_id is not None:
-        selected_project = (
-            db.query(Project)
-            .filter(
-                Project.id == project_id,
-                Project.owner_id == current_user.id,
-            )
-            .first()
+        selected_project, role = require_project_edit_access(
+            db=db,
+            project_id=project_id,
+            current_user=current_user,
         )
 
         if not selected_project:
@@ -353,20 +355,11 @@ def generate_and_save_content(
     project = None
 
     if request.project_id is not None:
-        project = (
-            db.query(Project)
-            .filter(
-                Project.id == request.project_id,
-                Project.owner_id == current_user.id,
-            )
-            .first()
+        project, role = require_project_edit_access(
+            db=db,
+            project_id=request.project_id,
+            current_user=current_user,
         )
-
-        if not project:
-            raise HTTPException(
-                status_code=404,
-                detail="Selected project was not found.",
-            )
 
     if not settings.OPENAI_API_KEY:
         raise HTTPException(
@@ -702,13 +695,10 @@ def generate_product_logo(
                 detail="The selected logo context could not be found.",
             )
 
-        context_project = (
-            db.query(Project)
-            .filter(
-                Project.id == selected_content.project_id,
-                Project.owner_id == current_user.id,
-            )
-            .first()
+        context_project, role = require_project_edit_access(
+            db=db,
+            project_id=selected_content.project_id,
+            current_user=current_user,
         )
 
         if not context_project:
@@ -962,26 +952,16 @@ def get_product_logo_gallery(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = (
-        db.query(Project)
-        .filter(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-        )
-        .first()
+    project, role = require_project_access(
+        db=db,
+        project_id=project_id,
+        current_user=current_user,
     )
-
-    if not project:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found.",
-        )
 
     logos = (
         db.query(ProductLogo)
         .filter(
             ProductLogo.project_id == project_id,
-            ProductLogo.owner_id == current_user.id,
         )
         .order_by(
             ProductLogo.created_at.desc(),
@@ -1028,35 +1008,26 @@ def update_product_logo(
             detail="Logo not found.",
         )
 
-    if logo.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to update this logo.",
+    if logo.project_id is not None:
+        old_project, old_role = require_project_edit_access(
+            db=db,
+            project_id=logo.project_id,
+            current_user=current_user,
         )
+    else:
+        if logo.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to update this logo.",
+            )
 
-    old_project = (
-        db.query(Project)
-        .filter(
-            Project.id == logo.project_id,
-            Project.owner_id == current_user.id,
-        )
-        .first()
+        old_project = None
+
+    new_project, new_role = require_project_edit_access(
+        db=db,
+        project_id=logo_data.project_id,
+        current_user=current_user,
     )
-
-    new_project = (
-        db.query(Project)
-        .filter(
-            Project.id == logo_data.project_id,
-            Project.owner_id == current_user.id,
-        )
-        .first()
-    )
-
-    if not new_project:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found.",
-        )
 
     old_project_id = logo.project_id
 
@@ -1136,17 +1107,20 @@ def delete_product_logo(
             detail="Logo not found.",
         )
 
-    if logo.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to delete this logo.",
+    if logo.project_id is not None:
+        project = require_project_owner(
+            db=db,
+            project_id=logo.project_id,
+            current_user=current_user,
         )
+    else:
+        if logo.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to delete this logo.",
+            )
 
-    project = (
-        db.query(Project)
-        .filter(Project.id == logo.project_id)
-        .first()
-    )
+        project = None
 
     try:
         create_activity_log(

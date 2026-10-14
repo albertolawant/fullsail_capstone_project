@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
+from app.models.project_member import ProjectMember
 from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.db.database import get_db
@@ -9,7 +10,14 @@ from app.models.content import GeneratedContent
 from app.models.content_version import ContentVersion
 from app.models.project import Project
 from app.models.user import User
+from app.models.project_activity import ProjectActivity
 from app.models.activity_log import ActivityLog
+from app.services.project_permissions import (
+    require_project_access,
+    require_project_edit_access,
+    require_project_owner,
+)
+from app.services.discord_webhook import send_discord_message
 from app.schemas.content import (
     ContentCreate,
     ContentResponse,
@@ -59,23 +67,11 @@ def create_content(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = (
-        db.query(Project)
-        .filter(Project.id == content_data.project_id)
-        .first()
+    project, role = require_project_edit_access(
+        db=db,
+        project_id=content_data.project_id,
+        current_user=current_user,
     )
-
-    if not project:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found",
-        )
-
-    if project.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to add content to this project",
-        )
 
     content = GeneratedContent(
         title=content_data.title,
@@ -102,8 +98,25 @@ def create_content(
         new_project_name=project.title,
     )
 
+    project_activity = ProjectActivity(
+        project_id=project.id,
+        user_id=current_user.id,
+        action="content_created",
+        details=(
+            f"Created {content.content_type} "
+            f"'{content.title}'."
+        ),
+    )
+
+    db.add(project_activity)
+
     db.commit()
     db.refresh(content)
+
+    send_discord_message(
+        f"📝 **{current_user.username}** created "
+        f"**{content.title}** in project **{project.title}**."
+    )    
 
     return content
 
@@ -126,7 +139,8 @@ def get_all_content(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Return all generated content owned by the authenticated user.
+    Return all generated content accessible to the authenticated user,
+    including content they own and content from shared projects.
 
     Optional query parameters:
 
@@ -137,8 +151,24 @@ def get_all_content(
     Results are returned with the newest content first.
     """
 
-    query = db.query(GeneratedContent).filter(
-        GeneratedContent.owner_id == current_user.id
+    query = (
+        db.query(GeneratedContent)
+        .outerjoin(
+            Project,
+            Project.id == GeneratedContent.project_id,
+        )
+        .outerjoin(
+            ProjectMember,
+            ProjectMember.project_id == GeneratedContent.project_id,
+        )
+        .filter(
+            or_(
+                GeneratedContent.owner_id == current_user.id,
+                Project.owner_id == current_user.id,
+                ProjectMember.user_id == current_user.id,
+            )
+        )
+        .distinct()
     )
 
     if search and search.strip():
@@ -187,7 +217,13 @@ def get_content(
             detail="Content not found",
         )
 
-    if content.owner_id != current_user.id:
+    if content.project_id is not None:
+        require_project_access(
+            db=db,
+            project_id=content.project_id,
+            current_user=current_user,
+        )
+    elif content.owner_id != current_user.id:
         raise HTTPException(
             status_code=403,
             detail="Not authorized to view this content",
@@ -223,7 +259,13 @@ def update_content(
         .first()
     )
 
-    if content.owner_id != current_user.id:
+    if content.project_id is not None:
+        require_project_edit_access(
+            db=db,
+            project_id=content.project_id,
+            current_user=current_user,
+        )
+    elif content.owner_id != current_user.id:
         raise HTTPException(
             status_code=403,
             detail="Not authorized to update this content",
@@ -262,20 +304,11 @@ def update_content(
         content.body = content_data.body
 
     if content_data.project_id is not None:
-        project = (
-            db.query(Project)
-            .filter(
-                Project.id == content_data.project_id,
-                Project.owner_id == current_user.id
-            )
-            .first()
+        project, role = require_project_edit_access(
+            db=db,
+            project_id=content_data.project_id,
+            current_user=current_user,
         )
-
-        if not project:
-            raise HTTPException(
-                status_code=404,
-                detail="Project not found",
-            )
 
         content.project_id = content_data.project_id
 
@@ -309,6 +342,19 @@ def update_content(
             new_project_id=content.project_id,
             new_project_name=new_project.title if new_project else None,
         )
+
+        project_activity = ProjectActivity(
+            project_id=content.project_id,
+            user_id=current_user.id,
+            action="content_moved",
+            details=(
+                f"Moved '{content.title}' from "
+                f"{old_project.title if old_project else 'Unknown Project'} "
+                f"to {new_project.title if new_project else 'Unknown Project'}."
+            ),
+        )
+
+        db.add(project_activity)
     else:
         create_activity_log(
             db=db,
@@ -321,6 +367,18 @@ def update_content(
             project_id=content.project_id,
             project_name=new_project.title if new_project else None,
         )
+
+        project_activity = ProjectActivity(
+            project_id=content.project_id,
+            user_id=current_user.id,
+            action="content_updated",
+            details=(
+                f"Updated {content.content_type} "
+                f"'{content.title}'."
+            ),
+        )
+
+        db.add(project_activity)
 
     db.commit()
     db.refresh(content)
@@ -346,17 +404,20 @@ def delete_content(
             detail="Content not found",
         )
 
-    if content.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to delete this content",
+    if content.project_id is not None:
+        project = require_project_owner(
+            db=db,
+            project_id=content.project_id,
+            current_user=current_user,
         )
+    else:
+        if content.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to delete this content",
+            )
 
-    project = (
-        db.query(Project)
-        .filter(Project.id == content.project_id)
-        .first()
-    )
+        project = None
 
     try:
         db.query(ContentVersion).filter(
@@ -374,6 +435,19 @@ def delete_content(
             project_id=content.project_id,
             project_name=project.title if project else None,
         )
+
+        if content.project_id is not None:
+            project_activity = ProjectActivity(
+                project_id=content.project_id,
+                user_id=current_user.id,
+                action="content_deleted",
+                details=(
+                    f"Deleted {content.content_type} "
+                    f"'{content.title}'."
+                ),
+            )
+
+            db.add(project_activity)
 
         db.delete(content)
         db.commit()

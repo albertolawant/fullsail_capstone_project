@@ -75,6 +75,18 @@ def create_access_token(data: dict):
 
     return encoded_jwt
 
+def is_user_online(user: User) -> bool:
+    if user.last_seen is None:
+        return False
+
+    now = datetime.now(timezone.utc)
+    last_seen = user.last_seen
+
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+
+    return now - last_seen <= timedelta(minutes=5)
+
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -196,6 +208,22 @@ def get_me(
     current_user: User = Depends(get_current_user),
 ):
     return current_user
+
+@router.post("/presence/heartbeat")
+def presence_heartbeat(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.last_seen = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "user_id": current_user.id,
+        "last_seen": current_user.last_seen,
+        "is_online": is_user_online(current_user),
+    }
 
 
 @router.put(

@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 from typing import List
+from sqlalchemy import or_
+from app.models.project_member import ProjectMember
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -10,6 +12,7 @@ from app.db.database import get_db
 from app.models.project import Project
 from app.models.workspace import Workspace
 from app.models.user import User
+from app.models.project_activity import ProjectActivity
 from app.schemas.project import (
     ProjectCreate,
     ProjectUpdate,
@@ -20,6 +23,13 @@ from app.models.content import GeneratedContent
 from app.models.content_version import ContentVersion
 from app.models.product_logo import ProductLogo
 from app.models.activity_log import ActivityLog
+from app.services.project_permissions import (
+    get_project_role,
+    require_project_access,
+    require_project_edit_access,
+    require_project_owner,
+)
+from app.services.discord_webhook import send_discord_message
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -154,8 +164,22 @@ def create_project(
         new_project_name=new_project.title,
     )
 
+    project_activity = ProjectActivity(
+        project_id=new_project.id,
+        user_id=current_user.id,
+        action="project_created",
+        details=f"Created project '{new_project.title}'.",
+    )
+
+    db.add(project_activity)
+
     db.commit()
     db.refresh(new_project)
+
+    send_discord_message(
+        f"📁 New Tanio project created: **{new_project.title}** "
+        f"by **{current_user.username}**."
+    )    
 
     return new_project
 
@@ -164,9 +188,19 @@ def get_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return (
+    projects = (
         db.query(Project)
-        .filter(Project.owner_id == current_user.id)
+        .outerjoin(
+            ProjectMember,
+            ProjectMember.project_id == Project.id,
+        )
+        .filter(
+            or_(
+                Project.owner_id == current_user.id,
+                ProjectMember.user_id == current_user.id,
+            )
+        )
+        .distinct()
         .order_by(
             Project.updated_at.desc(),
             Project.created_at.desc(),
@@ -174,6 +208,15 @@ def get_projects(
         )
         .all()
     )
+
+    for project in projects:
+        project.current_user_role = get_project_role(
+            db=db,
+            project=project,
+            current_user=current_user,
+        )
+
+    return projects
 
 
 @router.get("/preserved-logos")
@@ -214,17 +257,11 @@ def get_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    project = (
-        db.query(Project)
-        .filter(
-            Project.id == project_id,
-            Project.owner_id == current_user.id
-        )
-        .first()
+    project, role = require_project_access(
+        db=db,
+        project_id=project_id,
+        current_user=current_user,
     )
-
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
 
     return project
 
@@ -235,17 +272,11 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    project = (
-        db.query(Project)
-        .filter(
-            Project.id == project_id,
-            Project.owner_id == current_user.id
-        )
-        .first()
+    project, role = require_project_edit_access(
+        db=db,
+        project_id=project_id,
+        current_user=current_user,
     )
-
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
 
     old_title = project.title
     old_workspace_id = project.workspace_id
@@ -266,6 +297,12 @@ def update_project(
         description_changed = True
 
     if project_data.workspace_id is not None:
+        if role != "owner" and project_data.workspace_id != project.workspace_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the project owner can move the project to another workspace",
+            )
+
         workspace = (
             db.query(Workspace)
             .filter(
@@ -316,6 +353,17 @@ def update_project(
             new_project_id=project.id,
             new_project_name=project.title,
         )
+
+        project_activity = ProjectActivity(
+            project_id=project.id,
+            user_id=current_user.id,
+            action="project_moved",
+            details=(
+                f"Moved the project from "
+                f"{old_workspace.name if old_workspace else 'Unknown Workspace'} "
+                f"to {new_workspace.name if new_workspace else 'Unknown Workspace'}."
+            ),
+        )
     else:
         create_activity_log(
             db=db,
@@ -329,8 +377,24 @@ def update_project(
             project_name=project.title,
         )
 
+        project_activity = ProjectActivity(
+            project_id=project.id,
+            user_id=current_user.id,
+            action="project_updated",
+            details=f"Updated project information for {project.title}.",
+        )
+
+    db.add(project_activity)
+
     db.commit()
     db.refresh(project)
+
+    send_discord_message(
+        f"📦 **{current_user.username}** moved project "
+        f"**{project.title}** from "
+        f"**{old_workspace.name if old_workspace else 'Unknown Workspace'}** "
+        f"to **{new_workspace.name if new_workspace else 'Unknown Workspace'}**."
+    )    
 
     return project
 
@@ -341,20 +405,11 @@ def delete_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    project = (
-        db.query(Project)
-        .filter(
-            Project.id == project_id,
-            Project.owner_id == current_user.id
-        )
-        .first()
+    project = require_project_owner(
+        db=db,
+        project_id=project_id,
+        current_user=current_user,
     )
-
-    if not project:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found"
-        )
 
     project_content = (
         db.query(GeneratedContent)
