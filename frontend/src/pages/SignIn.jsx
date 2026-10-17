@@ -16,6 +16,10 @@ function SignIn() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    if (loading) {
+      return;
+    }
+
     setError("");
     setLoading(true);
 
@@ -38,13 +42,12 @@ function SignIn() {
       );
 
       if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => null);
+        const errorData = await response.json().catch(() => null);
 
         throw new Error(
-          errorData?.detail ||
-            "Invalid email or password."
+          typeof errorData?.detail === "string"
+            ? errorData.detail
+            : "Invalid email or password."
         );
       }
 
@@ -58,19 +61,14 @@ function SignIn() {
 
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("tanioSession", "true");
-
-      localStorage.setItem(
-        INTEREST_PROMPT_KEY,
-        "true"
-      );
+      localStorage.setItem(INTEREST_PROMPT_KEY, "true");
 
       localStorage.setItem(
         "tanioUser",
         JSON.stringify({
           email: email.trim(),
           username:
-            email.trim().toLowerCase() ===
-            "demo@tanio.ai"
+            email.trim().toLowerCase() === "demo@tanio.ai"
               ? "Demo User"
               : email.trim(),
         })
@@ -93,102 +91,143 @@ function SignIn() {
     }
   };
 
+  const inputClass =
+    "w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500 transition focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60";
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#010A24] p-6 text-white">
+    <main className="flex min-h-screen w-full min-w-0 items-center justify-center bg-slate-950 px-4 py-8 text-white sm:px-6 sm:py-12">
       <div className="w-full max-w-md">
-        <img
-          src={logo}
-          alt="Tanio AI"
-          className="mx-auto mb-1 h-64 object-contain"
-        />
-
-        <div className="w-full rounded-2xl border border-slate-800 bg-[#07142F] p-8 shadow-xl">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold">
-              Welcome to Tanio AI
-            </h1>
-
-            <p className="mt-2 text-slate-400">
-              Sign in to access your workspace.
-            </p>
+        <section
+          aria-labelledby="signin-title"
+          className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-xl"
+        >
+          {/* Existing logo artwork */}
+          <div className="border-b border-slate-800 bg-slate-950 px-6 py-6">
+            <div className="mx-auto w-full max-w-[240px] overflow-hidden rounded-2xl bg-[#010A24]">
+              <img
+                src={logo}
+                alt="Tanio AI"
+                className="block h-auto w-full object-contain"
+                draggable={false}
+              />
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="mb-5">
-              <label
-                htmlFor="email"
-                className="mb-2 block text-sm text-slate-300"
+          <div className="p-6 sm:p-8">
+            <div className="mb-7 text-center">
+              <h1
+                id="signin-title"
+                className="text-2xl font-bold tracking-tight text-white sm:text-3xl"
               >
-                Email Address
-              </label>
+                Welcome to Tanio AI
+              </h1>
 
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(event) =>
-                  setEmail(event.target.value)
-                }
-                placeholder="demo@tanio.ai"
-                autoComplete="email"
-                required
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
-                data-testid="signin-email"
-              />
-            </div>
-
-            <div className="mb-5">
-              <label
-                htmlFor="password"
-                className="mb-2 block text-sm text-slate-300"
-              >
-                Password
-              </label>
-
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(event) =>
-                  setPassword(event.target.value)
-                }
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                required
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
-                data-testid="signin-password"
-              />
-            </div>
-
-            <div className="mb-5 rounded-lg border border-cyan-900 bg-cyan-950/30 p-3 text-sm text-slate-300">
-              <p className="font-semibold text-cyan-400">
-                Demo Account
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Sign in to access your workspace.
               </p>
-
-              <p>Email: demo@tanio.ai</p>
-              <p>Password: Demo123!</p>
             </div>
 
-            {error && (
-              <p
-                className="mb-5 rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-300"
-                role="alert"
-                data-testid="signin-error"
-              >
-                {error}
-              </p>
-            )}
+            <form onSubmit={handleSubmit} aria-busy={loading}>
+              <div className="mb-5">
+                <label
+                  htmlFor="email"
+                  className="mb-2 block text-sm font-semibold text-slate-300"
+                >
+                  Email Address
+                </label>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-cyan-500 py-3 font-semibold text-slate-950 transition-all duration-200 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="signin-button"
-            >
-              {loading ? "Signing In..." : "Sign In"}
-            </button>
-          </form>
-        </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setError("");
+                  }}
+                  placeholder="demo@tanio.ai"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  required
+                  disabled={loading}
+                  className={inputClass}
+                  data-testid="signin-email"
+                />
+              </div>
+
+              <div className="mb-5">
+                <label
+                  htmlFor="password"
+                  className="mb-2 block text-sm font-semibold text-slate-300"
+                >
+                  Password
+                </label>
+
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setError("");
+                  }}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                  disabled={loading}
+                  className={inputClass}
+                  data-testid="signin-password"
+                />
+              </div>
+
+              <div className="mb-6 rounded-xl border border-cyan-900 bg-cyan-950/30 p-4 text-sm text-slate-300">
+                <p className="font-semibold text-cyan-400">
+                  Demo Account
+                </p>
+
+                <dl className="mt-3 space-y-2">
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-slate-400">Email:</dt>
+                    <dd className="break-all">demo@tanio.ai</dd>
+                  </div>
+
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-slate-400">Password:</dt>
+                    <dd>Demo123!</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {error && (
+                <p
+                  className="mb-5 rounded-xl border border-red-800 bg-red-950 p-4 text-sm leading-6 text-red-300"
+                  role="alert"
+                  data-testid="signin-error"
+                >
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="signin-button"
+              >
+                {loading && (
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950"
+                  />
+                )}
+
+                {loading ? "Signing In..." : "Sign In"}
+              </button>
+            </form>
+          </div>
+        </section>
       </div>
     </main>
   );

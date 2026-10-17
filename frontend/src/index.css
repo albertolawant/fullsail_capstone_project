@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ========================================
-   Tanio Global Appearance Settings
+   Global Appearance
    ======================================== */
 
 html,
@@ -11,11 +11,13 @@ body,
   background-color: #020617;
 }
 
+html {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
 }
-
-/* Smooth visual changes */
 
 body,
 header,
@@ -36,39 +38,144 @@ select {
 
 /* ========================================
    Light Theme
+   App.jsx resolves System Default to
+   either "light" or "dark".
    ======================================== */
+
+html[data-tanio-theme="light"] {
+  color-scheme: light;
+}
 
 html[data-tanio-theme="light"],
 html[data-tanio-theme="light"] body,
 html[data-tanio-theme="light"] #root {
-  background-color: #f8fafc;
-}
-
-html[data-tanio-theme="light"] body {
+  background-color: #f1f5f9;
   color: #0f172a;
 }
 
-html[data-tanio-theme="light"] .bg-slate-950 {
+html[data-tanio-theme="light"] main {
+  background-color: #f1f5f9 !important;
+}
+
+/* Solid and transparent background utilities */
+
+html[data-tanio-theme="light"]
+  :is(
+    [class~="bg-slate-950"],
+    [class*="bg-slate-950/"]
+  ) {
   background-color: #f8fafc !important;
 }
 
-html[data-tanio-theme="light"] .bg-slate-900 {
+html[data-tanio-theme="light"]
+  :is(
+    [class~="bg-slate-900"],
+    [class*="bg-slate-900/"]
+  ) {
   background-color: #ffffff !important;
 }
 
-html[data-tanio-theme="light"] .bg-slate-900\/60 {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-}
-
-html[data-tanio-theme="light"] .bg-slate-950\/50 {
-  background-color: #f8fafc !important;
-}
-
-html[data-tanio-theme="light"] .bg-slate-800 {
+html[data-tanio-theme="light"]
+  :is(
+    [class~="bg-slate-800"],
+    [class*="bg-slate-800/"]
+  ) {
   background-color: #e2e8f0 !important;
 }
 
-html[data-tanio-theme="light"] .text-white {
+html[data-tanio-theme="light"]
+  :is(
+    [class~="bg-slate-700"],
+    [class*="bg-slate-700/"]
+  ) {
+  background-color: #cbd5e1 !important;
+}
+
+/* Dark gradient surfaces */
+
+html[data-tanio-theme="light"]
+  :is(
+    [class*="from-slate-"],
+    [class*="via-slate-"],
+    [class*="to-slate-"]
+  ):not(.bg-clip-text) {
+  background-color: #ffffff !important;
+  background-image: linear-gradient(
+    135deg,
+    #ffffff,
+    #f8fafc
+  ) !important;
+}
+
+/* Preserve subtle module colors */
+
+html[data-tanio-theme="light"]
+  [class*="from-cyan-"][class*="to-slate-"]:not(.bg-clip-text) {
+  background-image: linear-gradient(
+    135deg,
+    #ecfeff,
+    #ffffff 65%
+  ) !important;
+}
+
+html[data-tanio-theme="light"]
+  [class*="from-purple-"][class*="to-slate-"]:not(.bg-clip-text) {
+  background-image: linear-gradient(
+    135deg,
+    #faf5ff,
+    #ffffff 65%
+  ) !important;
+}
+
+html[data-tanio-theme="light"]
+  [class*="from-violet-"][class*="to-slate-"]:not(.bg-clip-text) {
+  background-image: linear-gradient(
+    135deg,
+    #f5f3ff,
+    #ffffff 65%
+  ) !important;
+}
+
+html[data-tanio-theme="light"]
+  [class*="from-emerald-"][class*="to-slate-"]:not(.bg-clip-text) {
+  background-image: linear-gradient(
+    135deg,
+    #ecfdf5,
+    #ffffff 65%
+  ) !important;
+}
+
+/* Custom Product Architect panel backgrounds */
+
+html[data-tanio-theme="light"]
+  [class*="bg-[radial-gradient"] {
+  background-color: #ffffff !important;
+  background-image: linear-gradient(
+    135deg,
+    #f0fdff,
+    #ffffff 55%
+  ) !important;
+}
+
+/* Gradient headings */
+
+html[data-tanio-theme="light"] .bg-clip-text {
+  background-image: none !important;
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+/* ========================================
+   Text
+   ======================================== */
+
+html[data-tanio-theme="light"]
+  :is(
+    .text-white,
+    .text-slate-50,
+    .text-slate-100,
+    .text-slate-200
+  ) {
   color: #0f172a !important;
 }
 
@@ -76,111 +183,251 @@ html[data-tanio-theme="light"] .text-slate-300 {
   color: #334155 !important;
 }
 
-html[data-tanio-theme="light"] .text-slate-400 {
+html[data-tanio-theme="light"]
+  :is(.text-slate-400, .text-slate-500) {
+  color: #526277 !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(.text-slate-600, .text-slate-700) {
   color: #64748b !important;
 }
 
-html[data-tanio-theme="light"] .text-slate-500 {
-  color: #64748b !important;
+html[data-tanio-theme="light"]
+  :is(
+    .text-cyan-100,
+    .text-cyan-200,
+    .text-cyan-300,
+    .text-cyan-400,
+    [class*="text-cyan-300/"],
+    [class*="text-cyan-400/"]
+  ) {
+  color: #0e7490 !important;
 }
 
-html[data-tanio-theme="light"] .border-slate-800 {
+html[data-tanio-theme="light"]
+  :is(
+    .text-sky-100,
+    .text-sky-200,
+    .text-sky-300,
+    .text-sky-400
+  ) {
+  color: #0369a1 !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(
+    .text-purple-100,
+    .text-purple-200,
+    .text-purple-300,
+    .text-purple-400,
+    .text-violet-100,
+    .text-violet-200,
+    .text-violet-300,
+    .text-violet-400,
+    [class*="text-purple-300/"],
+    [class*="text-violet-300/"]
+  ) {
+  color: #7e22ce !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(
+    .text-emerald-100,
+    .text-emerald-200,
+    .text-emerald-300,
+    .text-emerald-400,
+    [class*="text-emerald-300/"]
+  ) {
+  color: #047857 !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(.text-red-200, .text-red-300, .text-red-400) {
+  color: #b91c1c !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(
+    .text-amber-200,
+    .text-amber-300,
+    .text-amber-400,
+    [class*="text-amber-200/"]
+  ) {
+  color: #92400e !important;
+}
+
+/* ========================================
+   Borders
+   ======================================== */
+
+html[data-tanio-theme="light"]
+  :is(
+    .border-slate-800,
+    .border-slate-900,
+    [class*="border-slate-800/"],
+    [class*="border-slate-900/"]
+  ) {
   border-color: #e2e8f0 !important;
 }
 
-html[data-tanio-theme="light"] .border-slate-700 {
+html[data-tanio-theme="light"]
+  :is(
+    .border-slate-700,
+    [class*="border-slate-700/"]
+  ) {
   border-color: #cbd5e1 !important;
 }
 
-html[data-tanio-theme="light"] input,
-html[data-tanio-theme="light"] textarea,
-html[data-tanio-theme="light"] select {
+html[data-tanio-theme="light"]
+  :is(
+    .border-cyan-800,
+    .border-cyan-900,
+    [class*="border-cyan-800/"],
+    [class*="border-cyan-900/"]
+  ) {
+  border-color: #a5dbe8 !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(
+    .border-purple-800,
+    .border-purple-900,
+    .border-violet-800,
+    .border-violet-900,
+    [class*="border-purple-900/"],
+    [class*="border-violet-900/"]
+  ) {
+  border-color: #d8b4fe !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(
+    .border-emerald-800,
+    .border-emerald-900,
+    [class*="border-emerald-800/"],
+    [class*="border-emerald-900/"]
+  ) {
+  border-color: #a7d8c4 !important;
+}
+
+/* ========================================
+   Tinted Panels and Badges
+   ======================================== */
+
+html[data-tanio-theme="light"]
+  :is(
+    .bg-cyan-950,
+    .bg-cyan-900,
+    [class*="bg-cyan-950/"],
+    [class*="bg-cyan-900/"]
+  ) {
+  background-color: #ecfeff !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(
+    .bg-purple-950,
+    .bg-purple-900,
+    .bg-violet-950,
+    .bg-violet-900,
+    [class*="bg-purple-950/"],
+    [class*="bg-purple-900/"],
+    [class*="bg-violet-950/"],
+    [class*="bg-violet-900/"]
+  ) {
+  background-color: #faf5ff !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(
+    .bg-emerald-950,
+    .bg-emerald-900,
+    [class*="bg-emerald-950/"],
+    [class*="bg-emerald-900/"]
+  ) {
+  background-color: #ecfdf5 !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(.bg-red-950, [class*="bg-red-950/"]) {
+  background-color: #fef2f2 !important;
+}
+
+html[data-tanio-theme="light"]
+  :is(.bg-amber-950, [class*="bg-amber-950/"]) {
+  background-color: #fffbeb !important;
+}
+
+/* ========================================
+   Inputs and Selects
+   ======================================== */
+
+html[data-tanio-theme="light"]
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    textarea,
+    select
+  ) {
   background-color: #ffffff !important;
   color: #0f172a !important;
+  border-color: #cbd5e1;
 }
 
 html[data-tanio-theme="light"] input::placeholder,
 html[data-tanio-theme="light"] textarea::placeholder {
-  color: #94a3b8 !important;
+  color: #64748b !important;
 }
 
-/* Sidebar/navigation hover states */
-
-html[data-tanio-theme="light"] .hover\:bg-slate-800:hover {
-  background-color: #e2e8f0 !important;
-}
-
-html[data-tanio-theme="light"] .hover\:bg-slate-700:hover {
-  background-color: #cbd5e1 !important;
+html[data-tanio-theme="light"] option {
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
 /* ========================================
-   System Theme
+   Buttons
    ======================================== */
 
-@media (prefers-color-scheme: light) {
-  html[data-tanio-theme="system"],
-  html[data-tanio-theme="system"] body,
-  html[data-tanio-theme="system"] #root {
-    background-color: #f8fafc;
-  }
+/* White text on solid purple and warning buttons */
 
-  html[data-tanio-theme="system"] body {
-    color: #0f172a;
-  }
+html[data-tanio-theme="light"]
+  :is(button, a):is(
+    .bg-purple-600,
+    .bg-purple-500,
+    .bg-violet-600,
+    .bg-violet-500,
+    .bg-red-800,
+    .bg-red-700,
+    .bg-amber-800,
+    .bg-amber-700
+  ),
+html[data-tanio-theme="light"]
+  :is(button, a):is(
+    .bg-purple-600,
+    .bg-purple-500,
+    .bg-violet-600,
+    .bg-violet-500,
+    .bg-red-800,
+    .bg-red-700,
+    .bg-amber-800,
+    .bg-amber-700
+  ) .text-white {
+  color: #ffffff !important;
+}
 
-  html[data-tanio-theme="system"] .bg-slate-950 {
-    background-color: #f8fafc !important;
-  }
+/* Neutral hover states */
 
-  html[data-tanio-theme="system"] .bg-slate-900 {
-    background-color: #ffffff !important;
-  }
+html[data-tanio-theme="light"] .hover\:bg-slate-900:hover,
+html[data-tanio-theme="light"] .hover\:bg-slate-800:hover {
+  background-color: #e8eef5 !important;
+}
 
-  html[data-tanio-theme="system"] .bg-slate-900\/60 {
-    background-color: rgba(255, 255, 255, 0.85) !important;
-  }
+html[data-tanio-theme="light"] .hover\:bg-slate-700:hover {
+  background-color: #dbe3ee !important;
+}
 
-  html[data-tanio-theme="system"] .bg-slate-950\/50 {
-    background-color: #f8fafc !important;
-  }
-
-  html[data-tanio-theme="system"] .bg-slate-800 {
-    background-color: #e2e8f0 !important;
-  }
-
-  html[data-tanio-theme="system"] .text-white {
-    color: #0f172a !important;
-  }
-
-  html[data-tanio-theme="system"] .text-slate-300 {
-    color: #334155 !important;
-  }
-
-  html[data-tanio-theme="system"] .text-slate-400,
-  html[data-tanio-theme="system"] .text-slate-500 {
-    color: #64748b !important;
-  }
-
-  html[data-tanio-theme="system"] .border-slate-800 {
-    border-color: #e2e8f0 !important;
-  }
-
-  html[data-tanio-theme="system"] .border-slate-700 {
-    border-color: #cbd5e1 !important;
-  }
-
-  html[data-tanio-theme="system"] input,
-  html[data-tanio-theme="system"] textarea,
-  html[data-tanio-theme="system"] select {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-  }
-
-  html[data-tanio-theme="system"] input::placeholder,
-  html[data-tanio-theme="system"] textarea::placeholder {
-    color: #94a3b8 !important;
-  }
+html[data-tanio-theme="light"] .hover\:text-white:hover {
+  color: #0f172a !important;
 }
 
 /* ========================================
@@ -224,4 +471,24 @@ html.tanio-compact .py-10 {
 html.tanio-compact .px-10 {
   padding-left: 1.5rem !important;
   padding-right: 1.5rem !important;
+}
+
+/* ========================================
+   Reduced Motion
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  header,
+  aside,
+  main,
+  section,
+  article,
+  div,
+  button,
+  input,
+  textarea,
+  select {
+    transition: none !important;
+  }
 }

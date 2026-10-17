@@ -25,13 +25,17 @@ const SIDEBAR_KEY = "tanioSidebarCollapsed";
 function Sidebar({
   dashboardMode = "basic",
   selectedModules = [],
+  theme = "dark",
 }) {
   const navigate = useNavigate();
   const isBasicMode = dashboardMode === "basic";
+  const isLight = theme === "light";
 
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem(SIDEBAR_KEY) === "true";
   });
+
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(
@@ -126,15 +130,46 @@ function Sidebar({
         ["/", "/projects", "/community"].includes(to)
       )
     : mainNavigation;
-    
+
   const visibleSupportNavigation = isBasicMode
     ? []
     : supportNavigation;
 
+  const colors = {
+    background: isLight ? "#ffffff" : "#020817",
+    border: isLight ? "#dbe3ee" : "rgba(30, 41, 59, 0.8)",
+    text: isLight ? "#334155" : "#94a3b8",
+    muted: isLight ? "#64748b" : "#64748b",
+    heading: isLight ? "#0f172a" : "#f8fafc",
+    iconBackground: isLight ? "#f1f5f9" : "rgba(30, 41, 59, 0.6)",
+    iconBorder: isLight ? "#dbe3ee" : "rgba(51, 65, 85, 0.7)",
+    cyan: isLight ? "#0e7490" : "#67e8f9",
+    cyanBackground: isLight ? "#ecfeff" : "rgba(34, 211, 238, 0.1)",
+    cyanBorder: isLight ? "#a5dbe8" : "rgba(34, 211, 238, 0.25)",
+    purple: isLight ? "#7e22ce" : "#d8b4fe",
+    purpleBackground: isLight ? "#faf5ff" : "rgba(168, 85, 247, 0.1)",
+    purpleBorder: isLight ? "#d8b4fe" : "rgba(192, 132, 252, 0.3)",
+  };
+
+  const focusClass =
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2";
+
   const handleLogout = async () => {
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+
     const token =
       localStorage.getItem("access_token") ||
       localStorage.getItem("token");
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      10000
+    );
 
     try {
       if (token) {
@@ -143,34 +178,38 @@ function Sidebar({
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          signal: controller.signal,
         });
       }
     } catch (error) {
       console.error("Logout request failed:", error);
     } finally {
+      window.clearTimeout(timeoutId);
+
       localStorage.removeItem("access_token");
       localStorage.removeItem("token");
       localStorage.removeItem("tanioSession");
       localStorage.removeItem("tanioUser");
 
+      // Keep tanioSettings so appearance persists after signing in again.
       navigate("/signin", { replace: true });
     }
   };
 
-  const Tooltip = ({ label }) => {
+  const renderTooltip = (label) => {
     if (!collapsed) {
       return null;
     }
 
     return (
       <span
-        className="
-          pointer-events-none absolute left-[58px] z-50
-          whitespace-nowrap rounded-lg border border-slate-700
-          bg-slate-900 px-3 py-2 text-xs font-medium text-white
-          opacity-0 shadow-xl transition-opacity duration-150
-          group-hover:opacity-100
-        "
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[58px] z-50 whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-medium opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        style={{
+          backgroundColor: colors.background,
+          borderColor: colors.border,
+          color: colors.heading,
+        }}
       >
         {label}
       </span>
@@ -188,46 +227,62 @@ function Sidebar({
       to={to}
       end={end}
       aria-label={label}
+      title={collapsed ? label : undefined}
       className={({ isActive }) =>
-        `
-        group relative flex items-center overflow-visible rounded-xl
-        text-sm font-medium transition-all duration-200
-        ${
+        `group relative flex items-center overflow-visible rounded-xl text-sm font-medium transition-all duration-200 ${focusClass} ${
           collapsed
             ? "h-11 w-11 justify-center p-0"
             : "w-full gap-3 px-3 py-2.5"
-        }
-        ${
+        } ${
           isActive
-            ? "bg-slate-800/75 text-white ring-1 ring-cyan-500/10"
-            : "text-slate-400 hover:bg-slate-800/45 hover:text-slate-100"
-        }
-        `
+            ? ""
+            : isLight
+              ? "hover:bg-[#f1f5f9]"
+              : "hover:bg-[#152033]"
+        }`
       }
+      style={({ isActive }) => ({
+        backgroundColor: isActive
+          ? isLight
+            ? "#ecfeff"
+            : "rgba(30, 41, 59, 0.75)"
+          : undefined,
+        color: isActive ? colors.heading : colors.text,
+        boxShadow: isActive
+          ? `inset 0 0 0 1px ${colors.cyanBorder}`
+          : undefined,
+      })}
     >
       {({ isActive }) => (
         <>
           {isActive && (
-            <>
-              <span className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.7)]" />
-
-              <span className="pointer-events-none absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-400/[0.035] to-transparent" />
-            </>
+            <span
+              aria-hidden="true"
+              className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full"
+              style={{
+                backgroundColor: isLight ? "#0891b2" : "#22d3ee",
+                boxShadow: isLight
+                  ? "none"
+                  : "0 0 10px rgba(34, 211, 238, 0.5)",
+              }}
+            />
           )}
 
           <span
-            className={`
-              relative z-10 flex shrink-0 items-center justify-center
-              rounded-lg border transition-all duration-200
-              ${collapsed ? "h-8 w-8" : "h-9 w-9"}
-              ${
-                isActive
-                  ? "border-cyan-400/25 bg-cyan-400/10 text-cyan-300"
-                  : "border-slate-700/70 bg-slate-800/60 text-slate-400 group-hover:border-cyan-500/20 group-hover:bg-cyan-500/[0.05] group-hover:text-cyan-300"
-              }
-            `}
+            className={`relative z-10 flex shrink-0 items-center justify-center rounded-lg border transition-all duration-200 ${
+              collapsed ? "h-8 w-8" : "h-9 w-9"
+            }`}
+            style={{
+              backgroundColor: isActive
+                ? colors.cyanBackground
+                : colors.iconBackground,
+              borderColor: isActive
+                ? colors.cyanBorder
+                : colors.iconBorder,
+              color: isActive ? colors.cyan : colors.text,
+            }}
           >
-            <Icon className="text-sm" />
+            <Icon aria-hidden="true" className="text-sm" />
           </span>
 
           {!collapsed && (
@@ -237,20 +292,20 @@ function Sidebar({
               </span>
 
               <FaChevronRight
-                className={`
-                  relative z-10 ml-auto text-[9px]
-                  transition-all duration-200
-                  ${
-                    isActive
-                      ? "translate-x-0 text-cyan-400"
-                      : "-translate-x-1 text-slate-700 opacity-0 group-hover:translate-x-0 group-hover:text-slate-500 group-hover:opacity-100"
-                  }
-                `}
+                aria-hidden="true"
+                className={`relative z-10 ml-auto shrink-0 text-[9px] transition-all duration-200 ${
+                  isActive
+                    ? "translate-x-0"
+                    : "-translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                }`}
+                style={{
+                  color: isActive ? colors.cyan : colors.muted,
+                }}
               />
             </>
           )}
 
-          <Tooltip label={label} />
+          {renderTooltip(label)}
         </>
       )}
     </NavLink>
@@ -262,252 +317,275 @@ function Sidebar({
     subtitle,
     icon: Icon,
     accent,
-  }) => (
-    <NavLink
-      key={to}
-      to={to}
-      aria-label={label}
-      className={({ isActive }) =>
-        `
-        group relative flex items-center overflow-visible
-        rounded-xl border transition-all duration-200
-        ${
-          collapsed
-            ? "h-11 w-11 justify-center p-0"
-            : "w-full gap-3 px-3 py-3"
+  }) => {
+    const isPurple = accent === "purple";
+    const accentColor = isPurple ? colors.purple : colors.cyan;
+    const accentBackground = isPurple
+      ? colors.purpleBackground
+      : colors.cyanBackground;
+    const accentBorder = isPurple
+      ? colors.purpleBorder
+      : colors.cyanBorder;
+
+    return (
+      <NavLink
+        key={to}
+        to={to}
+        aria-label={label}
+        title={collapsed ? label : undefined}
+        className={({ isActive }) =>
+          `group relative flex items-center overflow-visible rounded-xl border transition-all duration-200 ${focusClass} ${
+            collapsed
+              ? "h-11 w-11 justify-center p-0"
+              : "w-full gap-3 px-3 py-3"
+          } ${
+            isActive
+              ? ""
+              : isLight
+                ? "hover:bg-[#f1f5f9]"
+                : "hover:bg-[#152033]"
+          }`
         }
-        ${
-          isActive
-            ? accent === "purple"
-              ? "border-purple-500/20 bg-gradient-to-r from-purple-500/10 to-slate-800/40"
-              : "border-cyan-500/20 bg-gradient-to-r from-cyan-500/10 to-slate-800/40"
-            : "border-transparent hover:border-slate-800 hover:bg-slate-800/35"
-        }
-        `
-      }
-    >
-      {({ isActive }) => (
-        <>
-          {isActive && (
-            <span
-              className={`
-                absolute bottom-2.5 left-0 top-2.5 w-[3px]
-                rounded-r-full
-                ${
-                  accent === "purple"
-                    ? "bg-purple-400 shadow-[0_0_10px_rgba(192,132,252,0.7)]"
-                    : "bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.7)]"
-                }
-              `}
-            />
-          )}
-
-          <span
-            className={`
-              flex shrink-0 items-center justify-center rounded-xl
-              border transition-all duration-200
-              ${collapsed ? "h-8 w-8" : "h-10 w-10"}
-              ${
-                isActive
-                  ? accent === "purple"
-                    ? "border-purple-400/30 bg-purple-500/10 text-purple-300"
-                    : "border-cyan-400/30 bg-cyan-500/10 text-cyan-300"
-                  : accent === "purple"
-                    ? "border-slate-700/70 bg-slate-800/70 text-slate-400 group-hover:border-purple-500/25 group-hover:bg-purple-500/[0.06] group-hover:text-purple-300"
-                    : "border-slate-700/70 bg-slate-800/70 text-slate-400 group-hover:border-cyan-500/25 group-hover:bg-cyan-500/[0.06] group-hover:text-cyan-300"
-              }
-            `}
-          >
-            <Icon className="text-sm" />
-          </span>
-
-          {!collapsed && (
-            <>
-              <div className="min-w-0 flex-1">
-                <p
-                  className={`
-                    truncate text-sm font-medium
-                    ${
-                      isActive
-                        ? "text-white"
-                        : "text-slate-300 group-hover:text-white"
-                    }
-                  `}
-                >
-                  {label}
-                </p>
-
-                <p
-                  className={`
-                    mt-0.5 truncate text-[10px] transition-colors
-                    ${
-                      isActive
-                        ? accent === "purple"
-                          ? "text-purple-300/70"
-                          : "text-cyan-300/70"
-                        : "text-slate-600 group-hover:text-slate-500"
-                    }
-                  `}
-                >
-                  {subtitle}
-                </p>
-              </div>
-
-              <FaChevronRight
-                className={`
-                  text-[9px] transition-all
-                  ${
-                    isActive
-                      ? accent === "purple"
-                        ? "text-purple-400"
-                        : "text-cyan-400"
-                      : "text-slate-700 opacity-0 group-hover:opacity-100"
-                  }
-                `}
+        style={({ isActive }) => ({
+          borderColor: isActive ? accentBorder : "transparent",
+          backgroundColor: isActive ? accentBackground : undefined,
+          color: colors.text,
+        })}
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <span
+                aria-hidden="true"
+                className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-r-full"
+                style={{
+                  backgroundColor: accentColor,
+                  boxShadow: isLight
+                    ? "none"
+                    : `0 0 10px ${
+                        isPurple
+                          ? "rgba(192,132,252,0.5)"
+                          : "rgba(34,211,238,0.5)"
+                      }`,
+                }}
               />
-            </>
-          )}
+            )}
 
-          <Tooltip label={label} />
-        </>
-      )}
-    </NavLink>
+            <span
+              className={`flex shrink-0 items-center justify-center rounded-xl border transition-all duration-200 ${
+                collapsed ? "h-8 w-8" : "h-10 w-10"
+              }`}
+              style={{
+                backgroundColor: isActive
+                  ? accentBackground
+                  : colors.iconBackground,
+                borderColor: isActive
+                  ? accentBorder
+                  : colors.iconBorder,
+                color: isActive ? accentColor : colors.text,
+              }}
+            >
+              <Icon aria-hidden="true" className="text-sm" />
+            </span>
+
+            {!collapsed && (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="truncate text-sm font-medium"
+                    style={{
+                      color: isActive
+                        ? colors.heading
+                        : isLight
+                          ? "#334155"
+                          : "#cbd5e1",
+                    }}
+                  >
+                    {label}
+                  </p>
+
+                  <p
+                    className="mt-0.5 truncate text-[10px] transition-colors"
+                    style={{
+                      color: isActive ? accentColor : colors.muted,
+                    }}
+                  >
+                    {subtitle}
+                  </p>
+                </div>
+
+                <FaChevronRight
+                  aria-hidden="true"
+                  className={`shrink-0 text-[9px] transition-all ${
+                    isActive
+                      ? ""
+                      : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                  }`}
+                  style={{
+                    color: isActive ? accentColor : colors.muted,
+                  }}
+                />
+              </>
+            )}
+
+            {renderTooltip(label)}
+          </>
+        )}
+      </NavLink>
+    );
+  };
+
+  const sectionLabel = (label, dotColor) => (
+    <div className="mb-2 flex items-center gap-2 px-3">
+      <span
+        aria-hidden="true"
+        className="h-1 w-1 rounded-full"
+        style={{ backgroundColor: dotColor }}
+      />
+      <p
+        className="text-[10px] font-bold uppercase tracking-[0.2em]"
+        style={{ color: colors.muted }}
+      >
+        {label}
+      </p>
+    </div>
   );
 
   return (
     <aside
-      className={`
-        sticky top-0 z-30 flex h-screen shrink-0 flex-col
-        overflow-visible border-r border-slate-800/80
-        bg-[#020817] transition-[width] duration-300
-        ${collapsed ? "w-[72px]" : "w-64"}
-      `}
+      aria-label="Main sidebar"
+      className={`sticky top-0 z-30 flex h-screen shrink-0 flex-col overflow-visible border-r transition-[width,background-color,border-color] duration-300 ${
+        collapsed ? "w-[72px]" : "w-64"
+      }`}
+      style={{
+        backgroundColor: colors.background,
+        borderColor: colors.border,
+        color: colors.text,
+      }}
     >
-      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-cyan-500/[0.06] blur-3xl" />
-
-      <div className="pointer-events-none absolute -bottom-32 -right-24 h-72 w-72 rounded-full bg-purple-500/[0.04] blur-3xl" />
+      {!isLight && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+        >
+          <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-cyan-500/[0.06] blur-3xl" />
+          <div className="absolute -bottom-32 -right-24 h-72 w-72 rounded-full bg-purple-500/[0.04] blur-3xl" />
+        </div>
+      )}
 
       <div
-        className={`
-          relative z-10 flex h-[72px] shrink-0 items-center
-          border-b border-slate-800/80
-          ${collapsed ? "justify-center" : "justify-center px-5"}
-        `}
+        className={`relative z-10 flex h-[72px] shrink-0 items-center justify-center border-b ${
+          collapsed ? "" : "px-5"
+        }`}
+        style={{ borderColor: colors.border }}
       >
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
-
-        <img
-          src={logo}
-          alt="Tanio AI"
-          className={`
-            h-auto select-none object-contain
-            transition-all duration-300
-            ${collapsed ? "w-11" : "w-40"}
-          `}
-          draggable={false}
-        />
+        {/* Keep the existing logo readable on a light sidebar. */}
+        <div
+          className={`flex items-center justify-center ${
+            isLight ? "rounded-xl bg-[#020817]" : ""
+          } ${collapsed ? "h-12 w-12" : "px-3 py-2"}`}
+        >
+          <img
+            src={logo}
+            alt="Tanio AI"
+            className={`h-auto select-none object-contain transition-all duration-300 ${
+              collapsed ? "w-10" : "w-40"
+            }`}
+            draggable={false}
+          />
+        </div>
 
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
-          aria-label={
-            collapsed ? "Expand sidebar" : "Collapse sidebar"
-          }
-          title={
-            collapsed ? "Expand sidebar" : "Collapse sidebar"
-          }
-          className="
-            absolute -right-3 bottom-[-13px] z-40
-            flex h-7 w-7 items-center justify-center rounded-full
-            border border-slate-700 bg-slate-900
-            text-[9px] text-slate-400 shadow-lg
-            transition-all duration-200
-            hover:border-cyan-500/30 hover:bg-slate-800
-            hover:text-cyan-300
-          "
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          aria-controls="tanio-sidebar-navigation"
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={`absolute -right-3 bottom-[-13px] z-40 flex h-7 w-7 items-center justify-center rounded-full border text-[9px] shadow-lg transition-all duration-200 ${focusClass}`}
+          style={{
+            backgroundColor: isLight ? "#ffffff" : "#0f172a",
+            borderColor: colors.iconBorder,
+            color: colors.cyan,
+          }}
         >
           {collapsed ? (
-            <FaChevronRight />
+            <FaChevronRight aria-hidden="true" />
           ) : (
-            <FaChevronLeft />
+            <FaChevronLeft aria-hidden="true" />
           )}
         </button>
       </div>
 
       <div
-        className={`
-          relative z-10 flex flex-1 flex-col overflow-y-auto
-          overflow-x-visible py-5
-          ${collapsed ? "items-center px-3" : "px-4"}
-        `}
+        id="tanio-sidebar-navigation"
+        className={`relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-5 ${
+          collapsed ? "items-center px-3" : "px-4"
+        }`}
+        style={{
+          scrollbarWidth: "thin",
+          scrollbarColor: isLight
+            ? "#cbd5e1 #ffffff"
+            : "#334155 #020817",
+        }}
       >
         <div className={collapsed ? "" : "w-full"}>
-          {!collapsed && (
-            <div className="mb-2 flex items-center gap-2 px-3">
-              <span className="h-1 w-1 rounded-full bg-cyan-400/70" />
+          {!collapsed && sectionLabel("Workspace", colors.cyan)}
 
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
-                Workspace
-              </p>
-            </div>
-          )}
-
-          <nav className="space-y-1">
+          <nav aria-label="Workspace" className="space-y-1">
             {visibleMainNavigation.map(renderStandardNavItem)}
           </nav>
         </div>
 
         <div
-          className={`
-            my-6 h-px bg-gradient-to-r
-            from-transparent via-slate-800 to-transparent
-            ${collapsed ? "w-10" : "w-full"}
-          `}
+          aria-hidden="true"
+          className={`my-6 h-px shrink-0 ${
+            collapsed ? "w-10" : "w-full"
+          }`}
+          style={{ backgroundColor: colors.border }}
         />
 
         <div className={collapsed ? "" : "w-full"}>
           {!collapsed && (
             <div className="mb-2 flex items-center justify-between px-3">
               <div className="flex items-center gap-2">
-                <span className="h-1 w-1 rounded-full bg-purple-400/70" />
-
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
+                <span
+                  aria-hidden="true"
+                  className="h-1 w-1 rounded-full"
+                  style={{ backgroundColor: colors.purple }}
+                />
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.2em]"
+                  style={{ color: colors.muted }}
+                >
                   AI Tools
                 </p>
               </div>
 
-              <span className="rounded-full border border-cyan-500/20 bg-cyan-500/[0.07] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-cyan-400">
+              <span
+                className="rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                style={{
+                  backgroundColor: colors.cyanBackground,
+                  borderColor: colors.cyanBorder,
+                  color: colors.cyan,
+                }}
+              >
                 AI
               </span>
             </div>
           )}
 
-          <nav className="space-y-1.5">
+          <nav aria-label="AI tools" className="space-y-1.5">
             {visibleAiTools.map(renderAiNavItem)}
           </nav>
         </div>
 
         {visibleSupportNavigation.length > 0 && (
-          <div
-            className={`
-              mt-7
-              ${collapsed ? "" : "w-full"}
-            `}
-          >
-            {!collapsed && (
-              <div className="mb-2 flex items-center gap-2 px-3">
-                <span className="h-1 w-1 rounded-full bg-slate-500" />
+          <div className={`mt-7 ${collapsed ? "" : "w-full"}`}>
+            {!collapsed && sectionLabel("Support", colors.muted)}
 
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
-                  Support
-                </p>
-              </div>
-            )}
-
-            <nav className="space-y-1">
-              {visibleSupportNavigation.map(
-                renderStandardNavItem
-              )}
+            <nav aria-label="Support" className="space-y-1">
+              {visibleSupportNavigation.map(renderStandardNavItem)}
             </nav>
           </div>
         )}
@@ -516,65 +594,65 @@ function Sidebar({
       </div>
 
       <div
-        className={`
-          relative z-10 border-t border-slate-800/80
-          ${
-            collapsed
-              ? "px-3 pb-3 pt-3"
-              : "px-4 pb-3 pt-3"
-          }
-        `}
+        className={`relative z-10 border-t pb-3 pt-3 ${
+          collapsed ? "px-3" : "px-4"
+        }`}
+        style={{ borderColor: colors.border }}
       >
         <button
           type="button"
           onClick={handleLogout}
-          aria-label="Logout"
-          className={`
-            group relative flex items-center rounded-xl
-            text-sm font-medium text-slate-400
-            transition-all duration-200
-            hover:bg-red-500/[0.07] hover:text-red-400
-            ${
-              collapsed
-                ? "h-11 w-11 justify-center p-0"
-                : "w-full gap-3 px-3 py-2.5"
-            }
-          `}
+          disabled={loggingOut}
+          aria-label={loggingOut ? "Signing out" : "Logout"}
+          title={collapsed ? "Logout" : undefined}
+          className={`group relative flex items-center rounded-xl text-sm font-medium transition-all duration-200 disabled:cursor-wait disabled:opacity-60 ${focusClass} ${
+            isLight
+              ? "hover:bg-[#fef2f2]"
+              : "hover:bg-[#25101c]"
+          } ${
+            collapsed
+              ? "h-11 w-11 justify-center p-0"
+              : "w-full gap-3 px-3 py-2.5"
+          }`}
+          style={{ color: colors.text }}
         >
           <span
-            className={`
-              flex shrink-0 items-center justify-center rounded-lg
-              border border-slate-700/70 bg-slate-800/60
-              text-slate-400 transition-all duration-200
-              group-hover:border-red-500/20
-              group-hover:bg-red-500/10
-              group-hover:text-red-400
-              ${collapsed ? "h-8 w-8" : "h-9 w-9"}
-            `}
+            className={`flex shrink-0 items-center justify-center rounded-lg border transition-all duration-200 ${
+              collapsed ? "h-8 w-8" : "h-9 w-9"
+            }`}
+            style={{
+              backgroundColor: colors.iconBackground,
+              borderColor: colors.iconBorder,
+              color: isLight ? "#b91c1c" : "#f87171",
+            }}
           >
-            <FaSignOutAlt className="text-sm" />
+            <FaSignOutAlt aria-hidden="true" className="text-sm" />
           </span>
 
           {!collapsed && (
             <>
-              <span>Logout</span>
+              <span>{loggingOut ? "Signing out..." : "Logout"}</span>
 
-              <FaChevronRight className="ml-auto text-[9px] text-slate-700 opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-red-400/60 group-hover:opacity-100" />
+              <FaChevronRight
+                aria-hidden="true"
+                className="ml-auto text-[9px] opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100 group-focus-visible:opacity-100"
+                style={{ color: isLight ? "#b91c1c" : "#f87171" }}
+              />
             </>
           )}
 
-          <Tooltip label="Logout" />
+          {renderTooltip("Logout")}
         </button>
 
         {!collapsed && (
-          <div className="mt-2 flex items-center justify-between px-3">
-            <span className="text-[9px] font-medium uppercase tracking-[0.15em] text-slate-700">
+          <div
+            className="mt-2 flex items-center justify-between px-3"
+            style={{ color: colors.muted }}
+          >
+            <span className="text-[9px] font-medium uppercase tracking-[0.15em]">
               Tanio AI
             </span>
-
-            <span className="text-[9px] text-slate-700">
-              v1.0
-            </span>
+            <span className="text-[9px]">v1.0</span>
           </div>
         )}
       </div>

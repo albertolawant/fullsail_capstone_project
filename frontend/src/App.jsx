@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 
 import Sidebar from "./components/Sidebar";
-import TopBar from "./components/TopBar";
+import TopBar from "./components/Topbar";
 import InterestSelectionModal from "./components/InterestSelectionModal";
 
 import SignIn from "./pages/SignIn";
@@ -39,20 +39,19 @@ const VALID_MODULE_IDS = [
 function getStoredAppearance() {
   try {
     const storedSettings = localStorage.getItem(SETTINGS_KEY);
+    const parsedSettings = storedSettings
+      ? JSON.parse(storedSettings)
+      : {};
 
-    if (!storedSettings) {
-      return {
-        theme: "dark",
-        compactLayout: false,
-      };
-    }
-
-    const parsedSettings = JSON.parse(storedSettings);
+    const storedTheme = parsedSettings?.appearance?.theme;
 
     return {
-      theme: parsedSettings?.appearance?.theme || "dark",
-      compactLayout:
-        parsedSettings?.appearance?.compactLayout || false,
+      theme: ["dark", "light", "system"].includes(storedTheme)
+        ? storedTheme
+        : "dark",
+      compactLayout: Boolean(
+        parsedSettings?.appearance?.compactLayout
+      ),
     };
   } catch {
     return {
@@ -93,6 +92,10 @@ function App() {
     getStoredAppearance
   );
 
+  const [systemIsDark, setSystemIsDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+
   const [dashboardMode, setDashboardMode] = useState(
     getStoredDashboardMode
   );
@@ -101,17 +104,29 @@ function App() {
     getStoredSelectedModules
   );
 
-  const [showInterestModal, setShowInterestModal] =
-    useState(false);
+  const [showInterestModal, setShowInterestModal] = useState(false);
 
   const isSignInPage = location.pathname === "/signin";
 
   const isSignedIn =
     localStorage.getItem("tanioSession") === "true";
 
+  const resolvedTheme =
+    appearance.theme === "system"
+      ? systemIsDark
+        ? "dark"
+        : "light"
+      : appearance.theme;
+
   useEffect(() => {
     const updateAppearance = () => {
       setAppearance(getStoredAppearance());
+    };
+
+    const handleStorageUpdate = (event) => {
+      if (event.key === SETTINGS_KEY || event.key === null) {
+        updateAppearance();
+      }
     };
 
     window.addEventListener(
@@ -119,7 +134,9 @@ function App() {
       updateAppearance
     );
 
-    window.addEventListener("storage", updateAppearance);
+    window.addEventListener("storage", handleStorageUpdate);
+
+    updateAppearance();
 
     return () => {
       window.removeEventListener(
@@ -129,7 +146,28 @@ function App() {
 
       window.removeEventListener(
         "storage",
-        updateAppearance
+        handleStorageUpdate
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const systemTheme = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    );
+
+    const updateSystemTheme = () => {
+      setSystemIsDark(systemTheme.matches);
+    };
+
+    updateSystemTheme();
+
+    systemTheme.addEventListener("change", updateSystemTheme);
+
+    return () => {
+      systemTheme.removeEventListener(
+        "change",
+        updateSystemTheme
       );
     };
   }, []);
@@ -137,17 +175,14 @@ function App() {
   useEffect(() => {
     const root = document.documentElement;
 
-    root.setAttribute(
-      "data-tanio-theme",
-      appearance.theme
-    );
+    root.setAttribute("data-tanio-theme", resolvedTheme);
+    root.style.colorScheme = resolvedTheme;
 
-    if (appearance.compactLayout) {
-      root.classList.add("tanio-compact");
-    } else {
-      root.classList.remove("tanio-compact");
-    }
-  }, [appearance]);
+    root.classList.toggle(
+      "tanio-compact",
+      appearance.compactLayout
+    );
+  }, [resolvedTheme, appearance.compactLayout]);
 
   useEffect(() => {
     const handleModulesUpdated = (event) => {
@@ -161,7 +196,10 @@ function App() {
     };
 
     const handleStorageUpdate = (event) => {
-      if (event.key === SELECTED_MODULES_KEY) {
+      if (
+        event.key === SELECTED_MODULES_KEY ||
+        event.key === null
+      ) {
         setSelectedModules(getStoredSelectedModules());
       }
     };
@@ -171,10 +209,7 @@ function App() {
       handleModulesUpdated
     );
 
-    window.addEventListener(
-      "storage",
-      handleStorageUpdate
-    );
+    window.addEventListener("storage", handleStorageUpdate);
 
     return () => {
       window.removeEventListener(
@@ -192,7 +227,7 @@ function App() {
   useEffect(() => {
     if (!isSignedIn || isSignInPage) {
       setShowInterestModal(false);
-      return;
+      return undefined;
     }
 
     const shouldShowInterestModal =
@@ -204,7 +239,7 @@ function App() {
 
     if (!token) {
       setShowInterestModal(false);
-      return;
+      return undefined;
     }
 
     const controller = new AbortController();
@@ -229,6 +264,10 @@ function App() {
 
         const data = await response.json();
 
+        if (controller.signal.aborted) {
+          return;
+        }
+
         const savedModules = Array.isArray(
           data.selected_modules
         )
@@ -245,16 +284,12 @@ function App() {
         );
 
         setShowInterestModal(
-          localStorage.getItem(INTEREST_PROMPT_KEY) ===
-            "true"
+          localStorage.getItem(INTEREST_PROMPT_KEY) === "true"
         );
       } catch (error) {
-        if (error.name !== "AbortError") {
+        if (!controller.signal.aborted) {
           console.error(error);
-
-          setSelectedModules(
-            getStoredSelectedModules()
-          );
+          setSelectedModules(getStoredSelectedModules());
         }
       }
     };
@@ -268,14 +303,16 @@ function App() {
 
   useEffect(() => {
     if (!isSignedIn || isSignInPage) {
-      return;
+      return undefined;
     }
 
     const token = localStorage.getItem("token");
 
     if (!token) {
-      return;
+      return undefined;
     }
+
+    const controller = new AbortController();
 
     const sendHeartbeat = async () => {
       try {
@@ -286,41 +323,46 @@ function App() {
             headers: {
               Authorization: `Bearer ${token}`,
             },
+            signal: controller.signal,
           }
         );
       } catch (error) {
-        console.error("Presence heartbeat failed:", error);
+        if (!controller.signal.aborted) {
+          console.error("Presence heartbeat failed:", error);
+        }
       }
     };
 
     sendHeartbeat();
 
-    const heartbeatInterval = setInterval(
+    const heartbeatInterval = window.setInterval(
       sendHeartbeat,
       2 * 60 * 1000
     );
 
     return () => {
-      clearInterval(heartbeatInterval);
+      window.clearInterval(heartbeatInterval);
+      controller.abort();
     };
   }, [isSignedIn, isSignInPage]);
 
   const handleDashboardModeChange = (mode) => {
-    setDashboardMode(mode);
+    const nextMode = mode === "advanced" ? "advanced" : "basic";
+
+    setDashboardMode(nextMode);
 
     localStorage.setItem(
       DASHBOARD_MODE_KEY,
-      mode
+      nextMode
     );
   };
 
-  const handleInterestSelectionComplete = (
-    savedModules
-  ) => {
-    const validSavedModules = savedModules.filter(
-      (moduleId) =>
-        VALID_MODULE_IDS.includes(moduleId)
-    );
+  const handleInterestSelectionComplete = (savedModules) => {
+    const validSavedModules = Array.isArray(savedModules)
+      ? savedModules.filter((moduleId) =>
+          VALID_MODULE_IDS.includes(moduleId)
+        )
+      : [];
 
     setSelectedModules(validSavedModules);
 
@@ -330,7 +372,6 @@ function App() {
     );
 
     localStorage.removeItem(INTEREST_PROMPT_KEY);
-
     setShowInterestModal(false);
   };
 
@@ -348,34 +389,30 @@ function App() {
   if (isSignInPage) {
     return (
       <Routes>
-        <Route
-          path="/signin"
-          element={<SignIn />}
-        />
+        <Route path="/signin" element={<SignIn />} />
       </Routes>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-white">
+    <div className="flex min-h-screen min-w-0 bg-slate-950 text-white">
       <Sidebar
         dashboardMode={dashboardMode}
         selectedModules={selectedModules}
+        theme={resolvedTheme}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
 
-        <div className="flex flex-1 overflow-auto">
+        <div className="flex min-w-0 flex-1 overflow-auto">
           <Routes>
             <Route
               path="/"
               element={
                 <Dashboard
                   dashboardMode={dashboardMode}
-                  onDashboardModeChange={
-                    handleDashboardModeChange
-                  }
+                  onDashboardModeChange={handleDashboardModeChange}
                   selectedModules={selectedModules}
                 />
               }
@@ -409,7 +446,7 @@ function App() {
             <Route
               path="/community"
               element={<Community />}
-            />            
+            />
 
             <Route
               path="/product-architect"
