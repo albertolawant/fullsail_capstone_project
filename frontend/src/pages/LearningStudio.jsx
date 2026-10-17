@@ -93,11 +93,19 @@ function getErrorMessage(response, data, fallback) {
   return fallback;
 }
 
-function LearningStudio() {
+// Each panel stays mounted so switching tabs preserves its form,
+// generated material, save state, and LearningMaterialView progress.
+function LearningStudioPanel({
+  outputType,
+  active,
+  projects,
+  projectsLoading,
+  projectsError,
+  onReloadProjects,
+}) {
   const [topic, setTopic] = useState("");
   const [learningGoal, setLearningGoal] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("beginner");
-  const [outputType, setOutputType] = useState("lesson");
   const [topicError, setTopicError] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -106,10 +114,6 @@ function LearningStudio() {
   const [lastRequest, setLastRequest] = useState(null);
   const [resultVersion, setResultVersion] = useState(0);
 
-  const [projects, setProjects] = useState([]);
-  const [projectsLoading, setProjectsLoading] = useState(false);
-  const [projectsError, setProjectsError] = useState("");
-  const [projectsReload, setProjectsReload] = useState(0);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [saveTitle, setSaveTitle] = useState("");
   const [savedContentId, setSavedContentId] = useState(null);
@@ -130,9 +134,10 @@ function LearningStudio() {
   const selectedOutput = OUTPUT_TYPES.find(
     (type) => type.value === outputType
   );
-  const displayedOutputLabel = getOutputLabel(
-    generatedResult?.output_type || outputType
-  );
+  const displayedOutputLabel = getOutputLabel(outputType);
+
+  // Prefix every field ID because all three panels remain mounted.
+  const fieldId = (name) => `learning-${outputType}-${name}`;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -145,70 +150,16 @@ function LearningStudio() {
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
+    if (projectsLoading || projectsError) {
+      return;
+    }
 
-    const loadProjects = async () => {
-      setProjectsLoading(true);
-      setProjectsError("");
-
-      try {
-        const token = localStorage.getItem("token");
-
-        if (!token) {
-          throw new Error(
-            "Your session has expired. Please sign in again."
-          );
-        }
-
-        const response = await fetch(`${API_BASE_URL}/projects/`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
-        const data = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          throw new Error(
-            getErrorMessage(
-              response,
-              data,
-              "Your projects could not be loaded."
-            )
-          );
-        }
-
-        if (!Array.isArray(data)) {
-          throw new Error("The server returned invalid project information.");
-        }
-
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        setProjects(data);
-        setSelectedProjectId((currentId) =>
-          data.some((project) => String(project.id) === currentId)
-            ? currentId
-            : ""
-        );
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setProjectsError(
-            error instanceof Error
-              ? error.message
-              : "Your projects could not be loaded."
-          );
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setProjectsLoading(false);
-        }
-      }
-    };
-
-    loadProjects();
-
-    return () => controller.abort();
-  }, [projectsReload]);
+    setSelectedProjectId((currentId) =>
+      projects.some((project) => String(project.id) === currentId)
+        ? currentId
+        : ""
+    );
+  }, [projects, projectsLoading, projectsError]);
 
   const clearFeedback = () => {
     setGenerationError("");
@@ -224,6 +175,12 @@ function LearningStudio() {
       return;
     }
 
+    // Keep this panel's requests tied to its dedicated output type.
+    if (request.output_type !== outputType) {
+      setGenerationError("Choose the matching tab for this study material.");
+      return;
+    }
+
     const controller = new AbortController();
     requestControllerRef.current = controller;
 
@@ -233,6 +190,7 @@ function LearningStudio() {
     setLastRequest(request);
 
     let timedOut = false;
+
     const timeoutId = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
@@ -242,9 +200,7 @@ function LearningStudio() {
       const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error(
-          "Your session has expired. Please sign in again."
-        );
+        throw new Error("Your session has expired. Please sign in again.");
       }
 
       const response = await fetch(
@@ -266,6 +222,7 @@ function LearningStudio() {
         if (timedOut) {
           throw new Error("Generation timed out.");
         }
+
         return;
       }
 
@@ -279,9 +236,10 @@ function LearningStudio() {
         );
       }
 
-      validateLearningMaterial(data, request.output_type);
+      validateLearningMaterial(data, outputType);
 
       if (
+        data.output_type !== outputType ||
         data.topic !== request.topic ||
         data.learning_goal !== request.learning_goal ||
         data.experience_level !== request.experience_level
@@ -303,7 +261,7 @@ function LearningStudio() {
       setSaveMessage("");
       setExportError("");
       setStatusMessage(
-        `${getOutputLabel(data.output_type)} ready. You can study, save, or export it.`
+        `${getOutputLabel(outputType)} ready. You can study, save, or export it.`
       );
     } catch (error) {
       if (!mountedRef.current) {
@@ -356,19 +314,16 @@ function LearningStudio() {
     }
 
     if (cleanedGoal.length > 1000) {
-      setGenerationError(
-        "Learning goal must be 1,000 characters or fewer."
-      );
+      setGenerationError("Learning goal must be 1,000 characters or fewer.");
       return;
     }
 
     if (
-      !OUTPUT_TYPES.some((type) => type.value === outputType) ||
       !EXPERIENCE_LEVELS.some(
         (level) => level.value === experienceLevel
       )
     ) {
-      setGenerationError("Choose a valid output type and experience level.");
+      setGenerationError("Choose a valid experience level.");
       return;
     }
 
@@ -389,7 +344,7 @@ function LearningStudio() {
       topic: generatedResult.topic,
       learning_goal: generatedResult.learning_goal,
       experience_level: generatedResult.experience_level,
-      output_type: generatedResult.output_type,
+      output_type: outputType,
     });
   };
 
@@ -401,7 +356,6 @@ function LearningStudio() {
     setTopic("");
     setLearningGoal("");
     setExperienceLevel("beginner");
-    setOutputType("lesson");
     setTopicError("");
     setGeneratedResult(null);
     setLastRequest(null);
@@ -449,7 +403,11 @@ function LearningStudio() {
     try {
       body = serializeLearningMaterial(generatedResult);
     } catch (error) {
-      setSaveError(error.message);
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "The learning material could not be prepared for saving."
+      );
       return;
     }
 
@@ -482,8 +440,7 @@ function LearningStudio() {
           },
           body: JSON.stringify({
             title,
-            content_type:
-              LEARNING_STUDIO_CONTENT_TYPES[generatedResult.output_type],
+            content_type: LEARNING_STUDIO_CONTENT_TYPES[outputType],
             body,
             project_id: project.id,
           }),
@@ -520,7 +477,6 @@ function LearningStudio() {
         `Saved to ${project.title}. Open the Content page to study, edit, or view its history.`
       );
 
-      // A notification failure should not turn a successful save into an error.
       try {
         notifyContentSaved(title);
         addRecentActivity({
@@ -570,19 +526,20 @@ function LearningStudio() {
     setExportError("");
 
     try {
-      const title =
-        saveTitle.trim() || generatedResult.content.title;
+      const title = saveTitle.trim() || generatedResult.content.title;
       const body = learningMaterialToMarkdown(generatedResult);
       const fileName = getLearningMaterialFileName(title, format);
 
       if (format === "pdf") {
-        exportContentAsPdf(title, body, fileName);
+        await exportContentAsPdf(title, body, fileName);
       } else if (format === "md") {
-        exportContentAsMarkdown(title, body, fileName);
+        await exportContentAsMarkdown(title, body, fileName);
       } else if (format === "txt") {
-        exportContentAsTxt(title, body, fileName);
+        await exportContentAsTxt(title, body, fileName);
       } else if (format === "docx") {
         await exportContentAsDocx(title, body, fileName);
+      } else {
+        throw new Error("Choose a supported export format.");
       }
     } catch (error) {
       if (mountedRef.current) {
@@ -599,6 +556,548 @@ function LearningStudio() {
         setExporting(false);
       }
     }
+  };
+
+  return (
+    <div
+      id={`learning-studio-panel-${outputType}`}
+      role="tabpanel"
+      aria-labelledby={`learning-studio-tab-${outputType}`}
+      hidden={!active}
+      tabIndex={0}
+      className="rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+    >
+      <div className="flex flex-col gap-6">
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          aria-labelledby={fieldId("form-title")}
+          className="min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
+        >
+          <div className="flex items-start gap-3">
+            <div
+              aria-hidden="true"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-xl text-cyan-300"
+            >
+              {selectedOutput?.icon}
+            </div>
+            <div>
+              <h2
+                id={fieldId("form-title")}
+                className="text-xl font-bold"
+              >
+                Set Up Your {displayedOutputLabel}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                {selectedOutput?.description}
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm text-slate-400">
+            Start with what you want to learn. Your learning goal is optional.
+          </p>
+
+          <div className="mt-6">
+            <label
+              htmlFor={fieldId("topic")}
+              className="mb-2 block text-sm font-semibold"
+            >
+              Topic <span className="text-cyan-300">(required)</span>
+            </label>
+            <input
+              ref={topicRef}
+              id={fieldId("topic")}
+              type="text"
+              value={topic}
+              onChange={(event) => {
+                setTopic(event.target.value);
+                setTopicError("");
+                clearFeedback();
+              }}
+              required
+              maxLength={200}
+              disabled={busy}
+              aria-invalid={Boolean(topicError)}
+              aria-describedby={
+                topicError
+                  ? `${fieldId("topic-help")} ${fieldId("topic-error")}`
+                  : fieldId("topic-help")
+              }
+              placeholder="e.g. Python loops or network security"
+              className={FIELD_CLASS}
+            />
+            <p
+              id={fieldId("topic-help")}
+              className="mt-2 text-xs text-slate-500"
+            >
+              Choose a subject or concept. {topic.length}/200
+            </p>
+            {topicError && (
+              <p
+                id={fieldId("topic-error")}
+                role="alert"
+                className="mt-2 text-sm text-red-300"
+              >
+                {topicError}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-6">
+            <label
+              htmlFor={fieldId("goal")}
+              className="mb-2 block text-sm font-semibold"
+            >
+              Learning Goal (optional)
+            </label>
+            <textarea
+              id={fieldId("goal")}
+              value={learningGoal}
+              onChange={(event) => {
+                setLearningGoal(event.target.value);
+                clearFeedback();
+              }}
+              rows={4}
+              maxLength={1000}
+              disabled={busy}
+              aria-describedby={fieldId("goal-help")}
+              placeholder="What do you want to understand or achieve?"
+              className={`${FIELD_CLASS} resize-y`}
+            />
+            <p
+              id={fieldId("goal-help")}
+              className="mt-2 text-xs text-slate-500"
+            >
+              {learningGoal.length}/1000
+            </p>
+          </div>
+
+          <div className="mt-6">
+            <label
+              htmlFor={fieldId("experience")}
+              className="mb-2 block text-sm font-semibold"
+            >
+              Experience Level
+            </label>
+            <select
+              id={fieldId("experience")}
+              value={experienceLevel}
+              onChange={(event) => {
+                setExperienceLevel(event.target.value);
+                clearFeedback();
+              }}
+              disabled={busy}
+              className={FIELD_CLASS}
+            >
+              {EXPERIENCE_LEVELS.map((level) => (
+                <option key={level.value} value={level.value}>
+                  {level.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+            <p className="text-sm font-semibold text-cyan-200">
+              {displayedOutputLabel} Generator
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              This tab generates{" "}
+              {displayedOutputLabel.toLowerCase()} material. Each tab
+              keeps its own study settings and results while you stay
+              on this page.
+            </p>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={busy}
+              className={PRIMARY_BUTTON}
+            >
+              {loading
+                ? "Generating..."
+                : `Generate ${displayedOutputLabel}`}
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={busy}
+              className={SECONDARY_BUTTON}
+            >
+              Clear This Tab
+            </button>
+          </div>
+        </form>
+
+        <section
+          aria-labelledby={fieldId("output-title")}
+          aria-busy={busy}
+          className="w-full min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2
+              id={fieldId("output-title")}
+              className="text-xl font-bold"
+            >
+              Your {displayedOutputLabel}
+            </h2>
+            {generatedResult && (
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={busy}
+                className={SECONDARY_BUTTON}
+              >
+                Regenerate {displayedOutputLabel}
+              </button>
+            )}
+          </div>
+
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Regenerate uses the displayed material’s study settings.
+            For different settings, update the form and select Generate.
+          </p>
+
+          <div role="status" aria-live="polite" aria-atomic="true">
+            {loading ? (
+              <p className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-200">
+                Generating {displayedOutputLabel.toLowerCase()}.
+                {generatedResult
+                  ? " Your current material stays visible until the new result is ready."
+                  : " This may take a moment."}
+              </p>
+            ) : statusMessage ? (
+              <p className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm text-emerald-200">
+                {statusMessage}
+              </p>
+            ) : null}
+          </div>
+
+          {generationError && (
+            <div
+              role="alert"
+              className="mt-5 rounded-xl border border-red-800 bg-red-950/40 p-4"
+            >
+              <p className="font-semibold text-red-200">
+                Study material could not be generated
+              </p>
+              <p className="mt-2 text-sm text-red-300">
+                {generationError}
+              </p>
+              {lastRequest && (
+                <>
+                  <p className="mt-2 break-words text-xs text-slate-400">
+                    Retry uses your last submitted settings for{" "}
+                    {lastRequest.topic}.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => generateStudyMaterial(lastRequest)}
+                    disabled={busy}
+                    className={`${SECONDARY_BUTTON} mt-3`}
+                  >
+                    Retry Generation
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {generatedResult ? (
+            <>
+              <dl className="mt-5 space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-sm">
+                <div>
+                  <dt className="text-slate-400">Topic</dt>
+                  <dd className="mt-1 break-words font-semibold">
+                    {generatedResult.topic}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-400">Experience Level</dt>
+                  <dd className="mt-1 capitalize">
+                    {generatedResult.experience_level}
+                  </dd>
+                </div>
+                {generatedResult.learning_goal && (
+                  <div>
+                    <dt className="text-slate-400">Learning Goal</dt>
+                    <dd className="mt-1 whitespace-pre-wrap break-words">
+                      {generatedResult.learning_goal}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+
+              <section className="mt-5 rounded-xl border border-slate-700 p-4">
+                <h3 className="font-bold text-cyan-200">
+                  Save and Export
+                </h3>
+
+                <form onSubmit={handleSave} className="mt-4 space-y-4">
+                  <div>
+                    <label
+                      htmlFor={fieldId("save-title")}
+                      className="mb-2 block text-sm font-semibold"
+                    >
+                      Saved Title
+                    </label>
+                    <input
+                      id={fieldId("save-title")}
+                      value={saveTitle}
+                      onChange={(event) => {
+                        setSaveTitle(event.target.value);
+                        setSaveError("");
+                        setSaveMessage("");
+                      }}
+                      disabled={busy}
+                      className={FIELD_CLASS}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor={fieldId("save-project")}
+                      className="mb-2 block text-sm font-semibold"
+                    >
+                      Project
+                    </label>
+                    <select
+                      id={fieldId("save-project")}
+                      value={selectedProjectId}
+                      onChange={(event) => {
+                        setSelectedProjectId(event.target.value);
+                        setSaveError("");
+                        setSaveMessage("");
+                      }}
+                      disabled={busy || projectsLoading}
+                      className={FIELD_CLASS}
+                    >
+                      <option value="">
+                        {projectsLoading
+                          ? "Loading projects..."
+                          : "Choose a project"}
+                      </option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {!projectsLoading &&
+                    !projectsError &&
+                    projects.length === 0 && (
+                      <p className="text-sm text-slate-400">
+                        Create a project on the Projects page, then
+                        reload the project list here.
+                      </p>
+                    )}
+
+                  {projectsError && (
+                    <p role="alert" className="text-sm text-red-300">
+                      {projectsError}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="submit"
+                      disabled={
+                        busy ||
+                        projectsLoading ||
+                        !selectedProjectId ||
+                        !saveTitle.trim()
+                      }
+                      className={PRIMARY_BUTTON}
+                    >
+                      {saving
+                        ? "Saving..."
+                        : savedContentId
+                          ? "Update Saved Material"
+                          : "Save to Project"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onReloadProjects}
+                      disabled={busy || projectsLoading}
+                      className={SECONDARY_BUTTON}
+                    >
+                      Reload Projects
+                    </button>
+                  </div>
+
+                  {savedContentId && (
+                    <p className="text-xs leading-6 text-slate-400">
+                      Saving again updates this saved item and preserves
+                      its previous version. Generating new material
+                      starts a new item.
+                    </p>
+                  )}
+
+                  {saveError && (
+                    <p role="alert" className="text-sm text-red-300">
+                      {saveError}
+                    </p>
+                  )}
+                  {saveMessage && (
+                    <p role="status" className="text-sm text-emerald-300">
+                      {saveMessage}
+                    </p>
+                  )}
+                </form>
+
+                <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-800 pt-5">
+                  {[
+                    ["pdf", "PDF"],
+                    ["md", "Markdown"],
+                    ["txt", "TXT"],
+                    ["docx", "DOCX"],
+                  ].map(([format, label]) => (
+                    <button
+                      key={format}
+                      type="button"
+                      onClick={() => handleExport(format)}
+                      disabled={busy}
+                      className={SECONDARY_BUTTON}
+                    >
+                      Export {label}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="mt-3 text-xs leading-6 text-slate-400">
+                  Exports include the complete material. Quiz exports
+                  include correct answers and explanations in an answer key.
+                </p>
+                {exporting && (
+                  <p role="status" className="mt-2 text-sm text-cyan-200">
+                    Preparing your export...
+                  </p>
+                )}
+                {exportError && (
+                  <p role="alert" className="mt-2 text-sm text-red-300">
+                    {exportError}
+                  </p>
+                )}
+              </section>
+
+              <LearningMaterialView
+                key={`${outputType}-${resultVersion}`}
+                material={generatedResult}
+                disabled={busy || !active}
+              />
+            </>
+          ) : !loading && !generationError ? (
+            <div className="mt-5 rounded-xl border border-dashed border-slate-700 p-6 text-center">
+              <span
+                className="text-3xl text-cyan-300"
+                aria-hidden="true"
+              >
+                {selectedOutput?.icon}
+              </span>
+              <p className="mt-3 font-semibold">
+                Your {displayedOutputLabel.toLowerCase()} will appear here
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Enter a topic and select Generate {displayedOutputLabel}.
+              </p>
+            </div>
+          ) : null}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function LearningStudio() {
+  const [activeTab, setActiveTab] = useState("lesson");
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState("");
+  const [projectsReload, setProjectsReload] = useState(0);
+  const tabRefs = useRef([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadProjects = async () => {
+      setProjectsLoading(true);
+      setProjectsError("");
+
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          throw new Error("Your session has expired. Please sign in again.");
+        }
+
+        const response = await fetch(`${API_BASE_URL}/projects/`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => null);
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            getErrorMessage(
+              response,
+              data,
+              "Your projects could not be loaded."
+            )
+          );
+        }
+
+        if (!Array.isArray(data)) {
+          throw new Error("The server returned invalid project information.");
+        }
+
+        setProjects(data);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setProjectsError(
+            error instanceof Error
+              ? error.message
+              : "Your projects could not be loaded."
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setProjectsLoading(false);
+        }
+      }
+    };
+
+    loadProjects();
+
+    return () => controller.abort();
+  }, [projectsReload]);
+
+  const handleTabKeyDown = (event, currentIndex) => {
+    let nextIndex;
+
+    if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % OUTPUT_TYPES.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex =
+        (currentIndex - 1 + OUTPUT_TYPES.length) % OUTPUT_TYPES.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = OUTPUT_TYPES.length - 1;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    setActiveTab(OUTPUT_TYPES[nextIndex].value);
+    tabRefs.current[nextIndex]?.focus();
   };
 
   return (
@@ -627,437 +1126,57 @@ function LearningStudio() {
           or export them for later.
         </p>
 
-        <div className="mt-8 flex flex-col gap-6">
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            aria-labelledby="learning-form-title"
-            className="min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
-          >
-            <h2 id="learning-form-title" className="text-xl font-bold">
-              Set Up Your Study Material
-            </h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Start with what you want to learn. Your learning goal is optional.
-            </p>
+        <div
+          role="tablist"
+          aria-label="Learning Studio tools"
+          aria-orientation="horizontal"
+          className="mb-6 mt-8 flex gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.18)]"
+        >
+          {OUTPUT_TYPES.map((tab, index) => {
+            const isActive = activeTab === tab.value;
 
-            <div className="mt-6">
-              <label
-                htmlFor="learning-topic"
-                className="mb-2 block text-sm font-semibold"
-              >
-                Topic <span className="text-cyan-300">(required)</span>
-              </label>
-              <input
-                ref={topicRef}
-                id="learning-topic"
-                type="text"
-                value={topic}
-                onChange={(event) => {
-                  setTopic(event.target.value);
-                  setTopicError("");
-                  clearFeedback();
-                }}
-                required
-                maxLength={200}
-                disabled={busy}
-                aria-invalid={Boolean(topicError)}
-                aria-describedby={
-                  topicError
-                    ? "learning-topic-help learning-topic-error"
-                    : "learning-topic-help"
-                }
-                placeholder="e.g. Python loops or network security"
-                className={FIELD_CLASS}
-              />
-              <p
-                id="learning-topic-help"
-                className="mt-2 text-xs text-slate-500"
-              >
-                Choose a subject or concept. {topic.length}/200
-              </p>
-              {topicError && (
-                <p
-                  id="learning-topic-error"
-                  role="alert"
-                  className="mt-2 text-sm text-red-300"
-                >
-                  {topicError}
-                </p>
-              )}
-            </div>
-
-            <div className="mt-6">
-              <label
-                htmlFor="learning-goal"
-                className="mb-2 block text-sm font-semibold"
-              >
-                Learning Goal (optional)
-              </label>
-              <textarea
-                id="learning-goal"
-                value={learningGoal}
-                onChange={(event) => {
-                  setLearningGoal(event.target.value);
-                  clearFeedback();
-                }}
-                rows={4}
-                maxLength={1000}
-                disabled={busy}
-                placeholder="What do you want to understand or achieve?"
-                className={`${FIELD_CLASS} resize-y`}
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                {learningGoal.length}/1000
-              </p>
-            </div>
-
-            <div className="mt-6">
-              <label
-                htmlFor="learning-experience"
-                className="mb-2 block text-sm font-semibold"
-              >
-                Experience Level
-              </label>
-              <select
-                id="learning-experience"
-                value={experienceLevel}
-                onChange={(event) => {
-                  setExperienceLevel(event.target.value);
-                  clearFeedback();
-                }}
-                disabled={busy}
-                className={FIELD_CLASS}
-              >
-                {EXPERIENCE_LEVELS.map((level) => (
-                  <option key={level.value} value={level.value}>
-                    {level.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <fieldset className="mt-6" disabled={busy}>
-              <legend className="text-sm font-semibold">Output Type</legend>
-              <p className="mt-2 text-xs text-slate-400">
-                Use arrow keys when a radio option is focused.
-              </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                {OUTPUT_TYPES.map((type) => (
-                  <label
-                    key={type.value}
-                    className={`flex items-center gap-3 rounded-xl border p-4 focus-within:ring-2 focus-within:ring-cyan-400 ${
-                      busy ? "cursor-not-allowed" : "cursor-pointer"
-                    } ${
-                      outputType === type.value
-                        ? "border-cyan-400 bg-cyan-400/10"
-                        : "border-slate-700 bg-slate-900"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="outputType"
-                      value={type.value}
-                      checked={outputType === type.value}
-                      onChange={(event) => {
-                        setOutputType(event.target.value);
-                        clearFeedback();
-                      }}
-                      className="h-4 w-4 accent-cyan-400"
-                    />
-                    <span className="text-sm font-semibold">{type.label}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <p className="mt-6 text-sm leading-6 text-slate-400">
-              {selectedOutput?.description}
-            </p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button type="submit" disabled={busy} className={PRIMARY_BUTTON}>
-                {loading
-                  ? "Generating..."
-                  : `Generate ${getOutputLabel(outputType)}`}
-              </button>
+            return (
               <button
+                key={tab.value}
+                ref={(element) => {
+                  tabRefs.current[index] = element;
+                }}
+                id={`learning-studio-tab-${tab.value}`}
                 type="button"
-                onClick={handleReset}
-                disabled={busy}
-                className={SECONDARY_BUTTON}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`learning-studio-panel-${tab.value}`}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => setActiveTab(tab.value)}
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
+                className={`min-w-0 flex-1 rounded-xl px-2 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 sm:flex-none sm:px-5 ${
+                  isActive
+                    ? "border border-cyan-400/40 bg-cyan-400/15 text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,0.10)]"
+                    : "border border-transparent text-slate-400 hover:bg-slate-900 hover:text-white"
+                }`}
               >
-                Clear Form
-              </button>
-            </div>
-          </form>
-
-          <section
-            aria-labelledby="learning-output-title"
-            aria-busy={busy}
-            className="w-full min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 id="learning-output-title" className="text-xl font-bold">
-                Your {displayedOutputLabel}
-              </h2>
-              {generatedResult && (
-                <button
-                  type="button"
-                  onClick={handleRegenerate}
-                  disabled={busy}
-                  className={SECONDARY_BUTTON}
-                >
-                  Regenerate {displayedOutputLabel}
-                </button>
-              )}
-            </div>
-
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Regenerate uses the displayed material’s study settings.
-              For different settings, update the form and select Generate.
-            </p>
-
-            <div role="status" aria-live="polite" aria-atomic="true">
-              {loading ? (
-                <p className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-200">
-                  Generating{" "}
-                  {getOutputLabel(lastRequest?.output_type).toLowerCase()}.
-                  {generatedResult
-                    ? " Your current material stays visible until the new result is ready."
-                    : " This may take a moment."}
-                </p>
-              ) : statusMessage ? (
-                <p className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm text-emerald-200">
-                  {statusMessage}
-                </p>
-              ) : null}
-            </div>
-
-            {generationError && (
-              <div
-                role="alert"
-                className="mt-5 rounded-xl border border-red-800 bg-red-950/40 p-4"
-              >
-                <p className="font-semibold text-red-200">
-                  Study material could not be generated
-                </p>
-                <p className="mt-2 text-sm text-red-300">{generationError}</p>
-                {lastRequest && (
-                  <>
-                    <p className="mt-2 break-words text-xs text-slate-400">
-                      Retry uses your last submitted settings for{" "}
-                      {lastRequest.topic}.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => generateStudyMaterial(lastRequest)}
-                      disabled={busy}
-                      className={`${SECONDARY_BUTTON} mt-3`}
-                    >
-                      Retry Generation
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {generatedResult ? (
-              <>
-                <dl className="mt-5 space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-sm">
-                  <div>
-                    <dt className="text-slate-400">Topic</dt>
-                    <dd className="mt-1 break-words font-semibold">
-                      {generatedResult.topic}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-slate-400">Experience Level</dt>
-                    <dd className="mt-1 capitalize">
-                      {generatedResult.experience_level}
-                    </dd>
-                  </div>
-                  {generatedResult.learning_goal && (
-                    <div>
-                      <dt className="text-slate-400">Learning Goal</dt>
-                      <dd className="mt-1 whitespace-pre-wrap break-words">
-                        {generatedResult.learning_goal}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-
-                <section className="mt-5 rounded-xl border border-slate-700 p-4">
-                  <h3 className="font-bold text-cyan-200">Save and Export</h3>
-
-                  <form onSubmit={handleSave} className="mt-4 space-y-4">
-                    <div>
-                      <label
-                        htmlFor="learning-save-title"
-                        className="mb-2 block text-sm font-semibold"
-                      >
-                        Saved Title
-                      </label>
-                      <input
-                        id="learning-save-title"
-                        value={saveTitle}
-                        onChange={(event) => {
-                          setSaveTitle(event.target.value);
-                          setSaveError("");
-                          setSaveMessage("");
-                        }}
-                        disabled={busy}
-                        className={FIELD_CLASS}
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="learning-save-project"
-                        className="mb-2 block text-sm font-semibold"
-                      >
-                        Project
-                      </label>
-                      <select
-                        id="learning-save-project"
-                        value={selectedProjectId}
-                        onChange={(event) => {
-                          setSelectedProjectId(event.target.value);
-                          setSaveError("");
-                          setSaveMessage("");
-                        }}
-                        disabled={busy || projectsLoading}
-                        className={FIELD_CLASS}
-                      >
-                        <option value="">
-                          {projectsLoading
-                            ? "Loading projects..."
-                            : "Choose a project"}
-                        </option>
-                        {projects.map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {!projectsLoading &&
-                      !projectsError &&
-                      projects.length === 0 && (
-                        <p className="text-sm text-slate-400">
-                          Create a project on the Projects page, then reload
-                          the project list here.
-                        </p>
-                      )}
-
-                    {projectsError && (
-                      <p role="alert" className="text-sm text-red-300">
-                        {projectsError}
-                      </p>
-                    )}
-
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="submit"
-                        disabled={
-                          busy ||
-                          projectsLoading ||
-                          !selectedProjectId ||
-                          !saveTitle.trim()
-                        }
-                        className={PRIMARY_BUTTON}
-                      >
-                        {saving
-                          ? "Saving..."
-                          : savedContentId
-                            ? "Update Saved Material"
-                            : "Save to Project"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProjectsReload((value) => value + 1)}
-                        disabled={busy || projectsLoading}
-                        className={SECONDARY_BUTTON}
-                      >
-                        Reload Projects
-                      </button>
-                    </div>
-
-                    {savedContentId && (
-                      <p className="text-xs leading-6 text-slate-400">
-                        Saving again updates this saved item and preserves its
-                        previous version. Generating new material starts a new item.
-                      </p>
-                    )}
-
-                    {saveError && (
-                      <p role="alert" className="text-sm text-red-300">
-                        {saveError}
-                      </p>
-                    )}
-                    {saveMessage && (
-                      <p role="status" className="text-sm text-emerald-300">
-                        {saveMessage}
-                      </p>
-                    )}
-                  </form>
-
-                  <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-800 pt-5">
-                    {[
-                      ["pdf", "PDF"],
-                      ["md", "Markdown"],
-                      ["txt", "TXT"],
-                      ["docx", "DOCX"],
-                    ].map(([format, label]) => (
-                      <button
-                        key={format}
-                        type="button"
-                        onClick={() => handleExport(format)}
-                        disabled={busy}
-                        className={SECONDARY_BUTTON}
-                      >
-                        Export {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <p className="mt-3 text-xs leading-6 text-slate-400">
-                    Exports include the complete material. Quiz exports include
-                    correct answers and explanations in an answer key.
-                  </p>
-                  {exporting && (
-                    <p role="status" className="mt-2 text-sm text-cyan-200">
-                      Preparing your export...
-                    </p>
-                  )}
-                  {exportError && (
-                    <p role="alert" className="mt-2 text-sm text-red-300">
-                      {exportError}
-                    </p>
-                  )}
-                </section>
-
-                <LearningMaterialView
-                  key={resultVersion}
-                  material={generatedResult}
-                  disabled={busy}
-                />
-              </>
-            ) : !loading && !generationError ? (
-              <div className="mt-5 rounded-xl border border-dashed border-slate-700 p-6 text-center">
-                <span className="text-3xl text-cyan-300" aria-hidden="true">
-                  {selectedOutput?.icon}
+                <span aria-hidden="true" className="mr-2 hidden sm:inline">
+                  {tab.icon}
                 </span>
-                <p className="mt-3 font-semibold">
-                  Your {getOutputLabel(outputType).toLowerCase()} will appear here
-                </p>
-                <p className="mt-2 text-sm text-slate-400">
-                  Enter a topic, choose a format, and select Generate.
-                </p>
-              </div>
-            ) : null}
-          </section>
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
+
+        {OUTPUT_TYPES.map((type) => (
+          <LearningStudioPanel
+            key={type.value}
+            outputType={type.value}
+            active={activeTab === type.value}
+            projects={projects}
+            projectsLoading={projectsLoading}
+            projectsError={projectsError}
+            onReloadProjects={() =>
+              setProjectsReload((value) => value + 1)
+            }
+          />
+        ))}
       </section>
     </main>
   );
