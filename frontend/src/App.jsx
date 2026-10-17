@@ -24,6 +24,8 @@ import ProblemSolver from "./pages/ProblemSolver";
 import LearningStudio from "./pages/LearningStudio";
 import HelpGuide from "./pages/HelpGuide";
 
+const API_URL = "http://127.0.0.1:8000";
+
 const SETTINGS_KEY = "tanioSettings";
 const DASHBOARD_MODE_KEY = "tanioDashboardMode";
 const SELECTED_MODULES_KEY = "tanioSelectedModules";
@@ -35,6 +37,13 @@ const VALID_MODULE_IDS = [
   "problem-solver",
   "learning-studio",
 ];
+
+const DEFAULT_MODULE_COLORS = {
+  "product-architect": "#06b6d4",
+  "tabletop-creator": "#9333ea",
+  "problem-solver": "#10b981",
+  "learning-studio": "#06b6d4",
+};
 
 function getStoredAppearance() {
   try {
@@ -49,9 +58,8 @@ function getStoredAppearance() {
       theme: ["dark", "light", "system"].includes(storedTheme)
         ? storedTheme
         : "dark",
-      compactLayout: Boolean(
-        parsedSettings?.appearance?.compactLayout
-      ),
+      compactLayout:
+        parsedSettings?.appearance?.compactLayout === true,
     };
   } catch {
     return {
@@ -73,27 +81,51 @@ function getStoredSelectedModules() {
       localStorage.getItem(SELECTED_MODULES_KEY) || "[]"
     );
 
-    if (!Array.isArray(storedModules)) {
-      return [];
-    }
-
-    return storedModules.filter((moduleId) =>
-      VALID_MODULE_IDS.includes(moduleId)
-    );
+    return Array.isArray(storedModules)
+      ? storedModules.filter((moduleId) =>
+          VALID_MODULE_IDS.includes(moduleId)
+        )
+      : [];
   } catch {
     return [];
   }
 }
 
+function parseModuleColorResponse(data) {
+  if (!Number.isInteger(data?.user_id)) {
+    throw new Error("The server returned an invalid account response.");
+  }
+
+  const colors = {};
+
+  for (const moduleId of VALID_MODULE_IDS) {
+    const color = data?.module_colors?.[moduleId];
+
+    if (
+      typeof color !== "string" ||
+      !/^#[0-9a-f]{6}$/i.test(color)
+    ) {
+      throw new Error("The server returned invalid module colors.");
+    }
+
+    colors[moduleId] = color.toLowerCase();
+  }
+
+  return {
+    userId: data.user_id,
+    colors,
+  };
+}
+
 function App() {
   const location = useLocation();
 
-  const [appearance, setAppearance] = useState(
-    getStoredAppearance
-  );
+  const [appearance, setAppearance] = useState(getStoredAppearance);
 
   const [systemIsDark, setSystemIsDark] = useState(
-    () => window.matchMedia("(prefers-color-scheme: dark)").matches
+    () =>
+      window.matchMedia?.("(prefers-color-scheme: dark)").matches ??
+      true
   );
 
   const [dashboardMode, setDashboardMode] = useState(
@@ -106,10 +138,19 @@ function App() {
 
   const [showInterestModal, setShowInterestModal] = useState(false);
 
-  const isSignInPage = location.pathname === "/signin";
+  const [moduleColorState, setModuleColorState] = useState({
+    token: null,
+    userId: null,
+    colors: { ...DEFAULT_MODULE_COLORS },
+  });
 
+  // Refresh session values when another tab signs in or out.
+  const [, refreshSession] = useState(0);
+
+  const isSignInPage = location.pathname === "/signin";
   const isSignedIn =
     localStorage.getItem("tanioSession") === "true";
+  const token = localStorage.getItem("token");
 
   const resolvedTheme =
     appearance.theme === "system"
@@ -117,6 +158,32 @@ function App() {
         ? "dark"
         : "light"
       : appearance.theme;
+
+  // Never display another session's saved colors.
+  const moduleColors =
+    isSignedIn &&
+    token &&
+    moduleColorState.token === token
+      ? moduleColorState.colors
+      : DEFAULT_MODULE_COLORS;
+
+  useEffect(() => {
+    const handleSessionStorage = (event) => {
+      if (
+        event.key === "token" ||
+        event.key === "tanioSession" ||
+        event.key === null
+      ) {
+        refreshSession((current) => current + 1);
+      }
+    };
+
+    window.addEventListener("storage", handleSessionStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleSessionStorage);
+    };
+  }, []);
 
   useEffect(() => {
     const updateAppearance = () => {
@@ -133,7 +200,6 @@ function App() {
       "tanio-settings-updated",
       updateAppearance
     );
-
     window.addEventListener("storage", handleStorageUpdate);
 
     updateAppearance();
@@ -143,15 +209,15 @@ function App() {
         "tanio-settings-updated",
         updateAppearance
       );
-
-      window.removeEventListener(
-        "storage",
-        handleStorageUpdate
-      );
+      window.removeEventListener("storage", handleStorageUpdate);
     };
   }, []);
 
   useEffect(() => {
+    if (!window.matchMedia) {
+      return undefined;
+    }
+
     const systemTheme = window.matchMedia(
       "(prefers-color-scheme: dark)"
     );
@@ -161,7 +227,6 @@ function App() {
     };
 
     updateSystemTheme();
-
     systemTheme.addEventListener("change", updateSystemTheme);
 
     return () => {
@@ -208,7 +273,6 @@ function App() {
       "tanio-modules-updated",
       handleModulesUpdated
     );
-
     window.addEventListener("storage", handleStorageUpdate);
 
     return () => {
@@ -216,13 +280,137 @@ function App() {
         "tanio-modules-updated",
         handleModulesUpdated
       );
-
-      window.removeEventListener(
-        "storage",
-        handleStorageUpdate
-      );
+      window.removeEventListener("storage", handleStorageUpdate);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSignedIn || isSignInPage || !token) {
+      setModuleColorState({
+        token: null,
+        userId: null,
+        colors: { ...DEFAULT_MODULE_COLORS },
+      });
+
+      return undefined;
+    }
+
+    let active = true;
+    let knownUserId = null;
+    let requestVersion = 0;
+    let controller = null;
+
+    const sessionIsCurrent = () =>
+      active &&
+      localStorage.getItem("token") === token &&
+      localStorage.getItem("tanioSession") === "true";
+
+    const loadModuleColors = async () => {
+      controller?.abort();
+      controller = new AbortController();
+
+      const requestController = controller;
+      const version = ++requestVersion;
+
+      try {
+        const response = await fetch(
+          `${API_URL}/auth/me/module-colors`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: requestController.signal,
+          }
+        );
+
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(
+            typeof data?.detail === "string"
+              ? data.detail
+              : "Unable to load your module colors."
+          );
+        }
+
+        const result = parseModuleColorResponse(data);
+
+        if (
+          !sessionIsCurrent() ||
+          requestController.signal.aborted ||
+          version !== requestVersion
+        ) {
+          return;
+        }
+
+        knownUserId = result.userId;
+
+        setModuleColorState({
+          token,
+          userId: result.userId,
+          colors: result.colors,
+        });
+      } catch (error) {
+        if (
+          sessionIsCurrent() &&
+          !requestController.signal.aborted &&
+          version === requestVersion
+        ) {
+          console.error("Module color loading failed:", error);
+        }
+      }
+    };
+
+    const handleModuleColorsUpdated = (event) => {
+      if (!sessionIsCurrent()) {
+        return;
+      }
+
+      try {
+        const result = parseModuleColorResponse(event.detail);
+
+        // Verify the account through the API if the initial load
+        // has not identified the signed-in user yet.
+        if (knownUserId === null) {
+          loadModuleColors();
+          return;
+        }
+
+        if (result.userId !== knownUserId) {
+          return;
+        }
+
+        // A completed save takes precedence over an older GET.
+        requestVersion += 1;
+        controller?.abort();
+
+        setModuleColorState({
+          token,
+          userId: result.userId,
+          colors: result.colors,
+        });
+      } catch (error) {
+        console.error("Invalid module color update:", error);
+      }
+    };
+
+    window.addEventListener(
+      "tanio-module-colors-updated",
+      handleModuleColorsUpdated
+    );
+
+    loadModuleColors();
+
+    return () => {
+      active = false;
+      controller?.abort();
+
+      window.removeEventListener(
+        "tanio-module-colors-updated",
+        handleModuleColorsUpdated
+      );
+    };
+  }, [isSignedIn, isSignInPage, token]);
 
   useEffect(() => {
     if (!isSignedIn || isSignInPage) {
@@ -230,12 +418,9 @@ function App() {
       return undefined;
     }
 
-    const shouldShowInterestModal =
-      localStorage.getItem(INTEREST_PROMPT_KEY) === "true";
-
-    setShowInterestModal(shouldShowInterestModal);
-
-    const token = localStorage.getItem("token");
+    setShowInterestModal(
+      localStorage.getItem(INTEREST_PROMPT_KEY) === "true"
+    );
 
     if (!token) {
       setShowInterestModal(false);
@@ -247,7 +432,7 @@ function App() {
     const loadInterestSelection = async () => {
       try {
         const response = await fetch(
-          "http://127.0.0.1:8000/auth/me/interests",
+          `${API_URL}/auth/me/interests`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -264,13 +449,14 @@ function App() {
 
         const data = await response.json();
 
-        if (controller.signal.aborted) {
+        if (
+          controller.signal.aborted ||
+          localStorage.getItem("token") !== token
+        ) {
           return;
         }
 
-        const savedModules = Array.isArray(
-          data.selected_modules
-        )
+        const savedModules = Array.isArray(data.selected_modules)
           ? data.selected_modules.filter((moduleId) =>
               VALID_MODULE_IDS.includes(moduleId)
             )
@@ -287,7 +473,10 @@ function App() {
           localStorage.getItem(INTEREST_PROMPT_KEY) === "true"
         );
       } catch (error) {
-        if (!controller.signal.aborted) {
+        if (
+          !controller.signal.aborted &&
+          localStorage.getItem("token") === token
+        ) {
           console.error(error);
           setSelectedModules(getStoredSelectedModules());
         }
@@ -299,25 +488,23 @@ function App() {
     return () => {
       controller.abort();
     };
-  }, [isSignedIn, isSignInPage]);
+  }, [isSignedIn, isSignInPage, token]);
 
   useEffect(() => {
-    if (!isSignedIn || isSignInPage) {
-      return undefined;
-    }
-
-    const token = localStorage.getItem("token");
-
-    if (!token) {
+    if (!isSignedIn || isSignInPage || !token) {
       return undefined;
     }
 
     const controller = new AbortController();
 
     const sendHeartbeat = async () => {
+      if (localStorage.getItem("token") !== token) {
+        return;
+      }
+
       try {
         await fetch(
-          "http://127.0.0.1:8000/auth/presence/heartbeat",
+          `${API_URL}/auth/presence/heartbeat`,
           {
             method: "POST",
             headers: {
@@ -344,17 +531,13 @@ function App() {
       window.clearInterval(heartbeatInterval);
       controller.abort();
     };
-  }, [isSignedIn, isSignInPage]);
+  }, [isSignedIn, isSignInPage, token]);
 
   const handleDashboardModeChange = (mode) => {
     const nextMode = mode === "advanced" ? "advanced" : "basic";
 
     setDashboardMode(nextMode);
-
-    localStorage.setItem(
-      DASHBOARD_MODE_KEY,
-      nextMode
-    );
+    localStorage.setItem(DASHBOARD_MODE_KEY, nextMode);
   };
 
   const handleInterestSelectionComplete = (savedModules) => {
@@ -400,6 +583,7 @@ function App() {
         dashboardMode={dashboardMode}
         selectedModules={selectedModules}
         theme={resolvedTheme}
+        moduleColors={moduleColors}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -414,6 +598,8 @@ function App() {
                   dashboardMode={dashboardMode}
                   onDashboardModeChange={handleDashboardModeChange}
                   selectedModules={selectedModules}
+                  moduleColors={moduleColors}
+                  theme={resolvedTheme}
                 />
               }
             />

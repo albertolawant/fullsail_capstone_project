@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +19,8 @@ from app.schemas.user import (
     UserCreate,
     UserInterestResponse,
     UserInterestUpdate,
+    UserModuleColorsResponse,
+    UserModuleColorsUpdate,
     UserProfileUpdateResponse,
     UserResponse,
     UserUpdate,
@@ -45,6 +48,13 @@ ALLOWED_INTEREST_MODULES = {
     "learning-studio",
 }
 
+DEFAULT_MODULE_COLORS = {
+    "product-architect": "#06b6d4",
+    "tabletop-creator": "#9333ea",
+    "problem-solver": "#10b981",
+    "learning-studio": "#06b6d4",
+}
+
 
 def hash_password(password: str):
     return password_context.hash(password)
@@ -64,17 +74,14 @@ def create_access_token(data: dict):
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
 
-    to_encode.update({
-        "exp": expire,
-    })
+    to_encode.update({"exp": expire})
 
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
         algorithm=settings.ALGORITHM,
     )
 
-    return encoded_jwt
 
 def is_user_online(user: User) -> bool:
     if user.last_seen is None:
@@ -96,9 +103,7 @@ def get_current_user(
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
-        headers={
-            "WWW-Authenticate": "Bearer",
-        },
+        headers={"WWW-Authenticate": "Bearer"},
     )
 
     try:
@@ -125,6 +130,25 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def get_resolved_module_colors(user: User):
+    """Return defaults with valid saved overrides for this user."""
+    colors = DEFAULT_MODULE_COLORS.copy()
+    saved_colors = user.module_colors
+
+    if not isinstance(saved_colors, dict):
+        return colors
+
+    for module_id, color in saved_colors.items():
+        if (
+            module_id in DEFAULT_MODULE_COLORS
+            and isinstance(color, str)
+            and re.fullmatch(r"#[0-9a-fA-F]{6}", color.strip())
+        ):
+            colors[module_id] = color.strip().lower()
+
+    return colors
 
 
 @router.post(
@@ -190,9 +214,7 @@ def login(
         )
 
     access_token = create_access_token(
-        data={
-            "sub": user.email,
-        }
+        data={"sub": user.email}
     )
 
     return {
@@ -209,6 +231,7 @@ def get_me(
     current_user: User = Depends(get_current_user),
 ):
     return current_user
+
 
 @router.post("/presence/heartbeat")
 def presence_heartbeat(
@@ -273,9 +296,7 @@ def update_me(
     db.refresh(current_user)
 
     access_token = create_access_token(
-        data={
-            "sub": current_user.email,
-        }
+        data={"sub": current_user.email}
     )
 
     return {
@@ -326,9 +347,7 @@ def update_email(
     db.refresh(current_user)
 
     access_token = create_access_token(
-        data={
-            "sub": current_user.email,
-        }
+        data={"sub": current_user.email}
     )
 
     return {
@@ -365,9 +384,7 @@ def update_password(
 
     db.commit()
 
-    return {
-        "message": "Password updated successfully",
-    }
+    return {"message": "Password updated successfully"}
 
 
 @router.get(
@@ -449,8 +466,69 @@ def save_user_interests(
     }
 
 
+@router.get(
+    "/me/module-colors",
+    response_model=UserModuleColorsResponse,
+)
+def get_user_module_colors(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "user_id": current_user.id,
+        "module_colors": get_resolved_module_colors(current_user),
+    }
+
+
+@router.put(
+    "/me/module-colors",
+    response_model=UserModuleColorsResponse,
+)
+def save_user_module_colors(
+    color_data: UserModuleColorsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # PUT replaces the saved overrides.
+    # Omitted modules receive their defaults.
+    # An empty dictionary resets all colors.
+    current_user.module_colors = dict(color_data.module_colors)
+
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "user_id": current_user.id,
+        "module_colors": get_resolved_module_colors(current_user),
+    }
+
+
+@router.delete(
+    "/me/module-colors",
+    response_model=UserModuleColorsResponse,
+)
+def reset_user_module_colors(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.module_colors = None
+
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "user_id": current_user.id,
+        "module_colors": get_resolved_module_colors(current_user),
+    }
+
+
 @router.post("/logout")
 def logout():
-    return {
-        "message": "Successfully logged out",
-    }
+    return {"message": "Successfully logged out"}
