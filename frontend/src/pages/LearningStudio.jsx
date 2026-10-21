@@ -17,6 +17,7 @@ import { notifyContentSaved } from "../utils/notifications";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const GENERATION_TIMEOUT_MS = 45000;
+const QUESTION_BANK_TIMEOUT_MS = 90000;
 const UPLOAD_TIMEOUT_MS = 30000;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_SOURCE_TEXT_LENGTH = 40000;
@@ -122,6 +123,7 @@ function LearningStudioPanel({
   const [questionCount, setQuestionCount] = useState(
     DEFAULT_QUIZ_QUESTION_COUNT
   );
+  const [randomizeQuestions, setRandomizeQuestions] = useState(false);
   const [topicError, setTopicError] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -201,6 +203,11 @@ function LearningStudioPanel({
     setStatusMessage("");
   };
 
+  const clearLastRequest = () => {
+    setLastRequest(null);
+    setLastRequestFilename("");
+  };
+
   const handleNotesUpload = async (event) => {
     const file = event.target.files?.[0];
 
@@ -213,8 +220,7 @@ function LearningStudioPanel({
 
     setUploadError("");
     clearFeedback();
-    setLastRequest(null);
-    setLastRequestFilename("");
+    clearLastRequest();
 
     const extension = file.name
       .slice(file.name.lastIndexOf("."))
@@ -320,7 +326,6 @@ function LearningStudioPanel({
         return;
       }
 
-      // Replace previous notes only after a successful upload.
       setUploadedNotes({
         filename,
         sourceText,
@@ -364,8 +369,7 @@ function LearningStudioPanel({
 
     setUploadedNotes(null);
     setUploadError("");
-    setLastRequest(null);
-    setLastRequestFilename("");
+    clearLastRequest();
     clearFeedback();
 
     if (fileInputRef.current) {
@@ -397,6 +401,16 @@ function LearningStudioPanel({
       return;
     }
 
+    if (
+      isQuiz &&
+      typeof request.randomize_questions !== "boolean"
+    ) {
+      setGenerationError(
+        "Choose whether to enable random question selection."
+      );
+      return;
+    }
+
     const controller = new AbortController();
     requestControllerRef.current = controller;
 
@@ -408,10 +422,15 @@ function LearningStudioPanel({
 
     let timedOut = false;
 
+    const timeoutMs =
+      isQuiz && request.randomize_questions
+        ? QUESTION_BANK_TIMEOUT_MS
+        : GENERATION_TIMEOUT_MS;
+
     const timeoutId = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, GENERATION_TIMEOUT_MS);
+    }, timeoutMs);
 
     try {
       const token = localStorage.getItem("token");
@@ -468,13 +487,33 @@ function LearningStudioPanel({
         );
       }
 
-      if (
-        isQuiz &&
-        data.content.questions.length !== request.question_count
-      ) {
-        throw new Error(
-          `The quiz did not contain the requested ${request.question_count} questions. Please try again.`
-        );
+      if (isQuiz) {
+        if (
+          data.content.questions.length !== request.question_count
+        ) {
+          throw new Error(
+            `The quiz did not contain the requested ${request.question_count} questions. Please try again.`
+          );
+        }
+
+        if (
+          data.content.randomize_questions !==
+          request.randomize_questions
+        ) {
+          throw new Error(
+            "The quiz did not match your random selection setting. Please try again."
+          );
+        }
+
+        if (
+          request.randomize_questions &&
+          (data.content.question_bank?.length ?? 0) <=
+            request.question_count
+        ) {
+          throw new Error(
+            "The question bank is too small for different question sets. Choose fewer questions, disable random selection, or provide more detailed notes."
+          );
+        }
       }
 
       if (!mountedRef.current) {
@@ -483,8 +522,8 @@ function LearningStudioPanel({
 
       setGeneratedResult(data);
 
-      // Preserve the successful request, including its count and notes.
-      // Form changes and failed requests do not replace this snapshot.
+      // Preserve all settings used for the successful generation.
+      // Form edits and failed requests do not replace this snapshot.
       setGeneratedRequest({ ...request });
       setGeneratedSourceFilename(sourceFilename);
 
@@ -494,11 +533,20 @@ function LearningStudioPanel({
       setSaveError("");
       setSaveMessage("");
       setExportError("");
-      setStatusMessage(
-        isQuiz
-          ? `Your ${request.question_count}-question quiz is ready. You can study, save, or export it.`
-          : `${getOutputLabel(outputType)} ready. You can study, save, or export it.`
-      );
+
+      if (isQuiz && request.randomize_questions) {
+        setStatusMessage(
+          `Your ${request.question_count}-question quiz is ready with a bank of ${data.content.question_bank.length} questions. Use Start New Attempt below to select a different set.`
+        );
+      } else if (isQuiz) {
+        setStatusMessage(
+          `Your ${request.question_count}-question quiz is ready. You can study, save, or export it.`
+        );
+      } else {
+        setStatusMessage(
+          `${getOutputLabel(outputType)} ready. You can study, save, or export it.`
+        );
+      }
     } catch (error) {
       if (!mountedRef.current) {
         return;
@@ -539,8 +587,7 @@ function LearningStudioPanel({
 
     clearFeedback();
     setTopicError("");
-    setLastRequest(null);
-    setLastRequestFilename("");
+    clearLastRequest();
 
     const cleanedTopic = topic.trim();
     const cleanedGoal = learningGoal.trim();
@@ -587,6 +634,7 @@ function LearningStudioPanel({
 
     if (isQuiz) {
       request.question_count = questionCount;
+      request.randomize_questions = randomizeQuestions;
 
       if (uploadedNotes) {
         request.source_text = uploadedNotes.sourceText;
@@ -624,12 +672,12 @@ function LearningStudioPanel({
     setLearningGoal("");
     setExperienceLevel("beginner");
     setQuestionCount(DEFAULT_QUIZ_QUESTION_COUNT);
+    setRandomizeQuestions(false);
     setTopicError("");
     setGeneratedResult(null);
     setGeneratedRequest(null);
     setGeneratedSourceFilename("");
-    setLastRequest(null);
-    setLastRequestFilename("");
+    clearLastRequest();
     setUploadedNotes(null);
     setUploadError("");
     setSavedContentId(null);
@@ -674,6 +722,7 @@ function LearningStudioPanel({
     let body;
 
     try {
+      // Includes the original set and full question bank.
       body = serializeLearningMaterial(generatedResult);
     } catch (error) {
       setSaveError(
@@ -872,7 +921,7 @@ function LearningStudioPanel({
 
           <p className="mt-4 text-sm text-slate-400">
             {isQuiz
-              ? "Enter a topic, choose your question count, and optionally upload class notes."
+              ? "Enter a topic, choose your question count, and optionally enable random selection or upload class notes."
               : "Start with what you want to learn. Your learning goal is optional."}
           </p>
 
@@ -927,165 +976,210 @@ function LearningStudioPanel({
           </div>
 
           {isQuiz && (
-            <div className="mt-6">
-              <label
-                htmlFor={fieldId("question-count")}
-                className="mb-2 block text-sm font-semibold"
-              >
-                Number of Questions
-              </label>
-              <select
-                ref={questionCountRef}
-                id={fieldId("question-count")}
-                value={questionCount}
-                onChange={(event) => {
-                  setQuestionCount(Number(event.target.value));
-                  setLastRequest(null);
-                  setLastRequestFilename("");
-                  clearFeedback();
-                }}
-                disabled={busy}
-                aria-describedby={fieldId("question-count-help")}
-                className={FIELD_CLASS}
-              >
-                {QUIZ_QUESTION_COUNTS.map((count) => (
-                  <option key={count} value={count}>
-                    {count} questions
-                  </option>
-                ))}
-              </select>
-              <p
-                id={fieldId("question-count-help")}
-                className="mt-2 text-xs leading-6 text-slate-500"
-              >
-                Choose 5, 10, or 15 questions for a topic-based or
-                notes-based quiz. Uploaded notes must contain enough
-                information for the selected count.
-              </p>
-            </div>
-          )}
+            <>
+              <div className="mt-6">
+                <label
+                  htmlFor={fieldId("question-count")}
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Number of Questions per Attempt
+                </label>
+                <select
+                  ref={questionCountRef}
+                  id={fieldId("question-count")}
+                  value={questionCount}
+                  onChange={(event) => {
+                    setQuestionCount(Number(event.target.value));
+                    clearLastRequest();
+                    clearFeedback();
+                  }}
+                  disabled={busy}
+                  aria-describedby={fieldId("question-count-help")}
+                  className={FIELD_CLASS}
+                >
+                  {QUIZ_QUESTION_COUNTS.map((count) => (
+                    <option key={count} value={count}>
+                      {count} questions
+                    </option>
+                  ))}
+                </select>
+                <p
+                  id={fieldId("question-count-help")}
+                  className="mt-2 text-xs leading-6 text-slate-500"
+                >
+                  Choose 5, 10, or 15 questions for each attempt.
+                  This works with topics and uploaded notes.
+                </p>
+              </div>
 
-          {isQuiz && (
-            <section
-              aria-labelledby={fieldId("notes-title")}
-              aria-busy={uploading}
-              className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4"
-            >
-              <h3
-                id={fieldId("notes-title")}
-                className="font-semibold text-cyan-200"
-              >
-                Class Notes (optional)
-              </h3>
+              <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                <label
+                  htmlFor={fieldId("randomize-questions")}
+                  className={`flex items-start gap-3 ${
+                    busy
+                      ? "cursor-not-allowed"
+                      : "cursor-pointer"
+                  }`}
+                >
+                  <input
+                    id={fieldId("randomize-questions")}
+                    type="checkbox"
+                    checked={randomizeQuestions}
+                    onChange={(event) => {
+                      setRandomizeQuestions(event.target.checked);
+                      clearLastRequest();
+                      clearFeedback();
+                    }}
+                    disabled={busy}
+                    aria-describedby={fieldId("randomize-help")}
+                    className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
+                  />
+                  <span className="text-sm font-semibold leading-6 text-cyan-200">
+                    Enable Random Question Selection
+                  </span>
+                </label>
 
-              <p
-                id={fieldId("notes-help")}
-                className="mt-2 text-sm leading-6 text-slate-400"
-              >
-                Upload a PDF, DOCX, or TXT file under 5 MB.
-                Notes can contain up to 40,000 extracted characters.
-                PDFs must contain selectable text and no more than
-                100 pages.
-              </p>
+                <p
+                  id={fieldId("randomize-help")}
+                  className="mt-2 text-sm leading-6 text-slate-400"
+                >
+                  {randomizeQuestions
+                    ? `Build a bank of up to ${
+                        questionCount * 2
+                      } questions, then select ${questionCount} for each attempt. Use Start New Attempt to practice with a different set.`
+                    : "Generate one question set. New attempts repeat the original questions."}
+                </p>
 
-              <p className="mt-2 text-xs leading-6 text-slate-400">
-                When you generate a quiz, the extracted notes are
-                sent to the AI service as source material.
-              </p>
-
-              <label
-                htmlFor={fieldId("notes-file")}
-                className="mb-2 mt-4 block text-sm font-semibold"
-              >
-                {uploadedNotes
-                  ? "Replace Class Notes"
-                  : "Upload Class Notes"}
-              </label>
-
-              <input
-                ref={fileInputRef}
-                id={fieldId("notes-file")}
-                type="file"
-                accept=".pdf,.docx,.txt"
-                onChange={handleNotesUpload}
-                disabled={busy}
-                aria-invalid={Boolean(uploadError)}
-                aria-describedby={
-                  uploadError
-                    ? `${fieldId("notes-help")} ${fieldId("notes-error")}`
-                    : fieldId("notes-help")
-                }
-                className={`${FIELD_CLASS} file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-400 file:px-3 file:py-2 file:font-semibold file:text-slate-950`}
-              />
-
-              <div
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                {uploading ? (
-                  <p className="mt-3 text-sm text-cyan-200">
-                    Uploading and reading your notes...
-                  </p>
-                ) : uploadedNotes ? (
-                  <p className="mt-3 break-words text-sm text-emerald-300">
-                    Ready: {uploadedNotes.filename} —{" "}
-                    {uploadedNotes.characterCount.toLocaleString()}{" "}
-                    characters extracted.
-                  </p>
-                ) : (
-                  <p className="mt-3 text-sm text-slate-400">
-                    No notes selected. The quiz will use your topic.
+                {randomizeQuestions && (
+                  <p className="mt-2 text-xs leading-6 text-slate-400">
+                    Building a question bank may take longer.
+                    Uploaded notes must support at least{" "}
+                    {questionCount + 1} distinct questions.
                   </p>
                 )}
               </div>
 
-              {uploadError && (
-                <div
-                  id={fieldId("notes-error")}
-                  role="alert"
-                  className="mt-3 rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-300"
+              <section
+                aria-labelledby={fieldId("notes-title")}
+                aria-busy={uploading}
+                className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4"
+              >
+                <h3
+                  id={fieldId("notes-title")}
+                  className="font-semibold text-cyan-200"
                 >
-                  <p>{uploadError}</p>
-                  {uploadedNotes && (
-                    <p className="mt-2">
-                      Your previous notes, {uploadedNotes.filename},
-                      are still selected. Remove them below if you
-                      want to generate without notes.
+                  Class Notes (optional)
+                </h3>
+
+                <p
+                  id={fieldId("notes-help")}
+                  className="mt-2 text-sm leading-6 text-slate-400"
+                >
+                  Upload a PDF, DOCX, or TXT file under 5 MB.
+                  Notes can contain up to 40,000 extracted
+                  characters. PDFs must contain selectable text
+                  and no more than 100 pages.
+                </p>
+
+                <p className="mt-2 text-xs leading-6 text-slate-400">
+                  When you generate a quiz, the extracted notes are
+                  sent to the AI service as source material.
+                </p>
+
+                <label
+                  htmlFor={fieldId("notes-file")}
+                  className="mb-2 mt-4 block text-sm font-semibold"
+                >
+                  {uploadedNotes
+                    ? "Replace Class Notes"
+                    : "Upload Class Notes"}
+                </label>
+
+                <input
+                  ref={fileInputRef}
+                  id={fieldId("notes-file")}
+                  type="file"
+                  accept=".pdf,.docx,.txt"
+                  onChange={handleNotesUpload}
+                  disabled={busy}
+                  aria-invalid={Boolean(uploadError)}
+                  aria-describedby={
+                    uploadError
+                      ? `${fieldId("notes-help")} ${fieldId("notes-error")}`
+                      : fieldId("notes-help")
+                  }
+                  className={`${FIELD_CLASS} file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-400 file:px-3 file:py-2 file:font-semibold file:text-slate-950`}
+                />
+
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {uploading ? (
+                    <p className="mt-3 text-sm text-cyan-200">
+                      Uploading and reading your notes...
+                    </p>
+                  ) : uploadedNotes ? (
+                    <p className="mt-3 break-words text-sm text-emerald-300">
+                      Ready: {uploadedNotes.filename} —{" "}
+                      {uploadedNotes.characterCount.toLocaleString()}{" "}
+                      characters extracted.
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-400">
+                      No notes selected. The quiz will use your topic.
                     </p>
                   )}
                 </div>
-              )}
 
-              {uploadedNotes && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleRemoveNotes}
-                    disabled={busy}
-                    className={`${SECONDARY_BUTTON} mt-4`}
+                {uploadError && (
+                  <div
+                    id={fieldId("notes-error")}
+                    role="alert"
+                    className="mt-3 rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-300"
                   >
-                    Remove Notes
-                  </button>
+                    <p>{uploadError}</p>
+                    {uploadedNotes && (
+                      <p className="mt-2">
+                        Your previous notes, {uploadedNotes.filename},
+                        are still selected. Remove them below if you
+                        want to generate without notes.
+                      </p>
+                    )}
+                  </div>
+                )}
 
-                  <details className="mt-4 rounded-lg border border-slate-700 bg-slate-950/50 p-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-cyan-200">
-                      Preview Extracted Text
-                    </summary>
-                    <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-300">
-                      {uploadedNotes.sourceText}
-                    </pre>
-                  </details>
-                </>
-              )}
+                {uploadedNotes && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleRemoveNotes}
+                      disabled={busy}
+                      className={`${SECONDARY_BUTTON} mt-4`}
+                    >
+                      Remove Notes
+                    </button>
 
-              <p className="mt-3 text-xs leading-6 text-slate-400">
-                Replacing or removing notes affects the next Generate
-                Quiz request. Regenerate Quiz reuses the notes from
-                the displayed quiz. Notes are cleared when you leave
-                this page or select Clear This Tab.
-              </p>
-            </section>
+                    <details className="mt-4 rounded-lg border border-slate-700 bg-slate-950/50 p-3">
+                      <summary className="cursor-pointer text-sm font-semibold text-cyan-200">
+                        Preview Extracted Text
+                      </summary>
+                      <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-300">
+                        {uploadedNotes.sourceText}
+                      </pre>
+                    </details>
+                  </>
+                )}
+
+                <p className="mt-3 text-xs leading-6 text-slate-400">
+                  Replacing or removing notes affects the next
+                  Generate Quiz request. Regenerate reuses the
+                  original notes. Notes are cleared when you leave
+                  this page or select Clear This Tab.
+                </p>
+              </section>
+            </>
           )}
 
           <div className="mt-6">
@@ -1204,7 +1298,7 @@ function LearningStudioPanel({
 
           <p className="mt-2 text-sm leading-6 text-slate-400">
             {isQuiz
-              ? "Regenerate uses the displayed quiz’s topic, experience level, learning goal, question count, and original notes, if any. To use different settings, update the form and select Generate Quiz."
+              ? "Regenerate creates new material using the original generation settings and notes. Start New Attempt below reuses the existing question bank. To change generation settings, update the form and select Generate Quiz."
               : "Regenerate uses the displayed material’s study settings. For different settings, update the form and select Generate."}
           </p>
 
@@ -1215,9 +1309,13 @@ function LearningStudioPanel({
           >
             {loading ? (
               <p className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-200">
-                {isQuiz
-                  ? `Generating ${lastRequest?.question_count ?? questionCount} quiz questions.`
-                  : `Generating ${displayedOutputLabel.toLowerCase()}.`}
+                {isQuiz && lastRequest?.randomize_questions
+                  ? `Building a question bank for ${lastRequest.question_count}-question attempts.`
+                  : isQuiz
+                    ? `Generating ${
+                        lastRequest?.question_count ?? questionCount
+                      } quiz questions.`
+                    : `Generating ${displayedOutputLabel.toLowerCase()}.`}
                 {generatedResult
                   ? " Your current material stays visible until the new result is ready."
                   : " This may take a moment."}
@@ -1247,7 +1345,11 @@ function LearningStudioPanel({
                     Retry uses your last submitted settings for{" "}
                     {lastRequest.topic}
                     {isQuiz
-                      ? ` with ${lastRequest.question_count} questions`
+                      ? ` with ${lastRequest.question_count} questions and random selection ${
+                          lastRequest.randomize_questions
+                            ? "enabled"
+                            : "disabled"
+                        }`
                       : ""}
                     {lastRequestFilename
                       ? ` and notes from ${lastRequestFilename}`
@@ -1306,10 +1408,21 @@ function LearningStudioPanel({
                   <>
                     <div>
                       <dt className="text-slate-400">
-                        Number of Questions
+                        Questions per Attempt
                       </dt>
                       <dd className="mt-1">
                         {generatedResult.content.questions.length}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-slate-400">
+                        Question Bank
+                      </dt>
+                      <dd className="mt-1">
+                        {generatedResult.content.question_bank?.length
+                          ? `${generatedResult.content.question_bank.length} questions available`
+                          : "Original question set only"}
                       </dd>
                     </div>
 
@@ -1443,6 +1556,15 @@ function LearningStudioPanel({
                     </p>
                   )}
 
+                  {isQuiz && (
+                    <p className="text-xs leading-6 text-slate-400">
+                      Saving preserves the original question set,
+                      question bank, and initial random-selection
+                      setting. Practice answers and scores are not
+                      saved.
+                    </p>
+                  )}
+
                   {saveError && (
                     <p
                       role="alert"
@@ -1482,9 +1604,9 @@ function LearningStudioPanel({
                 </div>
 
                 <p className="mt-3 text-xs leading-6 text-slate-400">
-                  Exports include the complete material. Quiz
-                  exports include correct answers and explanations
-                  in an answer key.
+                  {isQuiz
+                    ? "Quiz exports contain the initially generated question set, correct answers, and explanations. The full bank remains in saved app material."
+                    : "Exports include the complete learning material."}
                 </p>
 
                 {exporting && (
@@ -1526,7 +1648,7 @@ function LearningStudioPanel({
               </p>
               <p className="mt-2 text-sm text-slate-400">
                 {isQuiz
-                  ? "Enter a topic, choose your question count, optionally upload notes, and select Generate Quiz."
+                  ? "Enter a topic, choose your quiz settings, optionally upload notes, and select Generate Quiz."
                   : `Enter a topic and select Generate ${displayedOutputLabel}.`}
               </p>
             </div>
@@ -1658,9 +1780,9 @@ function LearningStudio() {
 
         <p className="mt-5 max-w-2xl leading-relaxed text-slate-400">
           Turn topics into lessons, flashcards, and quizzes tailored
-          to your experience level. Choose 5, 10, or 15 quiz
-          questions, upload class notes, and save or export your
-          materials for later.
+          to your experience level. Choose your quiz length, practice
+          with different question sets, upload class notes, and save
+          or export your materials for later.
         </p>
 
         <div

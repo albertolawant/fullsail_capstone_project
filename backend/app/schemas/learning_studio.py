@@ -15,6 +15,7 @@ OutputType = Literal["lesson", "flashcards", "quiz"]
 MAX_SOURCE_TEXT_LENGTH = 40000
 SUPPORTED_QUIZ_QUESTION_COUNTS = (5, 10, 15)
 DEFAULT_QUIZ_QUESTION_COUNT = 5
+MAX_QUIZ_QUESTION_BANK_SIZE = 30
 
 NonEmptyText = Annotated[
     str,
@@ -65,6 +66,10 @@ QuizQuestionCount = Annotated[
 ]
 
 
+def normalize_question_text(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
 class StrictModel(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -79,6 +84,7 @@ class LearningStudioRequest(StrictModel):
     output_type: OutputType = "lesson"
     source_text: SourceText = ""
     question_count: QuizQuestionCount = DEFAULT_QUIZ_QUESTION_COUNT
+    randomize_questions: bool = False
 
     @model_validator(mode="after")
     def validate_source_text(self):
@@ -102,6 +108,15 @@ class LearningStudioRequest(StrictModel):
         ):
             raise ValueError(
                 "Custom question counts can only be used for quizzes."
+            )
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_randomize_questions(self):
+        if self.randomize_questions and self.output_type != "quiz":
+            raise ValueError(
+                "Random question selection can only be used for quizzes."
             )
 
         return self
@@ -209,12 +224,107 @@ class QuizQuestion(StrictModel):
         return self
 
 
+class QuizQuestionBankContent(StrictModel):
+    """
+    Used to validate an AI-generated question bank before
+    constructing the quiz response.
+    """
+
+    title: NonEmptyText
+    questions: list[QuizQuestion] = Field(
+        min_length=1,
+        max_length=MAX_QUIZ_QUESTION_BANK_SIZE,
+    )
+
+    @model_validator(mode="after")
+    def validate_unique_questions(self):
+        normalized_questions = [
+            normalize_question_text(question.question)
+            for question in self.questions
+        ]
+
+        if len(set(normalized_questions)) != len(normalized_questions):
+            raise ValueError(
+                "The question bank must not contain duplicate questions."
+            )
+
+        return self
+
+
 class QuizContent(StrictModel):
     title: NonEmptyText
+
+    # The initial attempt, containing the requested question count.
     questions: list[QuizQuestion] = Field(
         min_length=1,
         max_length=15,
     )
+
+    # Defaults preserve compatibility with older saved quizzes.
+    question_bank: list[QuizQuestion] = Field(
+        default_factory=list,
+        max_length=MAX_QUIZ_QUESTION_BANK_SIZE,
+    )
+    randomize_questions: bool = False
+
+    @model_validator(mode="after")
+    def validate_question_bank(self):
+        if not self.question_bank:
+            if self.randomize_questions:
+                raise ValueError(
+                    "Random question selection requires a question bank. "
+                    "Generate a new quiz with random selection enabled."
+                )
+
+            return self
+
+        normalized_bank_questions = [
+            normalize_question_text(question.question)
+            for question in self.question_bank
+        ]
+
+        if len(set(normalized_bank_questions)) != len(
+            normalized_bank_questions
+        ):
+            raise ValueError(
+                "The question bank must not contain duplicate questions."
+            )
+
+        if len(self.question_bank) < len(self.questions):
+            raise ValueError(
+                "The question bank is too small for the requested "
+                "number of questions."
+            )
+
+        bank_by_question = {
+            normalize_question_text(question.question): question
+            for question in self.question_bank
+        }
+
+        selected_questions = set()
+
+        for question in self.questions:
+            normalized_text = normalize_question_text(question.question)
+
+            if normalized_text in selected_questions:
+                raise ValueError(
+                    "A quiz attempt must not contain duplicate questions."
+                )
+
+            selected_questions.add(normalized_text)
+
+            bank_question = bank_by_question.get(normalized_text)
+
+            if (
+                bank_question is None
+                or bank_question.model_dump() != question.model_dump()
+            ):
+                raise ValueError(
+                    "Every selected question and its answers must "
+                    "match a question in the question bank."
+                )
+
+        return self
 
 
 class LessonResponse(StrictModel):

@@ -10,6 +10,8 @@ export const LEARNING_STUDIO_LABELS = {
   quiz: "Quiz",
 };
 
+export const MAX_QUIZ_QUESTION_BANK_SIZE = 30;
+
 const EXPERIENCE_LEVELS = [
   "beginner",
   "intermediate",
@@ -31,6 +33,226 @@ const requireValid = (condition, message) => {
     throw new Error(message);
   }
 };
+
+export function getQuizQuestionKey(question) {
+  return question.question.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function validateQuizQuestion(question, label) {
+  requireValid(
+    question &&
+      typeof question === "object" &&
+      !Array.isArray(question) &&
+      isText(question.question),
+    `${label} needs question text.`
+  );
+
+  requireValid(
+    isList(question.choices, 4, 4) &&
+      question.choices.every((choice) => isText(choice)),
+    `${label} needs four nonempty answer choices.`
+  );
+
+  requireValid(
+    new Set(
+      question.choices.map((choice) =>
+        choice.trim().toLowerCase()
+      )
+    ).size === 4,
+    `${label} must have four distinct answer choices.`
+  );
+
+  requireValid(
+    Number.isInteger(question.correct_answer_index) &&
+      question.correct_answer_index >= 0 &&
+      question.correct_answer_index < 4,
+    `${label} needs a correct answer selection.`
+  );
+
+  requireValid(
+    isText(question.explanation),
+    `${label} needs an explanation.`
+  );
+}
+
+function questionsMatch(first, second) {
+  return (
+    first.question === second.question &&
+    first.correct_answer_index === second.correct_answer_index &&
+    first.explanation === second.explanation &&
+    first.choices.length === second.choices.length &&
+    first.choices.every(
+      (choice, index) => choice === second.choices[index]
+    )
+  );
+}
+
+export function validateQuizContent(quiz) {
+  requireValid(
+    quiz &&
+      typeof quiz === "object" &&
+      !Array.isArray(quiz) &&
+      isText(quiz.title),
+    "The quiz needs a valid title."
+  );
+
+  requireValid(
+    isList(quiz.questions, 1, 15),
+    "Provide between 1 and 15 quiz questions."
+  );
+
+  quiz.questions.forEach((question, index) => {
+    validateQuizQuestion(question, `Question ${index + 1}`);
+  });
+
+  // Older saved quizzes may omit both new fields.
+  requireValid(
+    quiz.randomize_questions === undefined ||
+      typeof quiz.randomize_questions === "boolean",
+    "Random question selection must be enabled or disabled."
+  );
+
+  const bank =
+    quiz.question_bank === undefined ? [] : quiz.question_bank;
+
+  requireValid(
+    isList(bank, 0, MAX_QUIZ_QUESTION_BANK_SIZE),
+    `The question bank must contain at most ${MAX_QUIZ_QUESTION_BANK_SIZE} questions.`
+  );
+
+  bank.forEach((question, index) => {
+    validateQuizQuestion(
+      question,
+      `Question bank item ${index + 1}`
+    );
+  });
+
+  if (bank.length === 0) {
+    requireValid(
+      !quiz.randomize_questions,
+      "Random selection requires a question bank. Generate a new quiz with random selection enabled."
+    );
+
+    return quiz;
+  }
+
+  const bankByQuestion = new Map();
+
+  bank.forEach((question) => {
+    const key = getQuizQuestionKey(question);
+
+    requireValid(
+      !bankByQuestion.has(key),
+      "The question bank must not contain duplicate questions."
+    );
+
+    bankByQuestion.set(key, question);
+  });
+
+  requireValid(
+    bank.length >= quiz.questions.length,
+    "The question bank is too small for the requested number of questions."
+  );
+
+  const selectedKeys = new Set();
+
+  quiz.questions.forEach((question) => {
+    const key = getQuizQuestionKey(question);
+    const bankQuestion = bankByQuestion.get(key);
+
+    requireValid(
+      !selectedKeys.has(key),
+      "A quiz attempt must not contain duplicate questions."
+    );
+
+    selectedKeys.add(key);
+
+    requireValid(
+      bankQuestion && questionsMatch(question, bankQuestion),
+      "Every selected question and its answers must match a question in the question bank."
+    );
+  });
+
+  return quiz;
+}
+
+function shuffledCopy(items) {
+  const shuffled = [...items];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+
+    [shuffled[index], shuffled[randomIndex]] = [
+      shuffled[randomIndex],
+      shuffled[index],
+    ];
+  }
+
+  return shuffled;
+}
+
+export function createQuizAttempt(
+  quiz,
+  {
+    randomize = quiz.randomize_questions ?? false,
+    previousQuestions = [],
+  } = {}
+) {
+  validateQuizContent(quiz);
+
+  const requestedCount = quiz.questions.length;
+
+  if (!randomize) {
+    return [...quiz.questions];
+  }
+
+  const bank = quiz.question_bank ?? [];
+
+  requireValid(
+    bank.length > requestedCount,
+    `The question bank is too small to provide different ${requestedCount}-question sets. Generate a new quiz with random selection enabled or choose fewer questions.`
+  );
+
+  const selected = shuffledCopy(bank).slice(0, requestedCount);
+
+  const previousKeys = new Set(
+    previousQuestions.map(getQuizQuestionKey)
+  );
+
+  const repeatsPreviousSet =
+    previousQuestions.length === requestedCount &&
+    previousKeys.size === requestedCount &&
+    selected.every((question) =>
+      previousKeys.has(getQuizQuestionKey(question))
+    );
+
+  if (repeatsPreviousSet) {
+    // Guarantee a different set from the immediately previous
+    // attempt when the bank contains additional questions.
+    const alternatives = bank.filter(
+      (question) =>
+        !previousKeys.has(getQuizQuestionKey(question))
+    );
+
+    requireValid(
+      alternatives.length > 0,
+      "The question bank has no additional questions for a different attempt."
+    );
+
+    const replacement =
+      alternatives[
+        Math.floor(Math.random() * alternatives.length)
+      ];
+
+    const replacementIndex = Math.floor(
+      Math.random() * selected.length
+    );
+
+    selected[replacementIndex] = replacement;
+  }
+
+  return selected;
+}
 
 export function getLearningOutputType(contentType) {
   return (
@@ -165,46 +387,7 @@ export function validateLearningMaterial(
   }
 
   if (material.output_type === "quiz") {
-    requireValid(
-      isList(content.questions, 1, 15),
-      "Provide between 1 and 15 quiz questions."
-    );
-
-    content.questions.forEach((question, index) => {
-      const label = `Question ${index + 1}`;
-
-      requireValid(
-        question && isText(question.question),
-        `${label} needs question text.`
-      );
-
-      requireValid(
-        isList(question.choices, 4, 4) &&
-          question.choices.every((choice) => isText(choice)),
-        `${label} needs four nonempty answer choices.`
-      );
-
-      requireValid(
-        new Set(
-          question.choices.map((choice) =>
-            choice.trim().toLowerCase()
-          )
-        ).size === 4,
-        `${label} must have four distinct answer choices.`
-      );
-
-      requireValid(
-        Number.isInteger(question.correct_answer_index) &&
-          question.correct_answer_index >= 0 &&
-          question.correct_answer_index < 4,
-        `${label} needs a correct answer selection.`
-      );
-
-      requireValid(
-        isText(question.explanation),
-        `${label} needs an explanation.`
-      );
-    });
+    validateQuizContent(content);
   }
 
   return material;
@@ -362,6 +545,20 @@ export function learningMaterialToMarkdown(material) {
   }
 
   if (material.output_type === "quiz") {
+    lines.push(
+      `Questions in saved set: ${content.questions.length}`,
+      ""
+    );
+
+    if (content.question_bank?.length) {
+      lines.push(
+        `Questions available in bank: ${content.question_bank.length}`,
+        "",
+        "This export contains the initially generated question set and its answer key. The full question bank remains available in the saved app material.",
+        ""
+      );
+    }
+
     lines.push("### Questions", "");
 
     content.questions.forEach((question, index) => {

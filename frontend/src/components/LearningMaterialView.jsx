@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { validateLearningMaterial } from "../utils/learningStudioContent";
+import {
+  createQuizAttempt,
+  validateLearningMaterial,
+} from "../utils/learningStudioContent";
 
 const PRIMARY_BUTTON =
   "rounded-xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50";
@@ -208,7 +211,10 @@ export function FlashcardsView({ deck, disabled = false }) {
         </button>
       </div>
 
-      <p id={`${id}-help`} className="mt-4 text-sm leading-6 text-slate-400">
+      <p
+        id={`${id}-help`}
+        className="mt-4 text-sm leading-6 text-slate-400"
+      >
         Keyboard: Tab to the controls and press Enter or Space.
         Use Left and Right Arrow inside the deck to change cards.
       </p>
@@ -217,31 +223,51 @@ export function FlashcardsView({ deck, disabled = false }) {
 }
 
 export function QuizView({ quiz, disabled = false }) {
-  const [selectedAnswers, setSelectedAnswers] = useState(() =>
-    quiz.questions.map(() => null)
+  // The backend already selected the initial attempt.
+  const [attemptQuestions, setAttemptQuestions] = useState(
+    () => [...quiz.questions]
+  );
+  const [selectedAnswers, setSelectedAnswers] = useState(
+    () => quiz.questions.map(() => null)
   );
   const [submitted, setSubmitted] = useState(false);
+  const [attemptNumber, setAttemptNumber] = useState(1);
+  const [randomizeQuestions, setRandomizeQuestions] = useState(
+    () => quiz.randomize_questions ?? false
+  );
+  const [attemptRandomized, setAttemptRandomized] = useState(
+    () => quiz.randomize_questions ?? false
+  );
+  const [attemptError, setAttemptError] = useState("");
+  const [attemptMessage, setAttemptMessage] = useState("");
 
   const id = useId();
   const quizTitleRef = useRef(null);
   const resultsTitleRef = useRef(null);
 
-  const totalQuestions = quiz.questions.length;
+  const requestedCount = quiz.questions.length;
+  const bankSize = quiz.question_bank?.length ?? 0;
+  const canSelectDifferentSets = bankSize > requestedCount;
+  const totalQuestions = attemptQuestions.length;
+
   const answeredCount = selectedAnswers.filter(
     (answer) => answer !== null
   ).length;
   const allAnswered = answeredCount === totalQuestions;
 
-  const correctCount = quiz.questions.reduce(
+  const correctCount = attemptQuestions.reduce(
     (total, question, index) =>
       total +
-      (selectedAnswers[index] === question.correct_answer_index ? 1 : 0),
+      (selectedAnswers[index] === question.correct_answer_index
+        ? 1
+        : 0),
     0
   );
 
-  const percentage = Math.round(
-    (correctCount / totalQuestions) * 100
-  );
+  const percentage =
+    totalQuestions > 0
+      ? Math.round((correctCount / totalQuestions) * 100)
+      : 0;
 
   useEffect(() => {
     if (submitted) {
@@ -266,21 +292,62 @@ export function QuizView({ quiz, disabled = false }) {
 
     if (!disabled && !submitted && allAnswered) {
       setSubmitted(true);
+      setAttemptMessage("");
     }
   };
 
-  const handleRetake = () => {
+  const handleRandomSelectionChange = (event) => {
     if (disabled) {
       return;
     }
 
-    setSelectedAnswers(quiz.questions.map(() => null));
-    setSubmitted(false);
-    quizTitleRef.current?.focus();
+    setRandomizeQuestions(event.target.checked);
+    setAttemptError("");
+    setAttemptMessage("");
+  };
+
+  const handleNewAttempt = () => {
+    if (disabled) {
+      return;
+    }
+
+    setAttemptError("");
+
+    try {
+      const nextQuestions = createQuizAttempt(quiz, {
+        randomize: randomizeQuestions,
+        previousQuestions: attemptQuestions,
+      });
+
+      // Update the entire attempt together. A failed selection
+      // leaves the current questions, answers, and score intact.
+      setAttemptQuestions(nextQuestions);
+      setSelectedAnswers(nextQuestions.map(() => null));
+      setSubmitted(false);
+      setAttemptNumber((number) => number + 1);
+      setAttemptRandomized(randomizeQuestions);
+      setAttemptMessage(
+        randomizeQuestions
+          ? "A different question set is ready. Previous answers and scores have been cleared."
+          : "The original question set is ready. Previous answers and scores have been cleared."
+      );
+
+      quizTitleRef.current?.focus();
+    } catch (error) {
+      setAttemptMessage("");
+      setAttemptError(
+        error instanceof Error
+          ? error.message
+          : "A new quiz attempt could not be started."
+      );
+    }
   };
 
   return (
-    <section aria-labelledby={`${id}-title`} className="mt-6 min-w-0">
+    <section
+      aria-labelledby={`${id}-title`}
+      className="mt-6 min-w-0"
+    >
       <h3
         ref={quizTitleRef}
         id={`${id}-title`}
@@ -290,6 +357,103 @@ export function QuizView({ quiz, disabled = false }) {
         {quiz.title}
       </h3>
 
+      <div className="mt-5 rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-5">
+        <h4 className="font-semibold text-cyan-200">
+          Quiz Attempts
+        </h4>
+
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          Attempt {attemptNumber} · {totalQuestions} questions
+          {bankSize > 0
+            ? ` · ${bankSize} questions available in the bank`
+            : ""}
+        </p>
+
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          {attemptRandomized
+            ? "This attempt uses a randomly selected question set."
+            : "This attempt uses the original question set."}
+        </p>
+
+        <label
+          htmlFor={`${id}-random-selection`}
+          className={`mt-4 flex items-start gap-3 ${
+            disabled ? "cursor-not-allowed" : "cursor-pointer"
+          }`}
+        >
+          <input
+            id={`${id}-random-selection`}
+            type="checkbox"
+            checked={randomizeQuestions}
+            onChange={handleRandomSelectionChange}
+            disabled={disabled}
+            aria-describedby={`${id}-random-help`}
+            className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
+          />
+          <span className="text-sm font-semibold leading-6 text-white">
+            Randomly select questions for the next attempt
+          </span>
+        </label>
+
+        <p
+          id={`${id}-random-help`}
+          className="mt-2 text-sm leading-6 text-slate-400"
+        >
+          Turn this on to select {requestedCount} questions from
+          the bank. Turn it off to repeat the original set.
+          Changes apply when you select Start New Attempt.
+        </p>
+
+        {randomizeQuestions && !canSelectDifferentSets && (
+          <p
+            role="alert"
+            className="mt-3 rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-sm leading-6 text-amber-200"
+          >
+            {bankSize === 0
+              ? "This quiz has no question bank. Generate a new quiz with random selection enabled, or turn this option off to repeat the original questions."
+              : `The bank contains ${bankSize} questions. Different ${requestedCount}-question sets require at least ${
+                  requestedCount + 1
+                } questions. Generate a larger bank or turn random selection off.`}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={handleNewAttempt}
+          disabled={
+            disabled ||
+            (randomizeQuestions && !canSelectDifferentSets)
+          }
+          className={`${SECONDARY_BUTTON} mt-4`}
+        >
+          Start New Attempt
+        </button>
+
+        <p className="mt-3 text-xs leading-6 text-slate-400">
+          Starting a new attempt clears your current answers,
+          results, and explanations. Questions may appear again
+          across attempts, but each random set differs from the
+          immediately previous set.
+        </p>
+
+        {attemptError && (
+          <p
+            role="alert"
+            className="mt-3 text-sm text-red-300"
+          >
+            {attemptError}
+          </p>
+        )}
+
+        <div role="status" aria-live="polite" aria-atomic="true">
+          {attemptMessage && (
+            <p className="mt-3 text-sm text-emerald-300">
+              {attemptMessage}
+            </p>
+          )}
+        </div>
+      </div>
+
       {submitted ? (
         <>
           <div className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-5">
@@ -298,7 +462,7 @@ export function QuizView({ quiz, disabled = false }) {
               tabIndex={-1}
               className="text-xl font-bold text-cyan-200 focus:outline-none"
             >
-              Quiz Results
+              Quiz Results — Attempt {attemptNumber}
             </h4>
             <p className="mt-3 text-3xl font-bold text-white">
               {correctCount} / {totalQuestions}
@@ -306,25 +470,21 @@ export function QuizView({ quiz, disabled = false }) {
             <p className="mt-2 text-slate-300">
               You answered {percentage}% correctly.
             </p>
-            <button
-              type="button"
-              onClick={handleRetake}
-              disabled={disabled}
-              className={`${PRIMARY_BUTTON} mt-5`}
-            >
-              Retake Quiz
-            </button>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Review your answers below. To try again, use
+              Start New Attempt above.
+            </p>
           </div>
 
           <div className="mt-6 space-y-5">
-            {quiz.questions.map((question, index) => {
+            {attemptQuestions.map((question, index) => {
               const selectedIndex = selectedAnswers[index];
               const isCorrect =
                 selectedIndex === question.correct_answer_index;
 
               return (
                 <article
-                  key={index}
+                  key={`${attemptNumber}-${index}`}
                   className={`rounded-xl border p-5 ${
                     isCorrect
                       ? "border-emerald-700 bg-emerald-950/20"
@@ -337,7 +497,9 @@ export function QuizView({ quiz, disabled = false }) {
                     </p>
                     <p
                       className={`text-sm font-bold ${
-                        isCorrect ? "text-emerald-300" : "text-red-300"
+                        isCorrect
+                          ? "text-emerald-300"
+                          : "text-red-300"
                       }`}
                     >
                       {isCorrect ? "Correct" : "Incorrect"}
@@ -362,7 +524,11 @@ export function QuizView({ quiz, disabled = false }) {
                         Correct Answer
                       </dt>
                       <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-200">
-                        {question.choices[question.correct_answer_index]}
+                        {
+                          question.choices[
+                            question.correct_answer_index
+                          ]
+                        }
                       </dd>
                     </div>
                     <div>
@@ -387,15 +553,20 @@ export function QuizView({ quiz, disabled = false }) {
           className="mt-5 space-y-5"
         >
           <p className="text-sm leading-6 text-slate-400">
-            Choose one answer for every question, then submit your quiz.
+            Choose one answer for every question, then submit
+            your quiz.
           </p>
-          <p role="status" aria-live="polite" className="text-sm text-cyan-200">
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-sm text-cyan-200"
+          >
             {answeredCount} of {totalQuestions} questions answered
           </p>
 
-          {quiz.questions.map((question, questionIndex) => (
+          {attemptQuestions.map((question, questionIndex) => (
             <fieldset
-              key={questionIndex}
+              key={`${attemptNumber}-${questionIndex}`}
               disabled={disabled}
               className="min-w-0 rounded-xl border border-slate-700 p-5"
             >
@@ -412,7 +583,9 @@ export function QuizView({ quiz, disabled = false }) {
                     <label
                       key={choiceIndex}
                       className={`flex items-start gap-3 rounded-lg border p-3 focus-within:ring-2 focus-within:ring-cyan-400 ${
-                        disabled ? "cursor-not-allowed" : "cursor-pointer"
+                        disabled
+                          ? "cursor-not-allowed"
+                          : "cursor-pointer"
                       } ${
                         isSelected
                           ? "border-cyan-400 bg-cyan-400/10"
@@ -421,16 +594,20 @@ export function QuizView({ quiz, disabled = false }) {
                     >
                       <input
                         type="radio"
-                        name={`${id}-question-${questionIndex}`}
+                        name={`${id}-attempt-${attemptNumber}-question-${questionIndex}`}
                         value={choiceIndex}
                         checked={isSelected}
                         onChange={() =>
-                          handleAnswerChange(questionIndex, choiceIndex)
+                          handleAnswerChange(
+                            questionIndex,
+                            choiceIndex
+                          )
                         }
                         className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
                       />
                       <span className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">
-                        {String.fromCharCode(65 + choiceIndex)}. {choice}
+                        {String.fromCharCode(65 + choiceIndex)}.{" "}
+                        {choice}
                       </span>
                     </label>
                   );
@@ -467,7 +644,9 @@ function LearningMaterialView({ material, disabled = false }) {
         role="alert"
         className="mt-5 rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-300"
       >
-        {error.message}
+        {error instanceof Error
+          ? error.message
+          : "The learning material could not be displayed."}
       </p>
     );
   }

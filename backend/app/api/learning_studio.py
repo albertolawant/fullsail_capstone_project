@@ -2,6 +2,7 @@ import json
 import logging
 from io import BytesIO
 from pathlib import PurePosixPath
+from random import SystemRandom
 from zipfile import ZipFile
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -21,6 +22,7 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.learning_studio import (
+    MAX_QUIZ_QUESTION_BANK_SIZE,
     MAX_SOURCE_TEXT_LENGTH,
     FlashcardsContent,
     FlashcardsResponse,
@@ -30,12 +32,14 @@ from app.schemas.learning_studio import (
     LessonContent,
     LessonResponse,
     QuizContent,
+    QuizQuestionBankContent,
     QuizResponse,
 )
 from app.services.ai_usage_service import log_ai_usage
 
 
 logger = logging.getLogger(__name__)
+random_generator = SystemRandom()
 
 router = APIRouter(
     prefix="/learning-studio",
@@ -48,10 +52,12 @@ MAX_DOCX_ENTRIES = 1000
 MAX_PDF_PAGES = 100
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 
+# The AI returns quiz questions only. The server constructs
+# the final QuizContent, including bank and randomization settings.
 CONTENT_MODELS = {
     "lesson": LessonContent,
     "flashcards": FlashcardsContent,
-    "quiz": QuizContent,
+    "quiz": QuizQuestionBankContent,
 }
 
 RESPONSE_MODELS = {
@@ -78,7 +84,9 @@ OUTPUT_INSTRUCTIONS = {
         "Use correct_answer_index to identify the correct choice. "
         "The index is zero-based: 0, 1, 2, or 3. "
         "Ensure the explanation agrees with the selected correct choice. "
-        "Do not repeat questions."
+        "Do not repeat questions or rephrase the same question to "
+        "inflate the question count. "
+        "Keep explanations concise."
     ),
 }
 
@@ -407,6 +415,23 @@ def upload_learning_studio_notes(
         file.file.close()
 
 
+def get_quiz_generation_limits(
+    request: LearningStudioRequest,
+) -> tuple[int, int]:
+    if request.randomize_questions:
+        # A bank must contain at least one extra question so
+        # different sets are possible between attempts.
+        minimum_count = request.question_count + 1
+        target_count = min(
+            request.question_count * 2,
+            MAX_QUIZ_QUESTION_BANK_SIZE,
+        )
+
+        return minimum_count, target_count
+
+    return request.question_count, request.question_count
+
+
 def build_learning_studio_prompt(
     request: LearningStudioRequest,
 ) -> str:
@@ -414,19 +439,39 @@ def build_learning_studio_prompt(
     content_schema = content_model.model_json_schema()
     output_instructions = OUTPUT_INSTRUCTIONS[request.output_type]
 
-    if request.output_type == "quiz":
-        # Tell the AI the exact count in both prose and JSON Schema.
-        question_schema = content_schema["properties"]["questions"]
-        question_schema["minItems"] = request.question_count
-        question_schema["maxItems"] = request.question_count
+    minimum_count = request.question_count
+    target_count = request.question_count
 
-        output_instructions = (
-            f"Create exactly {request.question_count} "
-            "multiple-choice questions. "
-            "The questions array must contain exactly "
-            f"{request.question_count} items. "
-            + output_instructions
+    if request.output_type == "quiz":
+        minimum_count, target_count = get_quiz_generation_limits(
+            request
         )
+
+        question_schema = content_schema["properties"]["questions"]
+        question_schema["minItems"] = minimum_count
+        question_schema["maxItems"] = target_count
+
+        if request.randomize_questions:
+            output_instructions = (
+                "Create a reusable bank of distinct multiple-choice "
+                "questions for repeated quiz attempts. "
+                f"Aim for {target_count} questions. "
+                f"Return between {minimum_count} and {target_count} "
+                "questions if the source supports fewer than the target. "
+                f"Each attempt will select {request.question_count} "
+                "questions from this bank. "
+                "Return the bank in the questions array. "
+                "Do not select the attempt yourself. "
+                + output_instructions
+            )
+        else:
+            output_instructions = (
+                f"Create exactly {request.question_count} "
+                "multiple-choice questions. "
+                "The questions array must contain exactly "
+                f"{request.question_count} items. "
+                + output_instructions
+            )
 
     schema_json = json.dumps(
         content_schema,
@@ -442,6 +487,7 @@ def build_learning_studio_prompt(
 
     if request.output_type == "quiz":
         user_data["question_count"] = request.question_count
+        user_data["randomize_questions"] = request.randomize_questions
 
     user_input = json.dumps(
         user_data,
@@ -456,10 +502,12 @@ Use the topic and learning goal to focus the quiz within the notes.
 Every correct answer and its explanation must be supported by the notes.
 Do not introduce outside facts as required knowledge.
 Do not invent missing information or reproduce obvious contradictions.
-If the notes do not support exactly {request.question_count} distinct,
-accurate questions relevant to the requested topic, return
+The minimum number of supported distinct questions is {minimum_count}.
+The target number is {target_count}.
+If the notes cannot support the minimum number of accurate questions
+relevant to the topic, return
 {{"error": "insufficient_source_material"}}
-instead of inventing questions or returning fewer questions.
+instead of inventing questions or returning an undersized bank.
 """.strip()
     else:
         source_instructions = (
@@ -509,45 +557,71 @@ Additional requirements:
 """.strip()
 
 
-def validate_generated_quiz(
-    content: QuizContent,
-    expected_count: int,
-) -> None:
-    actual_count = len(content.questions)
+def build_quiz_content(
+    generated_bank: QuizQuestionBankContent,
+    request: LearningStudioRequest,
+) -> QuizContent:
+    available_count = len(generated_bank.questions)
+    minimum_count, target_count = get_quiz_generation_limits(request)
 
-    if actual_count != expected_count:
+    if request.randomize_questions:
+        if available_count < minimum_count:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"The question bank contains {available_count} "
+                    "questions. Random selection for "
+                    f"{request.question_count}-question attempts needs "
+                    f"at least {minimum_count} distinct questions. "
+                    "Choose fewer questions, disable random selection, "
+                    "or provide more detailed notes."
+                ),
+            )
+
+        if available_count > target_count:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "The AI returned an incorrectly sized question bank. "
+                    "Please try again."
+                ),
+            )
+
+        selected_questions = random_generator.sample(
+            generated_bank.questions,
+            request.question_count,
+        )
+
+        return QuizContent(
+            title=generated_bank.title,
+            questions=selected_questions,
+            question_bank=generated_bank.questions,
+            randomize_questions=True,
+        )
+
+    if available_count != request.question_count:
         logger.warning(
             "Learning Studio rejected a quiz with %s questions; "
             "expected %s.",
-            actual_count,
-            expected_count,
+            available_count,
+            request.question_count,
         )
 
         raise HTTPException(
             status_code=502,
             detail=(
-                f"The AI returned {actual_count} questions instead of "
-                f"the requested {expected_count}. Please try again."
-            ),
-        )
-
-    normalized_questions = [
-        " ".join(question.question.split()).casefold()
-        for question in content.questions
-    ]
-
-    if len(set(normalized_questions)) != expected_count:
-        logger.warning(
-            "Learning Studio rejected a quiz with duplicate questions."
-        )
-
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "The AI returned repeated questions. "
+                f"The AI returned {available_count} questions instead of "
+                f"the requested {request.question_count}. "
                 "Please try again."
             ),
         )
+
+    return QuizContent(
+        title=generated_bank.title,
+        questions=generated_bank.questions,
+        question_bank=[],
+        randomize_questions=False,
+    )
 
 
 def generate_learning_studio_content(
@@ -607,15 +681,32 @@ def generate_learning_studio_content(
                 and parsed_content.get("error")
                 == "insufficient_source_material"
             ):
-                raise HTTPException(
-                    status_code=422,
-                    detail=(
+                if request.randomize_questions:
+                    minimum_count, _ = get_quiz_generation_limits(
+                        request
+                    )
+
+                    detail = (
+                        "The uploaded notes do not support a large "
+                        "enough question bank for random selection. "
+                        f"A {request.question_count}-question attempt "
+                        f"needs at least {minimum_count} distinct "
+                        "questions in the bank. Choose fewer questions, "
+                        "disable random selection, or upload more "
+                        "detailed notes."
+                    )
+                else:
+                    detail = (
                         "The uploaded notes do not contain enough "
                         "relevant information for "
                         f"{request.question_count} distinct questions. "
                         "Choose fewer questions, upload more detailed "
                         "notes, or adjust the topic."
-                    ),
+                    )
+
+                raise HTTPException(
+                    status_code=422,
+                    detail=detail,
                 )
 
         content_model = CONTENT_MODELS[request.output_type]
@@ -624,6 +715,10 @@ def generate_learning_studio_content(
             content = content_model.model_validate_json(
                 generated_text.strip()
             )
+
+            if request.output_type == "quiz":
+                content = build_quiz_content(content, request)
+
         except ValidationError:
             logger.warning(
                 "Learning Studio rejected an invalid %s response.",
@@ -633,16 +728,11 @@ def generate_learning_studio_content(
             raise HTTPException(
                 status_code=502,
                 detail=(
-                    "The AI returned incomplete or incorrectly formatted "
-                    "study material. Please try again."
+                    "The AI returned incomplete, repeated, or "
+                    "incorrectly formatted study material. "
+                    "Please try again."
                 ),
             ) from None
-
-        if request.output_type == "quiz":
-            validate_generated_quiz(
-                content,
-                request.question_count,
-            )
 
         return content
 
