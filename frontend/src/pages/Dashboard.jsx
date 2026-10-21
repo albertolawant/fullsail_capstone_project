@@ -1,15 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import RecentContent from "../components/RecentContent";
 import { notifyProjectCreated } from "../utils/notifications";
 
 const API_URL = "http://127.0.0.1:8000";
 
-const PROJECT_MODULE_IDS = [
-  "product-architect",
-  "tabletop-creator",
-];
+const PROJECT_MODULE_IDS = ["product-architect", "tabletop-creator"];
 
 const DEFAULT_MODULE_COLORS = {
   "product-architect": "#06b6d4",
@@ -133,9 +129,7 @@ function mixColors(first, second, amount) {
     "#" +
     firstRgb
       .map((value, index) =>
-        Math.round(
-          value + (secondRgb[index] - value) * amount
-        )
+        Math.round(value + (secondRgb[index] - value) * amount)
           .toString(16)
           .padStart(2, "0")
       )
@@ -213,11 +207,7 @@ function getModuleStyles(moduleId, moduleColors, theme) {
   return {
     color,
     card: {
-      borderColor: mixColors(
-        surface,
-        color,
-        isLight ? 0.42 : 0.48
-      ),
+      borderColor: mixColors(surface, color, isLight ? 0.42 : 0.48),
       backgroundColor: surface,
       backgroundImage: `linear-gradient(135deg, ${mixColors(
         surface,
@@ -274,6 +264,179 @@ function BetaBadge() {
   );
 }
 
+function DashboardViewSelector({ mode, onChange, theme }) {
+  const id = useId();
+  const isLight = theme === "light";
+
+  const modes = [
+    {
+      value: "basic",
+      title: "Basic Mode",
+      description:
+        "Essential tools and simple navigation for a focused workspace.",
+      accent: isLight ? "#0e7490" : "#67e8f9",
+      border: isLight ? "#0891b2" : "#22d3ee",
+      background: isLight ? "#ecfeff" : "#0b2535",
+    },
+    {
+      value: "advanced",
+      title: "Advanced Mode",
+      description:
+        "Statistics, search, shortcuts, and recent activity in one place.",
+      accent: isLight ? "#7e22ce" : "#d8b4fe",
+      border: isLight ? "#9333ea" : "#c084fc",
+      background: isLight ? "#faf5ff" : "#21172f",
+    },
+  ];
+
+  return (
+    <section
+      aria-labelledby={`${id}-title`}
+      aria-describedby={`${id}-description`}
+      className="mb-6 min-w-0 rounded-2xl border p-5 shadow-sm sm:p-6"
+      style={{
+        backgroundColor: isLight ? "#ffffff" : "#0b1220",
+        borderColor: isLight ? "#dbe3ee" : "#243147",
+      }}
+    >
+      <div className="flex min-w-0 flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border"
+              style={{
+                backgroundColor: isLight ? "#ecfeff" : "#102638",
+                borderColor: isLight ? "#a5dbe8" : "#214358",
+                color: isLight ? "#0e7490" : "#67e8f9",
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-6 w-6"
+              >
+                <path d="M4 7h16M4 17h16" />
+                <rect x="7" y="4" width="4" height="6" rx="1.5" />
+                <rect x="13" y="14" width="4" height="6" rx="1.5" />
+              </svg>
+            </span>
+
+            <div>
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.2em]"
+                style={{ color: isLight ? "#0e7490" : "#67e8f9" }}
+              >
+                Make It Yours
+              </p>
+
+              <h2
+                id={`${id}-title`}
+                className="mt-1 text-xl font-bold tracking-tight sm:text-2xl"
+                style={{ color: isLight ? "#0f172a" : "#f8fafc" }}
+              >
+                Dashboard View
+              </h2>
+            </div>
+          </div>
+
+          <p
+            id={`${id}-description`}
+            className="mt-4 text-sm leading-6"
+            style={{ color: isLight ? "#526277" : "#94a3b8" }}
+          >
+            Choose the experience that best matches how you want to work.
+          </p>
+
+          <p
+            className="mt-2 text-xs leading-5"
+            style={{ color: isLight ? "#64748b" : "#94a3b8" }}
+          >
+            Switch views anytime.
+          </p>
+        </div>
+
+        <div
+          role="group"
+          aria-label="Dashboard mode"
+          className="grid w-full min-w-0 gap-3 sm:grid-cols-2 xl:w-[640px] xl:shrink-0"
+        >
+          {modes.map((option) => {
+            const selected = mode === option.value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onChange?.(option.value)}
+                aria-pressed={selected}
+                className="min-w-0 rounded-xl border px-4 py-3 text-left transition hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-4"
+                style={{
+                  backgroundColor: selected
+                    ? option.background
+                    : isLight
+                      ? "#f8fafc"
+                      : "#0f172a",
+                  borderColor: selected
+                    ? option.border
+                    : isLight
+                      ? "#cbd5e1"
+                      : "#334155",
+                  outlineColor: option.border,
+                }}
+              >
+                <span className="flex items-center justify-between gap-3">
+                  <span
+                    className="text-sm font-semibold"
+                    style={{
+                      color: selected
+                        ? option.accent
+                        : isLight
+                          ? "#0f172a"
+                          : "#f8fafc",
+                    }}
+                  >
+                    {option.title}
+                  </span>
+
+                  {selected && (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4 shrink-0"
+                      style={{ color: option.accent }}
+                    >
+                      <path d="m4 8 2.5 2.5L12 5" />
+                    </svg>
+                  )}
+                </span>
+
+                <span
+                  className="mt-1 block text-xs leading-5"
+                  style={{
+                    color: isLight ? "#526277" : "#94a3b8",
+                  }}
+                >
+                  {option.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ModuleCarousel({
   modules,
   mode,
@@ -304,7 +467,6 @@ function ModuleCarousel({
         0,
         track.scrollWidth - track.clientWidth
       );
-
       const position = Math.max(0, track.scrollLeft);
 
       const nextState = {
@@ -321,11 +483,7 @@ function ModuleCarousel({
     };
 
     updateScrollState();
-
-    track.addEventListener("scroll", updateScrollState, {
-      passive: true,
-    });
-
+    track.addEventListener("scroll", updateScrollState, { passive: true });
     window.addEventListener("resize", updateScrollState);
 
     const resizeObserver =
@@ -375,11 +533,7 @@ function ModuleCarousel({
       return;
     }
 
-    const safeIndex = Math.max(
-      0,
-      Math.min(index, cards.length - 1)
-    );
-
+    const safeIndex = Math.max(0, Math.min(index, cards.length - 1));
     const card = cards[safeIndex];
     const button = card.querySelector("[data-module-open]");
 
@@ -436,8 +590,7 @@ function ModuleCarousel({
     } else if (event.key === "ArrowRight") {
       nextIndex = currentIndex < 0 ? 0 : currentIndex + 1;
     } else {
-      nextIndex =
-        currentIndex < 0 ? cards.length - 1 : currentIndex - 1;
+      nextIndex = currentIndex < 0 ? cards.length - 1 : currentIndex - 1;
     }
 
     event.preventDefault();
@@ -621,15 +774,12 @@ function ModuleCarousel({
                           >
                             {module.subtitle}
                           </p>
-
                           <h3 className="mt-2 break-words text-2xl font-bold text-white">
                             {module.name}
                           </h3>
-
                           <div className="mt-2 flex min-h-7 items-center">
                             {module.beta && <BetaBadge />}
                           </div>
-
                           <p className="mt-3 break-words text-sm leading-6 text-slate-400">
                             {module.description}
                           </p>
@@ -675,7 +825,6 @@ function ModuleCarousel({
           <p className="mt-2 text-sm text-slate-400">
             Choose your modules in Settings to show them here.
           </p>
-
           <button
             type="button"
             onClick={() => onOpen("/settings")}
@@ -703,7 +852,6 @@ function Dashboard({
     ai_usage_count: 0,
     activity_status: "Loading...",
   });
-
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -743,8 +891,7 @@ function Dashboard({
 
   const canCreateProjects = projectModules.length > 0;
   const isBasic = dashboardMode === "basic";
-  const projectFormBusy =
-    projectCreating || Boolean(projectCreateSuccess);
+  const projectFormBusy = projectCreating || Boolean(projectCreateSuccess);
 
   const quickActions = [
     {
@@ -837,17 +984,12 @@ function Dashboard({
 
       if (!response.ok) {
         throw new Error(
-          getRequestError(
-            data,
-            "Dashboard statistics could not be loaded."
-          )
+          getRequestError(data, "Dashboard statistics could not be loaded.")
         );
       }
 
       if (!data || typeof data !== "object") {
-        throw new Error(
-          "Dashboard statistics could not be loaded."
-        );
+        throw new Error("Dashboard statistics could not be loaded.");
       }
 
       setDashboardStats({
@@ -857,7 +999,6 @@ function Dashboard({
       });
     } catch (error) {
       console.error("Dashboard stats error:", error);
-
       setStatsError(
         error instanceof Error
           ? error.message
@@ -897,10 +1038,7 @@ function Dashboard({
 
       if (!response.ok) {
         throw new Error(
-          getRequestError(
-            data,
-            "Workspaces could not be loaded."
-          )
+          getRequestError(data, "Workspaces could not be loaded.")
         );
       }
 
@@ -913,13 +1051,11 @@ function Dashboard({
       if (data.length > 0) {
         setNewProjectForm((previous) => ({
           ...previous,
-          workspaceId:
-            previous.workspaceId || String(data[0].id),
+          workspaceId: previous.workspaceId || String(data[0].id),
         }));
       }
     } catch (error) {
       console.error("Workspace load error:", error);
-
       setProjectCreateError(
         error instanceof Error
           ? error.message
@@ -937,7 +1073,6 @@ function Dashboard({
       workspaceId: "",
       projectType: getDefaultProjectType(selectedModules),
     });
-
     setProjectCreateError("");
     setProjectCreateSuccess("");
   };
@@ -950,7 +1085,6 @@ function Dashboard({
     resetProjectForm();
     setWorkspaces([]);
     setNewProjectOpen(true);
-
     await loadWorkspaces();
   };
 
@@ -968,7 +1102,6 @@ function Dashboard({
       ...previous,
       [key]: value,
     }));
-
     setProjectCreateError("");
   };
 
@@ -1004,8 +1137,7 @@ function Dashboard({
     }
 
     const workspaceExists = workspaces.some(
-      (workspace) =>
-        String(workspace.id) === newProjectForm.workspaceId
+      (workspace) => String(workspace.id) === newProjectForm.workspaceId
     );
 
     if (!workspaceExists) {
@@ -1054,17 +1186,12 @@ function Dashboard({
 
       if (!response.ok) {
         throw new Error(
-          getRequestError(
-            createdProject,
-            "Project could not be created."
-          )
+          getRequestError(createdProject, "Project could not be created.")
         );
       }
 
       if (!createdProject || typeof createdProject !== "object") {
-        throw new Error(
-          "The server did not return the created project."
-        );
+        throw new Error("The server did not return the created project.");
       }
 
       try {
@@ -1088,7 +1215,6 @@ function Dashboard({
       projectRedirectRef.current = window.setTimeout(() => {
         setNewProjectOpen(false);
         resetProjectForm();
-
         navigate(destination, {
           state: {
             project: createdProject,
@@ -1097,7 +1223,6 @@ function Dashboard({
       }, 700);
     } catch (error) {
       console.error("Project creation error:", error);
-
       setProjectCreateError(
         error instanceof Error
           ? error.message
@@ -1126,68 +1251,11 @@ function Dashboard({
 
   return (
     <main className="w-full min-w-0 max-w-full flex-1 bg-slate-950/30 p-4 sm:p-6 md:p-8 lg:p-10">
-      <div className="mb-6 flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Dashboard View
-          </p>
-          <p className="mt-1 text-sm text-slate-400">
-            Choose the experience that best matches how you want to work.
-          </p>
-        </div>
-
-        <div
-          role="group"
-          aria-label="Dashboard mode"
-          className="grid w-full min-w-0 gap-3 sm:grid-cols-2 xl:max-w-2xl"
-        >
-          {[
-            {
-              value: "basic",
-              title: "Basic Mode",
-              description:
-                "A simplified workspace with essential tools and navigation for a focused experience.",
-              active:
-                "border-cyan-400 bg-cyan-500/10 shadow-lg shadow-cyan-950/20",
-              text: "text-cyan-500",
-            },
-            {
-              value: "advanced",
-              title: "Advanced Mode",
-              description:
-                "The complete dashboard with statistics, search, shortcuts, and recent activity.",
-              active:
-                "border-purple-400 bg-purple-500/10 shadow-lg shadow-purple-950/20",
-              text: "text-purple-500",
-            },
-          ].map((mode) => (
-            <button
-              key={mode.value}
-              type="button"
-              onClick={() => onDashboardModeChange?.(mode.value)}
-              aria-pressed={dashboardMode === mode.value}
-              className={`min-w-0 rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-                dashboardMode === mode.value
-                  ? mode.active
-                  : "border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900"
-              }`}
-            >
-              <span
-                className={`block text-sm font-semibold ${
-                  dashboardMode === mode.value
-                    ? mode.text
-                    : "text-white"
-                }`}
-              >
-                {mode.title}
-              </span>
-              <span className="mt-1 block text-xs leading-5 text-slate-400">
-                {mode.description}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      <DashboardViewSelector
+        mode={dashboardMode}
+        onChange={onDashboardModeChange}
+        theme={theme}
+      />
 
       <section className="relative min-w-0 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-5 shadow-2xl shadow-black/10 sm:p-6 md:p-8">
         <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
@@ -1276,9 +1344,7 @@ function Dashboard({
                         <button
                           key={`${item.title}-${item.description}`}
                           type="button"
-                          onMouseDown={(event) =>
-                            event.preventDefault()
-                          }
+                          onMouseDown={(event) => event.preventDefault()}
                           onClick={() => {
                             item.action();
                             setSearchQuery("");
@@ -1292,7 +1358,6 @@ function Dashboard({
                           >
                             {item.icon}
                           </span>
-
                           <span className="min-w-0">
                             <span className="block truncate font-semibold text-white">
                               {item.title}
@@ -1345,24 +1410,19 @@ function Dashboard({
                   >
                     📁
                   </div>
-
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-300">
                       Projects
                     </p>
                     <p className="mt-1 break-words text-3xl font-bold text-white">
-                      {statsLoading
-                        ? "..."
-                        : dashboardStats.project_count}
+                      {statsLoading ? "..." : dashboardStats.project_count}
                     </p>
                   </div>
                 </div>
-
                 <span aria-hidden="true" className="text-slate-500">
                   →
                 </span>
               </div>
-
               <p className="mt-4 text-sm text-slate-500">
                 View and manage your active work.
               </p>
@@ -1377,24 +1437,19 @@ function Dashboard({
                   >
                     ✦
                   </div>
-
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-300">
                       AI Generations
                     </p>
                     <p className="mt-1 break-words text-3xl font-bold text-white">
-                      {statsLoading
-                        ? "..."
-                        : dashboardStats.ai_usage_count}
+                      {statsLoading ? "..." : dashboardStats.ai_usage_count}
                     </p>
                   </div>
                 </div>
-
                 <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-[11px] font-semibold text-purple-500">
                   Live
                 </span>
               </div>
-
               <p className="mt-4 text-sm text-slate-500">
                 Successful AI generations across Tanio.
               </p>
@@ -1413,24 +1468,19 @@ function Dashboard({
                   >
                     <span className="h-3 w-3 rounded-full bg-emerald-500" />
                   </div>
-
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-300">
                       Activity
                     </p>
                     <p className="mt-1 break-words text-3xl font-bold text-white">
-                      {statsLoading
-                        ? "..."
-                        : dashboardStats.activity_status}
+                      {statsLoading ? "..." : dashboardStats.activity_status}
                     </p>
                   </div>
                 </div>
-
                 <span aria-hidden="true" className="text-slate-500">
                   ↓
                 </span>
               </div>
-
               <p className="mt-4 text-sm text-slate-500">
                 Jump to your latest Tanio activity.
               </p>
@@ -1445,9 +1495,7 @@ function Dashboard({
               <p className="font-semibold text-amber-500">
                 Dashboard stats could not be loaded
               </p>
-              <p className="mt-1 text-sm text-slate-400">
-                {statsError}
-              </p>
+              <p className="mt-1 text-sm text-slate-400">{statsError}</p>
             </div>
           )}
         </>
@@ -1468,7 +1516,6 @@ function Dashboard({
             Shortcuts
           </p>
         )}
-
         <h2 className="mb-4 mt-1 text-xl font-bold text-white">
           {isBasic ? "Your Work" : "Quick Actions"}
         </h2>
@@ -1487,19 +1534,16 @@ function Dashboard({
               >
                 {action.icon}
               </span>
-
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold text-white">
                   {action.title}
                 </span>
-
                 {!isBasic && (
                   <span className="mt-1 block text-xs leading-5 text-slate-500">
                     {action.description}
                   </span>
                 )}
               </span>
-
               <span
                 aria-hidden="true"
                 className="shrink-0 text-slate-500 transition group-hover:translate-x-1 group-hover:text-cyan-500"
@@ -1534,20 +1578,17 @@ function Dashboard({
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-500">
                   New Project
                 </p>
-
                 <h2
                   id="new-project-title"
                   className="mt-1 text-2xl font-bold text-white"
                 >
                   Create & launch your project
                 </h2>
-
                 <p className="mt-2 text-sm text-slate-400">
                   Choose where the project belongs and which Tanio
                   module you want to open after creation.
                 </p>
               </div>
-
               <button
                 type="button"
                 onClick={handleCloseNewProject}
@@ -1577,7 +1618,6 @@ function Dashboard({
                     ? "Workspaces could not be loaded"
                     : "You need a workspace first"}
                 </p>
-
                 <p className="mt-2 text-sm text-slate-400">
                   {projectCreateError ||
                     "Projects must belong to a workspace. Create one before starting your project."}
@@ -1616,7 +1656,6 @@ function Dashboard({
                   >
                     Project Name
                   </label>
-
                   <input
                     id="dashboard-project-name"
                     type="text"
@@ -1638,15 +1677,11 @@ function Dashboard({
                   >
                     Description
                   </label>
-
                   <textarea
                     id="dashboard-project-description"
                     value={newProjectForm.description}
                     onChange={(event) =>
-                      updateProjectForm(
-                        "description",
-                        event.target.value
-                      )
+                      updateProjectForm("description", event.target.value)
                     }
                     rows={4}
                     maxLength={5000}
@@ -1654,7 +1689,6 @@ function Dashboard({
                     placeholder="Describe what you're building..."
                     className={`${FIELD_CLASS} resize-y`}
                   />
-
                   <p className="mt-1 text-right text-xs text-slate-500">
                     {newProjectForm.description.length}/5000
                   </p>
@@ -1667,24 +1701,17 @@ function Dashboard({
                   >
                     Workspace
                   </label>
-
                   <select
                     id="dashboard-project-workspace"
                     value={newProjectForm.workspaceId}
                     onChange={(event) =>
-                      updateProjectForm(
-                        "workspaceId",
-                        event.target.value
-                      )
+                      updateProjectForm("workspaceId", event.target.value)
                     }
                     disabled={projectFormBusy}
                     className={FIELD_CLASS}
                   >
                     {workspaces.map((workspace) => (
-                      <option
-                        key={workspace.id}
-                        value={workspace.id}
-                      >
+                      <option key={workspace.id} value={workspace.id}>
                         {workspace.name}
                       </option>
                     ))}
@@ -1695,7 +1722,6 @@ function Dashboard({
                   <p className="mb-2 text-sm font-medium text-slate-300">
                     Project Type
                   </p>
-
                   <div
                     role="group"
                     aria-label="Project type"
@@ -1707,7 +1733,6 @@ function Dashboard({
                         moduleColors,
                         theme
                       );
-
                       const selected =
                         newProjectForm.projectType === module.id;
 
@@ -1716,10 +1741,7 @@ function Dashboard({
                           key={module.id}
                           type="button"
                           onClick={() =>
-                            updateProjectForm(
-                              "projectType",
-                              module.id
-                            )
+                            updateProjectForm("projectType", module.id)
                           }
                           disabled={projectFormBusy}
                           aria-pressed={selected}
@@ -1738,7 +1760,6 @@ function Dashboard({
                             >
                               {module.icon}
                             </span>
-
                             <span className="min-w-0">
                               <span className="block font-semibold text-white">
                                 {module.name}
@@ -1752,7 +1773,6 @@ function Dashboard({
                       );
                     })}
                   </div>
-
                   <p className="mt-2 text-xs text-slate-500">
                     Tanio will open the selected module automatically
                     after the project is created.
@@ -1790,7 +1810,6 @@ function Dashboard({
                   >
                     Cancel
                   </button>
-
                   <button
                     type="submit"
                     disabled={projectFormBusy}

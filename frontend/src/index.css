@@ -91,6 +91,23 @@ html[data-tanio-theme="light"]
   background-color: #cbd5e1 !important;
 }
 
+/* ========================================
+   Shared Page Headers
+   Community, Content Vault, Projects,
+   and Workspaces use this custom surface.
+   ======================================== */
+
+html[data-tanio-theme="light"]
+  main
+  :is(header, section)[class~="bg-[#071222]"] {
+  background-color: #ffffff !important;
+  border-color: #a5dbe8 !important;
+  color: #0f172a !important;
+  box-shadow:
+    0 4px 6px -1px rgb(15 23 42 / 0.04),
+    0 2px 4px -2px rgb(15 23 42 / 0.04);
+}
+
 /* Dark gradient surfaces */
 
 html[data-tanio-theme="light"]
