@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import logo from "../assets/cropped_logo.png";
+import logoLight from "../assets/cropped_logo_light.png";
 
 import {
   FaHome,
@@ -127,9 +128,7 @@ function mixColors(first, second, amount) {
     "#" +
     firstRgb
       .map((value, index) =>
-        Math.round(
-          value + (secondRgb[index] - value) * amount
-        )
+        Math.round(value + (secondRgb[index] - value) * amount)
           .toString(16)
           .padStart(2, "0")
       )
@@ -210,10 +209,7 @@ function Sidebar({
         collapsed ? "true" : "false"
       );
     } catch (error) {
-      console.error(
-        "Unable to save sidebar preference:",
-        error
-      );
+      console.error("Unable to save sidebar preference:", error);
     }
   }, [collapsed]);
 
@@ -599,19 +595,14 @@ function Sidebar({
         }}
       >
         <div
-          className={`flex items-center justify-center ${
-            isLight ? "rounded-xl" : ""
-          } ${collapsed ? "h-12 w-12" : "px-3 py-2"}`}
-          style={{
-            backgroundColor: isLight ? "#020817" : undefined,
-          }}
+          className={`flex shrink-0 items-center justify-center ${
+            collapsed ? "h-12 w-12" : "h-14 w-40"
+          }`}
         >
           <img
-            src={logo}
+            src={isLight ? logoLight : logo}
             alt="Tanio AI"
-            className={`h-auto select-none object-contain transition-all duration-300 motion-reduce:transition-none ${
-              collapsed ? "w-10" : "w-40"
-            }`}
+            className="block h-full w-full select-none object-contain object-center"
             draggable={false}
           />
         </div>
@@ -656,8 +647,7 @@ function Sidebar({
         }}
       >
         <div className={collapsed ? "" : "w-full"}>
-          {!collapsed &&
-            sectionLabel("Workspace", colors.cyan)}
+          {!collapsed && sectionLabel("Workspace", colors.cyan)}
 
           <nav aria-label="Workspace" className="space-y-1">
             {visibleMainNavigation.map(renderStandardNavItem)}
@@ -715,18 +705,11 @@ function Sidebar({
         </div>
 
         {visibleSupportNavigation.length > 0 && (
-          <div
-            className={`mt-7 ${
-              collapsed ? "" : "w-full"
-            }`}
-          >
-            {!collapsed &&
-              sectionLabel("Support", colors.muted)}
+          <div className={`mt-7 ${collapsed ? "" : "w-full"}`}>
+            {!collapsed && sectionLabel("Support", colors.muted)}
 
             <nav aria-label="Support" className="space-y-1">
-              {visibleSupportNavigation.map(
-                renderStandardNavItem
-              )}
+              {visibleSupportNavigation.map(renderStandardNavItem)}
             </nav>
           </div>
         )}
@@ -807,9 +790,7 @@ function Sidebar({
             <span className="text-[9px] font-medium uppercase tracking-[0.15em]">
               Tanio AI
             </span>
-            <span className="text-[9px]">
-              v1.0
-            </span>
+            <span className="text-[9px]">v1.0</span>
           </div>
         )}
       </div>
