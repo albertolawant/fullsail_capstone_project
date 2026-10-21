@@ -19,7 +19,7 @@ const API_BASE_URL =
 const SORT_NEWEST = "newest";
 const SORT_OLDEST = "oldest";
 const SORT_NAME_ASC = "name-asc";
-const SORT_NAME_DESC = "name-desc";  
+const SORT_NAME_DESC = "name-desc";
 
 function getWorkspaceSortTime(workspace) {
   const value =
@@ -33,7 +33,10 @@ function getWorkspaceSortTime(workspace) {
   return Number.isNaN(time) ? 0 : time;
 }
 
-function sortWorkspaces(workspaceList = [], sortOption = SORT_NEWEST) {
+function sortWorkspaces(
+  workspaceList = [],
+  sortOption = SORT_NEWEST
+) {
   return [...workspaceList].sort((firstWorkspace, secondWorkspace) => {
     const firstSortTime = getWorkspaceSortTime(firstWorkspace);
     const secondSortTime = getWorkspaceSortTime(secondWorkspace);
@@ -57,7 +60,10 @@ function sortWorkspaces(workspaceList = [], sortOption = SORT_NEWEST) {
       return secondSortTime - firstSortTime;
     }
 
-    return Number(secondWorkspace.id || 0) - Number(firstWorkspace.id || 0);
+    return (
+      Number(secondWorkspace.id || 0) -
+      Number(firstWorkspace.id || 0)
+    );
   });
 }
 
@@ -68,7 +74,8 @@ function Workspaces() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [workspaceSortOption, setWorkspaceSortOption] = useState(SORT_NEWEST);
+  const [workspaceSortOption, setWorkspaceSortOption] =
+    useState(SORT_NEWEST);
 
   const [showModal, setShowModal] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState(null);
@@ -80,8 +87,10 @@ function Workspaces() {
   // Workspace deletion confirmation
   const [workspaceToDelete, setWorkspaceToDelete] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [deleteTextConfirmation, setDeleteTextConfirmation] = useState("");
-  const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
+  const [deleteTextConfirmation, setDeleteTextConfirmation] =
+    useState("");
+  const [deleteFinalConfirmed, setDeleteFinalConfirmed] =
+    useState(false);
   const [deleteContentChoice, setDeleteContentChoice] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -124,7 +133,9 @@ function Workspaces() {
         localStorage.removeItem("tanioSession");
         localStorage.removeItem("tanioUser");
 
-        throw new Error("Your session has expired. Please sign in again.");
+        throw new Error(
+          "Your session has expired. Please sign in again."
+        );
       }
 
       if (!response.ok) {
@@ -219,7 +230,9 @@ function Workspaces() {
         localStorage.removeItem("tanioSession");
         localStorage.removeItem("tanioUser");
 
-        throw new Error("Your session has expired. Please sign in again.");
+        throw new Error(
+          "Your session has expired. Please sign in again."
+        );
       }
 
       if (!response.ok) {
@@ -314,7 +327,9 @@ function Workspaces() {
         localStorage.removeItem("tanioSession");
         localStorage.removeItem("tanioUser");
 
-        throw new Error("Your session has expired. Please sign in again.");
+        throw new Error(
+          "Your session has expired. Please sign in again."
+        );
       }
 
       if (!response.ok) {
@@ -327,8 +342,7 @@ function Workspaces() {
 
       setWorkspaces((currentWorkspaces) =>
         currentWorkspaces.filter(
-          (currentWorkspace) =>
-            currentWorkspace.id !== workspace.id
+          (currentWorkspace) => currentWorkspace.id !== workspace.id
         )
       );
 
@@ -339,9 +353,7 @@ function Workspaces() {
       setDeleteContentChoice("");
       setDeleteError("");
     } catch (err) {
-      setDeleteError(
-        err.message || "Unable to delete workspace."
-      );
+      setDeleteError(err.message || "Unable to delete workspace.");
     } finally {
       setDeleting(false);
     }
@@ -353,44 +365,69 @@ function Workspaces() {
     deleteTextConfirmation.trim() === "DELETE" &&
     deleteFinalConfirmed &&
     deleteContentChoice;
+
   return (
-    <main className="flex-1 px-10 py-10">
+    <main className="min-h-screen w-full min-w-0 flex-1 px-4 py-5 text-white sm:px-6 sm:py-6 lg:px-8">
       {/* Page Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-4xl font-bold text-white">
-            Workspaces
-          </h1>
+      <header
+        aria-labelledby="workspaces-title"
+        className="mb-8 w-full rounded-2xl border border-cyan-900/60 bg-[#071222] p-5 shadow-lg sm:p-7 lg:p-8"
+      >
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-cyan-900/60 bg-cyan-950/40 text-2xl text-cyan-400">
+                <FaFolder aria-hidden="true" />
+              </div>
 
-          <p className="mt-2 text-slate-400">
-            Organize your projects into dedicated workspaces.
-          </p>
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
+                  Project Organization
+                </p>
+
+                <h1
+                  id="workspaces-title"
+                  className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl"
+                >
+                  Workspaces
+                </h1>
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm leading-7 text-slate-400 sm:text-base">
+              Organize your projects into dedicated workspaces.
+            </p>
+          </div>
+
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap lg:shrink-0 lg:justify-end">
+            <button
+              type="button"
+              onClick={() => loadWorkspaces(true)}
+              disabled={loading || refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FaSyncAlt
+                aria-hidden="true"
+                className={
+                  refreshing
+                    ? "animate-spin motion-reduce:animate-none"
+                    : ""
+                }
+              />
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </button>
+
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+            >
+              <FaPlus aria-hidden="true" className="text-sm" />
+              New Workspace
+            </button>
+          </div>
         </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => loadWorkspaces(true)}
-            disabled={refreshing}
-            className="flex items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <FaSyncAlt
-              className={refreshing ? "animate-spin" : ""}
-            />
-
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
-
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400"
-          >
-            <FaPlus />
-            New Workspace
-          </button>
-        </div>
-      </div>
+      </header>
 
       {/* Error */}
       {error && !showModal && (
@@ -404,10 +441,7 @@ function Workspaces() {
         <section className="flex min-h-72 items-center justify-center rounded-xl border border-slate-800 bg-slate-900">
           <div className="text-center">
             <FaSyncAlt className="mx-auto mb-4 animate-spin text-3xl text-cyan-400" />
-
-            <p className="text-slate-400">
-              Loading workspaces...
-            </p>
+            <p className="text-slate-400">Loading workspaces...</p>
           </div>
         </section>
       )}
@@ -426,7 +460,9 @@ function Workspaces() {
             <select
               id="workspace-sort"
               value={workspaceSortOption}
-              onChange={(event) => setWorkspaceSortOption(event.target.value)}
+              onChange={(event) =>
+                setWorkspaceSortOption(event.target.value)
+              }
               className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500"
             >
               <option value={SORT_NEWEST}>Newest First</option>
@@ -496,9 +532,7 @@ function Workspaces() {
               <div className="mt-6 flex flex-col gap-4 border-t border-slate-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   type="button"
-                  onClick={() =>
-                    handleOpenWorkspace(workspace)
-                  }
+                  onClick={() => handleOpenWorkspace(workspace)}
                   className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                 >
                   Open Workspace
@@ -517,9 +551,7 @@ function Workspaces() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      openDeleteModal(workspace)
-                    }
+                    onClick={() => openDeleteModal(workspace)}
                     className="flex items-center gap-2 text-sm font-medium text-red-400 transition hover:text-red-300"
                   >
                     <FaTrash />
@@ -560,10 +592,7 @@ function Workspaces() {
               </button>
             </div>
 
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-5 p-6"
-            >
+            <form onSubmit={handleSubmit} className="space-y-5 p-6">
               {error && (
                 <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                   {error}
@@ -582,9 +611,7 @@ function Workspaces() {
                   id="workspace-name"
                   type="text"
                   value={name}
-                  onChange={(event) =>
-                    setName(event.target.value)
-                  }
+                  onChange={(event) => setName(event.target.value)}
                   placeholder="Example: Personal Projects"
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500"
                   autoFocus
@@ -678,7 +705,8 @@ function Workspaces() {
                   <span className="font-bold text-white">
                     {workspaceToDelete.name}
                   </span>{" "}
-                  will delete this workspace and the projects inside it. Choose what should happen to the saved content.
+                  will delete this workspace and the projects inside it.
+                  Choose what should happen to the saved content.
                 </p>
               </div>
 
@@ -709,7 +737,8 @@ function Workspaces() {
                         Delete Everything
                       </p>
                       <p className="mt-1 text-sm leading-relaxed text-slate-400">
-                        Delete the workspace, projects, saved content, saved images, and saved versions.
+                        Delete the workspace, projects, saved content,
+                        saved images, and saved versions.
                       </p>
                     </div>
                   </div>
@@ -727,7 +756,9 @@ function Workspaces() {
                       type="radio"
                       name="workspace-delete-content-choice"
                       value="workspace-only"
-                      checked={deleteContentChoice === "workspace-only"}
+                      checked={
+                        deleteContentChoice === "workspace-only"
+                      }
                       onChange={() => {
                         setDeleteContentChoice("workspace-only");
                         setDeleteError("");
@@ -741,7 +772,8 @@ function Workspaces() {
                         Delete Workspace Only
                       </p>
                       <p className="mt-1 text-sm leading-relaxed text-slate-400">
-                        Delete just the workspace, but keep the projects and saved content.
+                        Delete just the workspace, but keep the projects
+                        and saved content.
                       </p>
                     </div>
                   </div>
@@ -749,7 +781,8 @@ function Workspaces() {
 
                 <label
                   className={`block cursor-pointer rounded-xl border p-4 transition ${
-                    deleteContentChoice === "delete-projects-keep-content"
+                    deleteContentChoice ===
+                    "delete-projects-keep-content"
                       ? "border-amber-500 bg-amber-950/30"
                       : "border-slate-700 bg-slate-950/40 hover:border-slate-600"
                   }`}
@@ -759,9 +792,14 @@ function Workspaces() {
                       type="radio"
                       name="workspace-delete-content-choice"
                       value="delete-projects-keep-content"
-                      checked={deleteContentChoice === "delete-projects-keep-content"}
+                      checked={
+                        deleteContentChoice ===
+                        "delete-projects-keep-content"
+                      }
                       onChange={() => {
-                        setDeleteContentChoice("delete-projects-keep-content");
+                        setDeleteContentChoice(
+                          "delete-projects-keep-content"
+                        );
                         setDeleteError("");
                       }}
                       disabled={deleting}
@@ -773,7 +811,8 @@ function Workspaces() {
                         Delete Workspace and Projects
                       </p>
                       <p className="mt-1 text-sm leading-relaxed text-slate-400">
-                        Delete the workspace and projects, but keep saved content in the Content Library.
+                        Delete the workspace and projects, but keep saved
+                        content in the Content Library.
                       </p>
                     </div>
                   </div>
@@ -852,7 +891,9 @@ function Workspaces() {
                   />
 
                   <span>
-                    I understand this will delete the workspace and affect the projects inside it based on the option I selected.
+                    I understand this will delete the workspace and
+                    affect the projects inside it based on the option I
+                    selected.
                   </span>
                 </label>
               </div>
@@ -877,9 +918,7 @@ function Workspaces() {
                 <button
                   type="button"
                   onClick={handleDelete}
-                  disabled={
-                    !deleteConfirmationMatches || deleting
-                  }
+                  disabled={!deleteConfirmationMatches || deleting}
                   className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-950 disabled:text-red-400 disabled:opacity-60"
                 >
                   {deleting ? (

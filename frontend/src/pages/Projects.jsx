@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaArrowRight, FaChevronRight, FaPlus } from "react-icons/fa";
+import {
+  FaArrowRight,
+  FaPlus,
+  FaProjectDiagram,
+  FaSyncAlt,
+} from "react-icons/fa";
 import { addRecentActivity } from "../utils/activityStorage";
 
 import {
@@ -55,7 +60,11 @@ function sortProjectsNewestFirst(projectList) {
   });
 }
 
-function sortProjects(projectList = [], sortOption = SORT_NEWEST, getWorkspaceName = null) {
+function sortProjects(
+  projectList = [],
+  sortOption = SORT_NEWEST,
+  getWorkspaceName = null
+) {
   return [...projectList].sort((firstProject, secondProject) => {
     const firstSortTime = getProjectSortTime(firstProject);
     const secondSortTime = getProjectSortTime(secondProject);
@@ -122,27 +131,14 @@ function Projects() {
   const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("");
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
 
-  const [projectSearchTerm, setProjectSearchTerm] =
-    useState("");
+  const [projectSearchTerm, setProjectSearchTerm] = useState("");
+  const [projectSortOption, setProjectSortOption] = useState(SORT_NEWEST);
+  const [selectedWorkspaceFilter, setSelectedWorkspaceFilter] = useState("all");
 
-  const [projectSortOption, setProjectSortOption] = 
-    useState(SORT_NEWEST);
-
-  const [
-    selectedWorkspaceFilter,
-    setSelectedWorkspaceFilter,
-  ] = useState("all");
-
-  const [editingProject, setEditingProject] =
-    useState(null);
-
+  const [editingProject, setEditingProject] = useState(null);
   const [editTitle, setEditTitle] = useState("");
-
-  const [editDescription, setEditDescription] =
-    useState("");
-
-  const [editWorkspaceId, setEditWorkspaceId] =
-    useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editWorkspaceId, setEditWorkspaceId] = useState("");
 
   const [showCreateWorkspaceForEdit, setShowCreateWorkspaceForEdit] =
     useState(false);
@@ -154,17 +150,12 @@ function Projects() {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  const [deletingProject, setDeletingProject] =
-    useState(null);
-
+  const [deletingProject, setDeletingProject] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  const [deleteContentChoice, setDeleteContentChoice] =
-    useState("");
-  const [deleteTextConfirmation, setDeleteTextConfirmation] =
-    useState("");
-  const [deleteFinalConfirmed, setDeleteFinalConfirmed] =
-    useState(false);    
+  const [deleteContentChoice, setDeleteContentChoice] = useState("");
+  const [deleteTextConfirmation, setDeleteTextConfirmation] = useState("");
+  const [deleteFinalConfirmed, setDeleteFinalConfirmed] = useState(false);
 
   const workspaceParam = searchParams.get("workspace");
 
@@ -184,9 +175,7 @@ function Projects() {
       if (!token) {
         initializeDemoData();
 
-        const demoProjects = sortProjectsNewestFirst(
-          getDemoProjects()
-        );
+        const demoProjects = sortProjectsNewestFirst(getDemoProjects());
 
         setProjects(demoProjects);
 
@@ -207,19 +196,18 @@ function Projects() {
         return;
       }
 
-      const [projectsResponse, workspacesResponse] =
-        await Promise.all([
-          fetch("http://127.0.0.1:8000/projects/", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-          fetch("http://127.0.0.1:8000/workspaces/", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-        ]);
+      const [projectsResponse, workspacesResponse] = await Promise.all([
+        fetch("http://127.0.0.1:8000/projects/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+        fetch("http://127.0.0.1:8000/workspaces/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
 
       if (!projectsResponse.ok) {
         throw new Error("Unable to load projects.");
@@ -229,11 +217,10 @@ function Projects() {
         throw new Error("Unable to load workspaces.");
       }
 
-      const [projectData, workspaceData] =
-        await Promise.all([
-          projectsResponse.json(),
-          workspacesResponse.json(),
-        ]);
+      const [projectData, workspaceData] = await Promise.all([
+        projectsResponse.json(),
+        workspacesResponse.json(),
+      ]);
 
       setProjects(
         sortProjectsNewestFirst(
@@ -241,9 +228,7 @@ function Projects() {
         )
       );
 
-      setWorkspaces(
-        Array.isArray(workspaceData) ? workspaceData : []
-      );
+      setWorkspaces(Array.isArray(workspaceData) ? workspaceData : []);
     } catch {
       setError(
         "Unable to load projects. Make sure you are logged in and the backend is running."
@@ -268,9 +253,7 @@ function Projects() {
         const token = localStorage.getItem("token");
 
         if (!token) {
-          setWorkspaceName(
-            `Workspace #${selectedWorkspaceId}`
-          );
+          setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
           return;
         }
 
@@ -284,22 +267,17 @@ function Projects() {
         );
 
         if (!response.ok) {
-          setWorkspaceName(
-            `Workspace #${selectedWorkspaceId}`
-          );
+          setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
           return;
         }
 
         const workspace = await response.json();
 
         setWorkspaceName(
-          workspace.name ||
-            `Workspace #${selectedWorkspaceId}`
+          workspace.name || `Workspace #${selectedWorkspaceId}`
         );
       } catch {
-        setWorkspaceName(
-          `Workspace #${selectedWorkspaceId}`
-        );
+        setWorkspaceName(`Workspace #${selectedWorkspaceId}`);
       }
     };
 
@@ -313,63 +291,46 @@ function Projects() {
       }
 
       const matchingWorkspace = workspaces.find(
-        (workspace) =>
-          Number(workspace.id) === Number(workspaceId)
+        (workspace) => Number(workspace.id) === Number(workspaceId)
       );
 
-      return (
-        matchingWorkspace?.name ||
-        `Workspace #${workspaceId}`
-      );
+      return matchingWorkspace?.name || `Workspace #${workspaceId}`;
     },
     [workspaces]
   );
 
   const filteredProjects = useMemo(() => {
-    let workspaceFilteredProjects =
-      selectedWorkspaceId
-        ? projects.filter(
-            (project) =>
-              Number(project.workspace_id) ===
-              selectedWorkspaceId
-          )
-        : projects;
+    let workspaceFilteredProjects = selectedWorkspaceId
+      ? projects.filter(
+          (project) =>
+            Number(project.workspace_id) === selectedWorkspaceId
+        )
+      : projects;
 
     if (selectedWorkspaceFilter !== "all") {
-      workspaceFilteredProjects =
-        workspaceFilteredProjects.filter(
-          (project) =>
-            Number(project.workspace_id) ===
-            Number(selectedWorkspaceFilter)
-        );
+      workspaceFilteredProjects = workspaceFilteredProjects.filter(
+        (project) =>
+          Number(project.workspace_id) === Number(selectedWorkspaceFilter)
+      );
     }
 
-    const normalizedSearch =
-      projectSearchTerm.trim().toLowerCase();
-
+    const normalizedSearch = projectSearchTerm.trim().toLowerCase();
     let searchedProjects = workspaceFilteredProjects;
 
     if (normalizedSearch) {
       searchedProjects = workspaceFilteredProjects.filter((project) => {
         const matchingWorkspace = workspaces.find(
           (workspace) =>
-            Number(workspace.id) ===
-            Number(project.workspace_id)
+            Number(workspace.id) === Number(project.workspace_id)
         );
 
         const resolvedWorkspaceName =
           matchingWorkspace?.name?.toLowerCase() || "";
 
         return (
-          project.title
-            ?.toLowerCase()
-            .includes(normalizedSearch) ||
-          project.description
-            ?.toLowerCase()
-            .includes(normalizedSearch) ||
-          project.ai_summary
-            ?.toLowerCase()
-            .includes(normalizedSearch) ||
+          project.title?.toLowerCase().includes(normalizedSearch) ||
+          project.description?.toLowerCase().includes(normalizedSearch) ||
+          project.ai_summary?.toLowerCase().includes(normalizedSearch) ||
           resolvedWorkspaceName.includes(normalizedSearch)
         );
       });
@@ -402,13 +363,11 @@ function Projects() {
         project.current_user_role === "editor" ||
         project.current_user_role === "viewer"
     );
-  }, [filteredProjects]);  
+  }, [filteredProjects]);
 
   const displayWorkspaceName =
     workspaceName ||
-    (selectedWorkspaceId
-      ? `Workspace #${selectedWorkspaceId}`
-      : "");
+    (selectedWorkspaceId ? `Workspace #${selectedWorkspaceId}` : "");
 
   const clearWorkspaceFilter = () => {
     setSearchParams({});
@@ -424,9 +383,7 @@ function Projects() {
     if (workspaces.length > 0) {
       return workspaces.map((workspace) => ({
         id: workspace.id,
-        name:
-          workspace.name ||
-          `Workspace ${workspace.id}`,
+        name: workspace.name || `Workspace ${workspace.id}`,
       }));
     }
 
@@ -441,9 +398,7 @@ function Projects() {
       }
     });
 
-    return Array.from(
-      workspaceMap.entries()
-    ).map(([id, name]) => ({
+    return Array.from(workspaceMap.entries()).map(([id, name]) => ({
       id,
       name,
     }));
@@ -559,7 +514,7 @@ function Projects() {
     } finally {
       setCreatingWorkspace(false);
     }
-  };  
+  };
 
   const createProject = async (event) => {
     event.preventDefault();
@@ -570,23 +525,17 @@ function Projects() {
     const cleanedDescription = newProjectDescription.trim();
 
     if (cleanedTitle.length < 2) {
-      setCreateError(
-        "Project name must be at least 2 characters."
-      );
+      setCreateError("Project name must be at least 2 characters.");
       return;
     }
 
     if (cleanedTitle.length > 100) {
-      setCreateError(
-        "Project name must be 100 characters or fewer."
-      );
+      setCreateError("Project name must be 100 characters or fewer.");
       return;
     }
 
     if (cleanedDescription.length < 10) {
-      setCreateError(
-        "Project description must be at least 10 characters."
-      );
+      setCreateError("Project description must be at least 10 characters.");
       return;
     }
 
@@ -613,36 +562,28 @@ function Projects() {
     const token = localStorage.getItem("token");
 
     if (!token) {
-      setCreateError(
-        "Your session has expired. Please sign in again."
-      );
+      setCreateError("Your session has expired. Please sign in again.");
       return;
     }
 
     setCreating(true);
 
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/projects/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            title: cleanedTitle,
-            description: cleanedDescription,
-            workspace_id: Number(newProjectWorkspaceId),
-          }),
-        }
-      );
+      const response = await fetch("http://127.0.0.1:8000/projects/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: cleanedTitle,
+          description: cleanedDescription,
+          workspace_id: Number(newProjectWorkspaceId),
+        }),
+      });
 
       if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => null);
-
+        const errorData = await response.json().catch(() => null);
         let message = "Unable to create project.";
 
         if (typeof errorData?.detail === "string") {
@@ -713,9 +654,7 @@ function Projects() {
     setEditingProject(project);
     setEditTitle(project.title);
     setEditDescription(project.description || "");
-    setEditWorkspaceId(
-      String(project.workspace_id || "")
-    );
+    setEditWorkspaceId(String(project.workspace_id || ""));
     setShowCreateWorkspaceForEdit(false);
     setEditNewWorkspaceName("");
     setEditNewWorkspaceDescription("");
@@ -805,15 +744,14 @@ function Projects() {
     } finally {
       setCreatingEditWorkspace(false);
     }
-  };  
+  };
 
   const saveProjectChanges = async (event) => {
     event.preventDefault();
     setEditError("");
 
     const cleanedTitle = editTitle.trim();
-    const cleanedDescription =
-      editDescription.trim();
+    const cleanedDescription = editDescription.trim();
 
     if (!cleanedTitle) {
       setEditError("Project name is required.");
@@ -821,9 +759,7 @@ function Projects() {
     }
 
     if (cleanedTitle.length > 100) {
-      setEditError(
-        "Project name must be 100 characters or fewer."
-      );
+      setEditError("Project name must be 100 characters or fewer.");
       return;
     }
 
@@ -846,18 +782,14 @@ function Projects() {
 
     try {
       const token = localStorage.getItem("token");
-
       let updatedProject;
 
       if (!token) {
-        updatedProject = updateDemoProject(
-          editingProject.id,
-          {
-            title: cleanedTitle,
-            description: cleanedDescription,
-            workspace_id: Number(editWorkspaceId),
-          }
-        );
+        updatedProject = updateDemoProject(editingProject.id, {
+          title: cleanedTitle,
+          description: cleanedDescription,
+          workspace_id: Number(editWorkspaceId),
+        });
       } else {
         const response = await fetch(
           `http://127.0.0.1:8000/projects/${editingProject.id}`,
@@ -871,22 +803,17 @@ function Projects() {
               title: cleanedTitle,
               description: cleanedDescription,
               ...(editingProject.current_user_role === "owner"
-                ? {
-                    workspace_id: Number(editWorkspaceId),
-                  }
+                ? { workspace_id: Number(editWorkspaceId) }
                 : {}),
             }),
           }
         );
 
         if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => null);
+          const errorData = await response.json().catch(() => null);
 
           throw new Error(
-            errorData?.detail ||
-              "Unable to update project."
+            errorData?.detail || "Unable to update project."
           );
         }
 
@@ -908,10 +835,7 @@ function Projects() {
         )
       );
 
-      setSuccessMessage(
-        "Project updated successfully."
-      );
-
+      setSuccessMessage("Project updated successfully.");
       cancelEditing();
     } catch (error) {
       setEditError(error.message);
@@ -965,8 +889,7 @@ function Projects() {
       return;
     }
 
-    const deleteAttachedContent =
-      deleteContentChoice === "delete";
+    const deleteAttachedContent = deleteContentChoice === "delete";
 
     setDeleting(true);
     setDeleteError("");
@@ -988,21 +911,17 @@ function Projects() {
         );
 
         if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => null);
+          const errorData = await response.json().catch(() => null);
 
           throw new Error(
-            errorData?.detail ||
-              "Unable to delete project."
+            errorData?.detail || "Unable to delete project."
           );
         }
       }
 
       setProjects((currentProjects) =>
         currentProjects.filter(
-          (project) =>
-            project.id !== deletingProject.id
+          (project) => project.id !== deletingProject.id
         )
       );
 
@@ -1026,12 +945,12 @@ function Projects() {
 
   return (
     <main
-      className="flex-1 p-10"
+      className="min-h-screen w-full min-w-0 flex-1 px-4 py-5 text-white sm:px-6 sm:py-6 lg:px-8"
       data-testid="project-list-view"
     >
       {/* Workspace Breadcrumb */}
       {selectedWorkspaceId && (
-        <div className="mb-4 flex items-center gap-2 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
           <button
             type="button"
             onClick={() => navigate("/workspaces")}
@@ -1049,103 +968,117 @@ function Projects() {
       )}
 
       {/* Page Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-4xl font-bold text-white">
-              Projects
-            </h1>
+      <header
+        aria-labelledby="projects-title"
+        className="mb-8 w-full rounded-2xl border border-cyan-900/60 bg-[#071222] p-5 shadow-lg sm:p-7 lg:p-8"
+      >
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-cyan-900/60 bg-cyan-950/40 text-2xl text-cyan-400">
+                <FaProjectDiagram aria-hidden="true" />
+              </div>
 
-            {selectedWorkspaceId && (
-              <span className="rounded-full border border-cyan-700/50 bg-cyan-950/40 px-3 py-1 text-sm font-medium text-cyan-400">
-                {filteredProjects.length}{" "}
-                {filteredProjects.length === 1
-                  ? "Project"
-                  : "Projects"}
-              </span>
-            )}
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
+                  Project Management
+                </p>
+
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <h1
+                    id="projects-title"
+                    className="text-3xl font-bold tracking-tight sm:text-4xl"
+                  >
+                    Projects
+                  </h1>
+
+                  {selectedWorkspaceId && (
+                    <span className="rounded-full border border-cyan-700/50 bg-cyan-950/40 px-3 py-1 text-sm font-medium text-cyan-400">
+                      {filteredProjects.length}{" "}
+                      {filteredProjects.length === 1
+                        ? "Project"
+                        : "Projects"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm leading-7 text-slate-400 sm:text-base">
+              {selectedWorkspaceId
+                ? `Viewing projects from ${displayWorkspaceName}.`
+                : "View and manage projects from your workspaces."}
+            </p>
           </div>
 
-          <p className="mt-2 text-slate-400">
-            {selectedWorkspaceId
-              ? `Viewing projects from ${displayWorkspaceName}.`
-              : "View and manage projects from your workspaces."}
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={openCreateProject}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400"
-            data-testid="new-project-button"
-          >
-            <FaPlus className="text-sm" />
-            New Project
-          </button>
-
-          {selectedWorkspaceId && (
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap lg:shrink-0 lg:justify-end">
             <button
               type="button"
-              onClick={clearWorkspaceFilter}
-              className="rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700"
+              onClick={openCreateProject}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+              data-testid="new-project-button"
             >
-              Show All Projects
+              <FaPlus aria-hidden="true" className="text-sm" />
+              New Project
             </button>
-          )}
 
-          <button
-            type="button"
-            onClick={loadProjects}
-            disabled={loading}
-            className="rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading
-              ? "Refreshing..."
-              : "Refresh"}
-          </button>
+            {selectedWorkspaceId && (
+              <button
+                type="button"
+                onClick={clearWorkspaceFilter}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              >
+                Show All Projects
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={loadProjects}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FaSyncAlt
+                aria-hidden="true"
+                className={
+                  loading
+                    ? "animate-spin motion-reduce:animate-none"
+                    : ""
+                }
+              />
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       {!loading && !error && (
         <section className="mb-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">
-              Total Projects
-            </p>
-
+            <p className="text-sm text-slate-500">Total Projects</p>
             <p className="mt-2 text-3xl font-bold text-white">
               {projects.length}
             </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">
-              Showing
-            </p>
-
+            <p className="text-sm text-slate-500">Showing</p>
             <p className="mt-2 text-3xl font-bold text-cyan-400">
               {filteredProjects.length}
             </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-500">
-              Workspace
-            </p>
-
+            <p className="text-sm text-slate-500">Workspace</p>
             <p className="mt-2 truncate text-lg font-semibold text-white">
               {selectedWorkspaceId
                 ? displayWorkspaceName
-                : selectedWorkspaceFilter ===
-                    "all"
+                : selectedWorkspaceFilter === "all"
                   ? "All"
                   : availableWorkspaces.find(
                       (workspace) =>
                         String(workspace.id) ===
-                        String(
-                          selectedWorkspaceFilter
-                        )
+                        String(selectedWorkspaceFilter)
                     )?.name || "Selected"}
             </p>
           </div>
@@ -1168,9 +1101,7 @@ function Projects() {
                 type="search"
                 value={projectSearchTerm}
                 onChange={(event) =>
-                  setProjectSearchTerm(
-                    event.target.value
-                  )
+                  setProjectSearchTerm(event.target.value)
                 }
                 placeholder="Search by project name, description, or workspace..."
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500"
@@ -1189,36 +1120,24 @@ function Projects() {
                 id="workspace-filter"
                 value={selectedWorkspaceFilter}
                 onChange={(event) =>
-                  setSelectedWorkspaceFilter(
-                    event.target.value
-                  )
+                  setSelectedWorkspaceFilter(event.target.value)
                 }
-                disabled={Boolean(
-                  selectedWorkspaceId
-                )}
+                disabled={Boolean(selectedWorkspaceId)}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="all">
-                  All Workspaces
-                </option>
+                <option value="all">All Workspaces</option>
 
-                {availableWorkspaces.map(
-                  (workspace) => (
-                    <option
-                      key={workspace.id}
-                      value={workspace.id}
-                    >
-                      {workspace.name}
-                    </option>
-                  )
-                )}
+                {availableWorkspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </option>
+                ))}
               </select>
 
               {selectedWorkspaceId && (
                 <p className="mt-2 text-xs text-slate-500">
-                  Workspace filter is locked because
-                  you opened this page from a specific
-                  workspace.
+                  Workspace filter is locked because you opened this page
+                  from a specific workspace.
                 </p>
               )}
             </div>
@@ -1234,7 +1153,9 @@ function Projects() {
               <select
                 id="project-sort"
                 value={projectSortOption}
-                onChange={(event) => setProjectSortOption(event.target.value)}
+                onChange={(event) =>
+                  setProjectSortOption(event.target.value)
+                }
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none transition focus:border-cyan-500"
               >
                 <option value={SORT_NEWEST}>Newest First</option>
@@ -1244,7 +1165,6 @@ function Projects() {
                 <option value={SORT_WORKSPACE_ASC}>Workspace A-Z</option>
               </select>
             </div>
-
           </div>
         </section>
       )}
@@ -1255,9 +1175,7 @@ function Projects() {
           className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center"
           data-testid="projects-loading"
         >
-          <p className="text-slate-400">
-            Loading projects...
-          </p>
+          <p className="text-slate-400">Loading projects...</p>
         </div>
       )}
 
@@ -1281,167 +1199,44 @@ function Projects() {
       )}
 
       {/* Project Tabs */}
-      {!loading &&
-        !error &&
-        filteredProjects.length > 0 && (
-          <section>
-            <div className="mb-6 flex flex-wrap items-center gap-3 border-b border-slate-800 pb-4">
-              <button
-                type="button"
-                onClick={() => setProjectViewTab("owned")}
-                className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${
-                  projectViewTab === "owned"
-                    ? "bg-cyan-500 text-slate-950"
-                    : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                My Projects
-                <span className="ml-2 rounded-full bg-black/20 px-2 py-0.5 text-xs">
-                  {ownedProjects.length}
-                </span>
-              </button>
+      {!loading && !error && filteredProjects.length > 0 && (
+        <section>
+          <div className="mb-6 flex flex-wrap items-center gap-3 border-b border-slate-800 pb-4">
+            <button
+              type="button"
+              onClick={() => setProjectViewTab("owned")}
+              className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+                projectViewTab === "owned"
+                  ? "bg-cyan-500 text-slate-950"
+                  : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              My Projects
+              <span className="ml-2 rounded-full bg-black/20 px-2 py-0.5 text-xs">
+                {ownedProjects.length}
+              </span>
+            </button>
 
-              <button
-                type="button"
-                onClick={() => setProjectViewTab("shared")}
-                className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${
-                  projectViewTab === "shared"
-                    ? "bg-purple-500 text-white"
-                    : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
-                }`}
-              >
-                Shared With Me
-                <span className="ml-2 rounded-full bg-black/20 px-2 py-0.5 text-xs">
-                  {sharedProjects.length}
-                </span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setProjectViewTab("shared")}
+              className={`rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+                projectViewTab === "shared"
+                  ? "bg-purple-500 text-white"
+                  : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              Shared With Me
+              <span className="ml-2 rounded-full bg-black/20 px-2 py-0.5 text-xs">
+                {sharedProjects.length}
+              </span>
+            </button>
+          </div>
 
-            {projectViewTab === "owned" ? (
-              ownedProjects.length > 0 ? (
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                  {ownedProjects.map((project) => (
-                    <article
-                      key={project.id}
-                      className="flex min-h-[28rem] flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
-                      data-testid={`project-${project.id}`}
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
-                              Project
-                            </p>
-
-                            <h3 className="mt-1 text-xl font-semibold text-white">
-                              {project.title}
-                            </h3>
-                          </div>
-
-                          {project.current_user_role && (
-                            <span
-                              className={`shrink-0 rounded-full border px-3 py-1 text-xs font-bold capitalize ${
-                                project.current_user_role === "owner"
-                                  ? "border-cyan-700 bg-cyan-950/40 text-cyan-300"
-                                  : project.current_user_role === "editor"
-                                    ? "border-purple-700 bg-purple-950/40 text-purple-300"
-                                    : "border-slate-700 bg-slate-800 text-slate-300"
-                              }`}
-                            >
-                              {project.current_user_role}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-5 space-y-4">
-                          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                              Description
-                            </p>
-
-                            <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
-                              {project.description ||
-                                "No project description provided."}
-                            </p>
-                          </div>
-
-                          <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
-                              AI Summary
-                            </p>
-
-                            <p className="mt-2 line-clamp-3 text-sm leading-6 text-cyan-100">
-                              {createProjectSummaryFallback(
-                                project
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 border-t border-slate-800 pt-4">
-                        {/* Workspace label only shown when viewing ALL projects */}
-                        {!selectedWorkspaceId && (
-                          <div className="mb-4">
-                            <span className="text-sm text-slate-500">
-                              Workspace:{" "}
-                              <span className="font-medium text-slate-300">
-                                {getWorkspaceName(project.workspace_id)}
-                              </span>
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openProject(project)
-                            }
-                            className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-                          >
-                            Open Project
-                            <FaArrowRight className="text-xs" />
-                          </button>
-
-                          <div className="flex items-center justify-center gap-4">
-                            <button
-                              type="button"
-                              onClick={() => startEditing(project)}
-                              className="text-sm font-medium text-slate-300 transition hover:text-white"
-                              data-testid={`edit-project-${project.id}`}
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => startDeleting(project)}
-                              className="text-sm font-medium text-red-400 transition hover:text-red-300"
-                              data-testid={`delete-project-${project.id}`}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
-                  <h3 className="text-xl font-semibold text-white">
-                    No owned projects
-                  </h3>
-
-                  <p className="mt-2 text-slate-400">
-                    Projects you create will appear here.
-                  </p>
-                </div>
-              )
-            ) : sharedProjects.length > 0 ? (
+          {projectViewTab === "owned" ? (
+            ownedProjects.length > 0 ? (
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {sharedProjects.map((project) => (
+                {ownedProjects.map((project) => (
                   <article
                     key={project.id}
                     className="flex min-h-[28rem] flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
@@ -1479,7 +1274,6 @@ function Projects() {
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                             Description
                           </p>
-
                           <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
                             {project.description ||
                               "No project description provided."}
@@ -1490,18 +1284,14 @@ function Projects() {
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
                             AI Summary
                           </p>
-
                           <p className="mt-2 line-clamp-3 text-sm leading-6 text-cyan-100">
-                            {createProjectSummaryFallback(
-                              project
-                            )}
+                            {createProjectSummaryFallback(project)}
                           </p>
                         </div>
                       </div>
                     </div>
 
                     <div className="mt-6 border-t border-slate-800 pt-4">
-                      {/* Workspace label only shown when viewing ALL projects */}
                       {!selectedWorkspaceId && (
                         <div className="mb-4">
                           <span className="text-sm text-slate-500">
@@ -1516,45 +1306,154 @@ function Projects() {
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <button
                           type="button"
-                          onClick={() =>
-                            openProject(project)
-                          }
+                          onClick={() => openProject(project)}
                           className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
                         >
                           Open Project
                           <FaArrowRight className="text-xs" />
                         </button>
 
-                        {project.current_user_role === "editor" && (
-                          <div className="flex items-center justify-center gap-4">
-                            <button
-                              type="button"
-                              onClick={() => startEditing(project)}
-                              className="text-sm font-medium text-slate-300 transition hover:text-white"
-                              data-testid={`edit-project-${project.id}`}
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex items-center justify-center gap-4">
+                          <button
+                            type="button"
+                            onClick={() => startEditing(project)}
+                            className="text-sm font-medium text-slate-300 transition hover:text-white"
+                            data-testid={`edit-project-${project.id}`}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => startDeleting(project)}
+                            className="text-sm font-medium text-red-400 transition hover:text-red-300"
+                            data-testid={`delete-project-${project.id}`}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </article>                      
+                  </article>
                 ))}
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
                 <h3 className="text-xl font-semibold text-white">
-                  Nothing shared with you yet
+                  No owned projects
                 </h3>
-
                 <p className="mt-2 text-slate-400">
-                  Projects shared by other Tanio users will appear here.
+                  Projects you create will appear here.
                 </p>
               </div>
-            )}
-          </section>
-        )}      
+            )
+          ) : sharedProjects.length > 0 ? (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {sharedProjects.map((project) => (
+                <article
+                  key={project.id}
+                  className="flex min-h-[28rem] flex-col rounded-xl border border-slate-800 bg-slate-900 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:border-cyan-700/50 hover:shadow-xl"
+                  data-testid={`project-${project.id}`}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+                          Project
+                        </p>
+                        <h3 className="mt-1 text-xl font-semibold text-white">
+                          {project.title}
+                        </h3>
+                      </div>
+
+                      {project.current_user_role && (
+                        <span
+                          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-bold capitalize ${
+                            project.current_user_role === "owner"
+                              ? "border-cyan-700 bg-cyan-950/40 text-cyan-300"
+                              : project.current_user_role === "editor"
+                                ? "border-purple-700 bg-purple-950/40 text-purple-300"
+                                : "border-slate-700 bg-slate-800 text-slate-300"
+                          }`}
+                        >
+                          {project.current_user_role}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-5 space-y-4">
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Description
+                        </p>
+                        <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">
+                          {project.description ||
+                            "No project description provided."}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
+                          AI Summary
+                        </p>
+                        <p className="mt-2 line-clamp-3 text-sm leading-6 text-cyan-100">
+                          {createProjectSummaryFallback(project)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 border-t border-slate-800 pt-4">
+                    {!selectedWorkspaceId && (
+                      <div className="mb-4">
+                        <span className="text-sm text-slate-500">
+                          Workspace:{" "}
+                          <span className="font-medium text-slate-300">
+                            {getWorkspaceName(project.workspace_id)}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <button
+                        type="button"
+                        onClick={() => openProject(project)}
+                        className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                      >
+                        Open Project
+                        <FaArrowRight className="text-xs" />
+                      </button>
+
+                      {project.current_user_role === "editor" && (
+                        <div className="flex items-center justify-center gap-4">
+                          <button
+                            type="button"
+                            onClick={() => startEditing(project)}
+                            className="text-sm font-medium text-slate-300 transition hover:text-white"
+                            data-testid={`edit-project-${project.id}`}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 p-8 text-center">
+              <h3 className="text-xl font-semibold text-white">
+                Nothing shared with you yet
+              </h3>
+              <p className="mt-2 text-slate-400">
+                Projects shared by other Tanio users will appear here.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Empty State - All Projects */}
       {!loading &&
@@ -1565,10 +1464,8 @@ function Projects() {
             <h3 className="text-xl font-semibold text-white">
               No projects found
             </h3>
-
             <p className="mt-2 text-slate-400">
-              Projects will appear here after they are
-              created.
+              Projects will appear here after they are created.
             </p>
           </div>
         )}
@@ -1583,12 +1480,9 @@ function Projects() {
               <h3 className="text-2xl font-bold text-white">
                 No projects in this workspace
               </h3>
-
               <p className="mt-2 text-slate-400">
-                {displayWorkspaceName} does not have any
-                projects yet.
+                {displayWorkspaceName} does not have any projects yet.
               </p>
-
               <button
                 type="button"
                 onClick={clearWorkspaceFilter}
@@ -1608,12 +1502,9 @@ function Projects() {
             <h3 className="text-xl font-semibold text-white">
               No matching projects
             </h3>
-
             <p className="mt-2 text-slate-400">
-              Try another search term or clear the
-              workspace filter.
+              Try another search term or clear the workspace filter.
             </p>
-
             <button
               type="button"
               onClick={clearFilters}
@@ -1633,10 +1524,7 @@ function Projects() {
           aria-labelledby="new-project-title"
           data-testid="create-project-panel"
           onMouseDown={(event) => {
-            if (
-              event.target === event.currentTarget &&
-              !creating
-            ) {
+            if (event.target === event.currentTarget && !creating) {
               closeCreateProject();
             }
           }}
@@ -1647,17 +1535,15 @@ function Projects() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
                   New Project
                 </p>
-
                 <h2
                   id="new-project-title"
                   className="mt-1 text-2xl font-bold text-white"
                 >
                   Create & launch your project
                 </h2>
-
                 <p className="mt-2 text-sm text-slate-400">
-                  Choose where the project belongs and which Tanio module you want
-                  to open after creation.
+                  Choose where the project belongs and which Tanio module
+                  you want to open after creation.
                 </p>
               </div>
 
@@ -1710,9 +1596,7 @@ function Projects() {
                   id="new-project-description"
                   value={newProjectDescription}
                   onChange={(event) => {
-                    setNewProjectDescription(
-                      event.target.value
-                    );
+                    setNewProjectDescription(event.target.value);
                     setCreateError("");
                   }}
                   rows="4"
@@ -1741,7 +1625,9 @@ function Projects() {
                     <button
                       type="button"
                       onClick={() => {
-                        setShowCreateWorkspaceForProject((currentValue) => !currentValue);
+                        setShowCreateWorkspaceForProject(
+                          (currentValue) => !currentValue
+                        );
                         setCreateError("");
                       }}
                       disabled={creating || creatingWorkspace}
@@ -1771,7 +1657,6 @@ function Projects() {
                     data-testid="new-project-workspace"
                   >
                     <option value="">Choose a workspace</option>
-
                     {availableWorkspaces.map((workspace) => (
                       <option key={workspace.id} value={workspace.id}>
                         {workspace.name}
@@ -1827,10 +1712,14 @@ function Projects() {
                     <button
                       type="button"
                       onClick={createWorkspaceForProject}
-                      disabled={creatingWorkspace || !newWorkspaceName.trim()}
+                      disabled={
+                        creatingWorkspace || !newWorkspaceName.trim()
+                      }
                       className="mt-4 rounded-xl bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {creatingWorkspace ? "Creating Workspace..." : "Create Workspace"}
+                      {creatingWorkspace
+                        ? "Creating Workspace..."
+                        : "Create Workspace"}
                     </button>
                   </div>
                 )}
@@ -1843,7 +1732,8 @@ function Projects() {
 
                 {!selectedWorkspaceId && showCreateWorkspaceForProject && (
                   <p className="mt-2 text-xs text-slate-500">
-                    Create the workspace first, then the new project will use it.
+                    Create the workspace first, then the new project will
+                    use it.
                   </p>
                 )}
               </div>
@@ -1866,9 +1756,7 @@ function Projects() {
                         ? "border-cyan-500 bg-cyan-950/40 shadow-lg shadow-cyan-950/20"
                         : "border-slate-700 bg-slate-950/60 hover:border-cyan-800 hover:bg-slate-950"
                     }`}
-                    aria-pressed={
-                      newProjectType === "product-architect"
-                    }
+                    aria-pressed={newProjectType === "product-architect"}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-800 bg-cyan-950 text-xl">
@@ -1880,8 +1768,8 @@ function Projects() {
                           Product Architect
                         </p>
                         <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                          Plan products, generate documents, and build product
-                          strategy with AI.
+                          Plan products, generate documents, and build
+                          product strategy with AI.
                         </p>
                       </div>
                     </div>
@@ -1899,9 +1787,7 @@ function Projects() {
                         ? "border-purple-500 bg-purple-950/40 shadow-lg shadow-purple-950/20"
                         : "border-slate-700 bg-slate-950/60 hover:border-purple-800 hover:bg-slate-950"
                     }`}
-                    aria-pressed={
-                      newProjectType === "tabletop-creator"
-                    }
+                    aria-pressed={newProjectType === "tabletop-creator"}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-purple-800 bg-purple-950 text-xl">
@@ -1922,8 +1808,8 @@ function Projects() {
                 </div>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Tanio will open the selected module automatically after the
-                  project is created.
+                  Tanio will open the selected module automatically after
+                  the project is created.
                 </p>
               </div>
 
@@ -1932,9 +1818,7 @@ function Projects() {
                   className="rounded-xl border border-red-800 bg-red-950/40 p-4"
                   role="alert"
                 >
-                  <p className="text-sm text-red-300">
-                    {createError}
-                  </p>
+                  <p className="text-sm text-red-300">{createError}</p>
                 </div>
               )}
 
@@ -1950,7 +1834,11 @@ function Projects() {
 
                 <button
                   type="submit"
-                  disabled={creating || creatingWorkspace || showCreateWorkspaceForProject}
+                  disabled={
+                    creating ||
+                    creatingWorkspace ||
+                    showCreateWorkspaceForProject
+                  }
                   className="rounded-xl bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                   data-testid="create-project-submit"
                 >
@@ -1976,9 +1864,7 @@ function Projects() {
             onSubmit={saveProjectChanges}
             className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6"
           >
-            <h3 className="text-2xl font-bold">
-              Edit Project
-            </h3>
+            <h3 className="text-2xl font-bold">Edit Project</h3>
 
             <div className="mt-6">
               <label
@@ -1991,9 +1877,7 @@ function Projects() {
               <input
                 id="edit-project-title"
                 value={editTitle}
-                onChange={(event) =>
-                  setEditTitle(event.target.value)
-                }
+                onChange={(event) => setEditTitle(event.target.value)}
                 maxLength={100}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none"
                 data-testid="edit-project-title"
@@ -2012,9 +1896,7 @@ function Projects() {
                 id="edit-project-description"
                 value={editDescription}
                 onChange={(event) =>
-                  setEditDescription(
-                    event.target.value
-                  )
+                  setEditDescription(event.target.value)
                 }
                 rows="5"
                 maxLength={5000}
@@ -2022,9 +1904,9 @@ function Projects() {
                 data-testid="edit-project-description"
               />
             </div>
-            
+
             {editingProject?.current_user_role === "owner" && (
-              <>    
+              <>
                 <div className="mt-5">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <label
@@ -2037,7 +1919,9 @@ function Projects() {
                     <button
                       type="button"
                       onClick={() => {
-                        setShowCreateWorkspaceForEdit((currentValue) => !currentValue);
+                        setShowCreateWorkspaceForEdit(
+                          (currentValue) => !currentValue
+                        );
                         setEditError("");
                       }}
                       disabled={saving || creatingEditWorkspace}
@@ -2060,10 +1944,7 @@ function Projects() {
                       disabled={saving || creatingEditWorkspace}
                       className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-white focus:border-cyan-500 focus:outline-none disabled:opacity-50"
                     >
-                      <option value="">
-                        Choose a workspace
-                      </option>
-
+                      <option value="">Choose a workspace</option>
                       {availableWorkspaces.map((workspace) => (
                         <option key={workspace.id} value={workspace.id}>
                           {workspace.name}
@@ -2106,7 +1987,9 @@ function Projects() {
                           id="edit-new-workspace-description"
                           value={editNewWorkspaceDescription}
                           onChange={(event) => {
-                            setEditNewWorkspaceDescription(event.target.value);
+                            setEditNewWorkspaceDescription(
+                              event.target.value
+                            );
                             setEditError("");
                           }}
                           disabled={creatingEditWorkspace}
@@ -2119,26 +2002,33 @@ function Projects() {
                       <button
                         type="button"
                         onClick={createWorkspaceForEditProject}
-                        disabled={creatingEditWorkspace || !editNewWorkspaceName.trim()}
+                        disabled={
+                          creatingEditWorkspace ||
+                          !editNewWorkspaceName.trim()
+                        }
                         className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {creatingEditWorkspace ? "Creating Workspace..." : "Create Workspace"}
+                        {creatingEditWorkspace
+                          ? "Creating Workspace..."
+                          : "Create Workspace"}
                       </button>
                     </div>
                   )}
 
                   <p className="mt-2 text-xs text-slate-500">
-                    Moving this project will place it under the selected workspace.
+                    Moving this project will place it under the selected
+                    workspace.
                   </p>
 
                   {showCreateWorkspaceForEdit && (
                     <p className="mt-2 text-xs text-slate-500">
-                      Create the workspace first, then save the project move.
+                      Create the workspace first, then save the project
+                      move.
                     </p>
                   )}
                 </div>
               </>
-            )}  
+            )}
 
             {editError && (
               <p
@@ -2161,7 +2051,11 @@ function Projects() {
 
               <button
                 type="submit"
-                disabled={saving || creatingEditWorkspace || showCreateWorkspaceForEdit}
+                disabled={
+                  saving ||
+                  creatingEditWorkspace ||
+                  showCreateWorkspaceForEdit
+                }
                 className="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-50"
                 data-testid="save-project-changes"
               >
@@ -2185,10 +2079,7 @@ function Projects() {
           aria-labelledby="delete-project-title"
           data-testid="delete-project-panel"
           onMouseDown={(event) => {
-            if (
-              event.target === event.currentTarget &&
-              !deleting
-            ) {
+            if (event.target === event.currentTarget && !deleting) {
               cancelDeleting();
             }
           }}
@@ -2223,8 +2114,8 @@ function Projects() {
               <span className="font-semibold text-white">
                 {deletingProject.title}
               </span>
-              . Choose whether its saved content and documents
-              should be kept or permanently deleted.
+              . Choose whether its saved content and documents should be
+              kept or permanently deleted.
             </p>
 
             <div className="mt-6 space-y-3">
@@ -2255,9 +2146,9 @@ function Projects() {
                       Keep Attached Content
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-slate-400">
-                      Delete the project, but keep its saved
-                      content and documents in the Content Library.
-                      They will no longer be attached to a project.
+                      Delete the project, but keep its saved content and
+                      documents in the Content Library. They will no longer
+                      be attached to a project.
                     </p>
                   </div>
                 </div>
@@ -2290,8 +2181,8 @@ function Projects() {
                       Delete Attached Content
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-slate-400">
-                      Permanently delete the project, its saved
-                      content, documents, and saved content versions.
+                      Permanently delete the project, its saved content,
+                      documents, and saved content versions.
                     </p>
                   </div>
                 </div>
@@ -2299,9 +2190,9 @@ function Projects() {
             </div>
 
             <div className="mt-5 rounded-lg border border-amber-800/70 bg-amber-950/30 p-3 text-sm text-amber-200">
-              Deleting the project cannot be undone. If you choose
-              to delete attached content, that content cannot be
-              recovered either.
+              Deleting the project cannot be undone. If you choose to
+              delete attached content, that content cannot be recovered
+              either.
             </div>
 
             <div className="mt-5">
@@ -2344,7 +2235,8 @@ function Projects() {
               />
 
               <span>
-                I understand this will delete the project and affect its attached content based on the option I selected.
+                I understand this will delete the project and affect its
+                attached content based on the option I selected.
               </span>
             </label>
 

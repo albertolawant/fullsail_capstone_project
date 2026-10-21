@@ -91,8 +91,15 @@ function determineCategory(contentType = "") {
 
   if (
     [
-      "campaign", "npc", "quest", "encounter", "location",
-      "character", "world", "item", "tabletop",
+      "campaign",
+      "npc",
+      "quest",
+      "encounter",
+      "location",
+      "character",
+      "world",
+      "item",
+      "tabletop",
     ].some((keyword) => normalized.includes(keyword))
   ) {
     return CATEGORY_TABLETOP;
@@ -100,9 +107,18 @@ function determineCategory(contentType = "") {
 
   if (
     [
-      "product", "requirement", "prd", "persona", "user stor",
-      "feature", "architecture", "roadmap", "risk", "swot",
-      "market", "technical",
+      "product",
+      "requirement",
+      "prd",
+      "persona",
+      "user stor",
+      "feature",
+      "architecture",
+      "roadmap",
+      "risk",
+      "swot",
+      "market",
+      "technical",
     ].some((keyword) => normalized.includes(keyword))
   ) {
     return CATEGORY_PRODUCT;
@@ -129,14 +145,22 @@ function getCategoryIcon(category) {
 
 function getCategoryBadgeClasses(category) {
   const classes = {
-    [CATEGORY_PRODUCT]: "border-cyan-800 bg-cyan-950/50 text-cyan-300",
-    [CATEGORY_TABLETOP]: "border-purple-800 bg-purple-950/50 text-purple-300",
-    [CATEGORY_PROBLEM]: "border-amber-800 bg-amber-950/50 text-amber-300",
-    [CATEGORY_LEARNING]: "border-sky-800 bg-sky-950/50 text-sky-300",
-    [CATEGORY_LOGOS]: "border-emerald-800 bg-emerald-950/50 text-emerald-300",
+    [CATEGORY_PRODUCT]:
+      "border-cyan-800 bg-cyan-950/50 text-cyan-300",
+    [CATEGORY_TABLETOP]:
+      "border-purple-800 bg-purple-950/50 text-purple-300",
+    [CATEGORY_PROBLEM]:
+      "border-amber-800 bg-amber-950/50 text-amber-300",
+    [CATEGORY_LEARNING]:
+      "border-sky-800 bg-sky-950/50 text-sky-300",
+    [CATEGORY_LOGOS]:
+      "border-emerald-800 bg-emerald-950/50 text-emerald-300",
   };
 
-  return classes[category] || "border-slate-700 bg-slate-800 text-slate-300";
+  return (
+    classes[category] ||
+    "border-slate-700 bg-slate-800 text-slate-300"
+  );
 }
 
 function createPreview(item) {
@@ -153,7 +177,9 @@ function createPreview(item) {
     return "No preview is available for this content.";
   }
 
-  return text.length <= 220 ? text : `${text.slice(0, 220).trim()}…`;
+  return text.length <= 220
+    ? text
+    : `${text.slice(0, 220).trim()}…`;
 }
 
 function formatDate(value) {
@@ -185,6 +211,7 @@ function getTimestamp(item) {
 function SavedDates({ item }) {
   const created = formatDate(item.created_at);
   const updated = formatDate(item.updated_at);
+
   const wasModified =
     item.created_at &&
     item.updated_at &&
@@ -194,8 +221,11 @@ function SavedDates({ item }) {
   return (
     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
       {created && <span>Date Created: {created}</span>}
+
       {updated && wasModified && (
-        <span className="text-violet-300">Date Modified: {updated}</span>
+        <span className="text-violet-300">
+          Date Modified: {updated}
+        </span>
       )}
     </div>
   );
@@ -205,14 +235,18 @@ async function apiRequest(path, options = {}) {
   const token = localStorage.getItem("token");
 
   if (!token) {
-    throw new Error("Your session has expired. Please sign in again.");
+    throw new Error(
+      "Your session has expired. Please sign in again."
+    );
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.body
+        ? { "Content-Type": "application/json" }
+        : {}),
       ...options.headers,
       Authorization: `Bearer ${token}`,
     },
@@ -222,7 +256,9 @@ async function apiRequest(path, options = {}) {
 
   if (!response.ok) {
     if (response.status === 401) {
-      throw new Error("Your session has expired. Please sign in again.");
+      throw new Error(
+        "Your session has expired. Please sign in again."
+      );
     }
 
     throw new Error(
@@ -235,8 +271,17 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
-function Modal({ title, onClose, busy, children, footer, wide = false }) {
-  const titleId = `modal-${title.toLowerCase().replace(/\W+/g, "-")}`;
+function Modal({
+  title,
+  onClose,
+  busy,
+  children,
+  footer,
+  wide = false,
+}) {
+  const titleId = `modal-${title
+    .toLowerCase()
+    .replace(/\W+/g, "-")}`;
 
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -276,9 +321,13 @@ function Modal({ title, onClose, busy, children, footer, wide = false }) {
         }`}
       >
         <header className="flex items-start justify-between gap-4 border-b border-slate-800 p-5">
-          <h2 id={titleId} className="text-2xl font-bold text-white">
+          <h2
+            id={titleId}
+            className="text-2xl font-bold text-white"
+          >
             {title}
           </h2>
+
           <button
             type="button"
             onClick={onClose}
@@ -291,7 +340,9 @@ function Modal({ title, onClose, busy, children, footer, wide = false }) {
           </button>
         </header>
 
-        <div className="min-h-0 overflow-y-auto p-5">{children}</div>
+        <div className="min-h-0 overflow-y-auto p-5">
+          {children}
+        </div>
 
         {footer && (
           <footer className="flex flex-wrap justify-end gap-3 border-t border-slate-800 p-5">
@@ -327,16 +378,25 @@ function SavedMaterial({ item, disabled }) {
           alt={`${item.title} saved logo`}
           className="mx-auto max-h-[60vh] rounded-xl border border-slate-700 bg-white object-contain"
         />
+
         <dl className="mt-6 space-y-3 text-sm">
           {[
             ["Style", item.style || "default"],
-            ["Preferred Colors", item.preferred_colors || "Default"],
+            [
+              "Preferred Colors",
+              item.preferred_colors || "Default",
+            ],
             ["Logo Ideas / Symbols", item.logo_ideas || "None"],
-            ["Branding Direction", item.branding_direction || "Default"],
+            [
+              "Branding Direction",
+              item.branding_direction || "Default",
+            ],
           ].map(([label, value]) => (
             <div key={label}>
               <dt className="text-slate-500">{label}</dt>
-              <dd className="mt-1 whitespace-pre-wrap text-slate-200">{value}</dd>
+              <dd className="mt-1 whitespace-pre-wrap text-slate-200">
+                {value}
+              </dd>
             </div>
           ))}
         </dl>
@@ -348,7 +408,10 @@ function SavedMaterial({ item, disabled }) {
     let material;
 
     try {
-      material = parseLearningMaterial(item.body, item.content_type);
+      material = parseLearningMaterial(
+        item.body,
+        item.content_type
+      );
     } catch (error) {
       return <ErrorMessage>{error.message}</ErrorMessage>;
     }
@@ -358,14 +421,18 @@ function SavedMaterial({ item, disabled }) {
         <dl className="space-y-3 rounded-xl bg-slate-900/60 p-4 text-sm">
           <div>
             <dt className="text-slate-400">Topic</dt>
-            <dd className="mt-1 break-words text-white">{material.topic}</dd>
+            <dd className="mt-1 break-words text-white">
+              {material.topic}
+            </dd>
           </div>
+
           <div>
             <dt className="text-slate-400">Experience Level</dt>
             <dd className="mt-1 capitalize text-white">
               {material.experience_level}
             </dd>
           </div>
+
           {material.learning_goal && (
             <div>
               <dt className="text-slate-400">Learning Goal</dt>
@@ -375,7 +442,11 @@ function SavedMaterial({ item, disabled }) {
             </div>
           )}
         </dl>
-        <LearningMaterialView material={material} disabled={disabled} />
+
+        <LearningMaterialView
+          material={material}
+          disabled={disabled}
+        />
       </>
     );
   }
@@ -398,7 +469,8 @@ function Content() {
   const [error, setError] = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ALL);
+  const [selectedCategory, setSelectedCategory] =
+    useState(CATEGORY_ALL);
   const [sortOption, setSortOption] = useState("newest");
 
   const [selectedContent, setSelectedContent] = useState(null);
@@ -422,13 +494,18 @@ function Content() {
   const [moveProjectId, setMoveProjectId] = useState("");
   const [moveLoading, setMoveLoading] = useState(false);
   const [moveError, setMoveError] = useState("");
-  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showCreateProject, setShowCreateProject] =
+    useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState("");
-  const [newProjectDescription, setNewProjectDescription] = useState("");
-  const [newProjectWorkspaceId, setNewProjectWorkspaceId] = useState("");
-  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [newProjectDescription, setNewProjectDescription] =
+    useState("");
+  const [newProjectWorkspaceId, setNewProjectWorkspaceId] =
+    useState("");
+  const [showCreateWorkspace, setShowCreateWorkspace] =
+    useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
-  const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("");
+  const [newWorkspaceDescription, setNewWorkspaceDescription] =
+    useState("");
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteText, setDeleteText] = useState("");
@@ -453,6 +530,7 @@ function Content() {
 
   const loadLibrary = useCallback(async (isRefresh = false) => {
     libraryControllerRef.current?.abort();
+
     const controller = new AbortController();
     libraryControllerRef.current = controller;
 
@@ -466,20 +544,27 @@ function Content() {
 
     try {
       const options = { signal: controller.signal };
-      const [contents, loadedProjects, loadedWorkspaces, preserved] =
-        await Promise.all([
-          apiRequest("/content/", options),
-          apiRequest("/projects/", options),
-          apiRequest("/workspaces/", options),
-          apiRequest("/projects/preserved-logos", options),
-        ]);
+
+      const [
+        contents,
+        loadedProjects,
+        loadedWorkspaces,
+        preserved,
+      ] = await Promise.all([
+        apiRequest("/content/", options),
+        apiRequest("/projects/", options),
+        apiRequest("/workspaces/", options),
+        apiRequest("/projects/preserved-logos", options),
+      ]);
 
       if (
         !Array.isArray(contents) ||
         !Array.isArray(loadedProjects) ||
         !Array.isArray(loadedWorkspaces)
       ) {
-        throw new Error("The server returned invalid library information.");
+        throw new Error(
+          "The server returned invalid library information."
+        );
       }
 
       const logoGroups = await Promise.all(
@@ -505,6 +590,7 @@ function Content() {
             if (controller.signal.aborted) {
               throw requestError;
             }
+
             return [];
           }
         })
@@ -524,9 +610,11 @@ function Content() {
 
       if (!controller.signal.aborted && mountedRef.current) {
         const uniqueItems = new Map(
-          [...contents, ...logoGroups.flat(), ...preservedLogos].map(
-            (item) => [String(item.id), item]
-          )
+          [
+            ...contents,
+            ...logoGroups.flat(),
+            ...preservedLogos,
+          ].map((item) => [String(item.id), item])
         );
 
         setContentItems([...uniqueItems.values()]);
@@ -559,7 +647,10 @@ function Content() {
 
   const preparedContent = useMemo(() => {
     const names = new Map(
-      projects.map((project) => [String(project.id), project.title])
+      projects.map((project) => [
+        String(project.id),
+        project.title,
+      ])
     );
 
     return contentItems.map((item) => ({
@@ -570,21 +661,26 @@ function Content() {
       projectName:
         item.project_id == null
           ? "No Project"
-          : names.get(String(item.project_id)) || `Project #${item.project_id}`,
+          : names.get(String(item.project_id)) ||
+            `Project #${item.project_id}`,
     }));
   }, [contentItems, projects]);
 
   const categories = useMemo(() => {
-    const available = new Set(preparedContent.map((item) => item.category));
+    const available = new Set(
+      preparedContent.map((item) => item.category)
+    );
 
     return [
       CATEGORY_ALL,
       CATEGORY_PRODUCT,
       CATEGORY_TABLETOP,
       CATEGORY_LEARNING,
-      ...[CATEGORY_PROBLEM, CATEGORY_LOGOS, CATEGORY_OTHER].filter(
-        (category) => available.has(category)
-      ),
+      ...[
+        CATEGORY_PROBLEM,
+        CATEGORY_LOGOS,
+        CATEGORY_OTHER,
+      ].filter((category) => available.has(category)),
     ];
   }, [preparedContent]);
 
@@ -602,10 +698,18 @@ function Content() {
       return (
         !search ||
         [
-          item.title, item.content_type, item.body, item.projectName,
-          item.category, item.style, item.preferred_colors,
-          item.logo_ideas, item.branding_direction,
-        ].some((value) => String(value || "").toLowerCase().includes(search))
+          item.title,
+          item.content_type,
+          item.body,
+          item.projectName,
+          item.category,
+          item.style,
+          item.preferred_colors,
+          item.logo_ideas,
+          item.branding_direction,
+        ].some((value) =>
+          String(value || "").toLowerCase().includes(search)
+        )
       );
     });
 
@@ -613,18 +717,29 @@ function Content() {
       if (sortOption === "oldest") {
         return getTimestamp(first) - getTimestamp(second);
       }
+
       if (sortOption === "title-asc") {
         return first.title.localeCompare(second.title);
       }
+
       if (sortOption === "title-desc") {
         return second.title.localeCompare(first.title);
       }
+
       if (sortOption === "type-asc") {
-        return first.content_type.localeCompare(second.content_type);
+        return first.content_type.localeCompare(
+          second.content_type
+        );
       }
+
       return getTimestamp(second) - getTimestamp(first);
     });
-  }, [preparedContent, searchTerm, selectedCategory, sortOption]);
+  }, [
+    preparedContent,
+    searchTerm,
+    selectedCategory,
+    sortOption,
+  ]);
 
   const closeView = useCallback(() => {
     if (actionBusyRef.current) {
@@ -643,31 +758,44 @@ function Content() {
 
   const loadVersions = async (item) => {
     versionsControllerRef.current?.abort();
+
     const controller = new AbortController();
     versionsControllerRef.current = controller;
+
     setVersionsLoading(true);
     setVersionsError("");
 
     try {
-      const data = await apiRequest(`/content/${item.id}/versions`, {
-        signal: controller.signal,
-      });
+      const data = await apiRequest(
+        `/content/${item.id}/versions`,
+        {
+          signal: controller.signal,
+        }
+      );
 
       if (!Array.isArray(data)) {
-        throw new Error("The server returned invalid version information.");
+        throw new Error(
+          "The server returned invalid version information."
+        );
       }
 
       if (!controller.signal.aborted && mountedRef.current) {
         setVersions(
-          [...data].sort((a, b) => a.version_number - b.version_number)
+          [...data].sort(
+            (a, b) => a.version_number - b.version_number
+          )
         );
 
         // Problem Solver uses saved versions for its generated history.
         // Learning Studio opens the active content by default.
-        if (item.category === CATEGORY_PROBLEM && data.length > 0) {
+        if (
+          item.category === CATEGORY_PROBLEM &&
+          data.length > 0
+        ) {
           const latest = [...data].sort(
             (a, b) => b.version_number - a.version_number
           )[0];
+
           setSelectedVersionId(String(latest.id));
         }
       }
@@ -713,7 +841,9 @@ function Content() {
   const replaceContent = (updated) => {
     setContentItems((items) =>
       items.map((item) =>
-        String(item.id) === String(updated.id) ? updated : item
+        String(item.id) === String(updated.id)
+          ? updated
+          : item
       )
     );
   };
@@ -735,7 +865,9 @@ function Content() {
       );
 
       if (!updated?.id) {
-        throw new Error("The server did not confirm the restored content.");
+        throw new Error(
+          "The server did not confirm the restored content."
+        );
       }
 
       if (!mountedRef.current) {
@@ -764,6 +896,7 @@ function Content() {
       }
     } finally {
       actionBusyRef.current = false;
+
       if (mountedRef.current) {
         setRestoreLoading(false);
       }
@@ -773,7 +906,11 @@ function Content() {
   const downloadLogo = (item) => {
     const link = document.createElement("a");
     link.href = `data:image/png;base64,${item.image_base64}`;
-    link.download = getLearningMaterialFileName(item.title, "png");
+    link.download = getLearningMaterialFileName(
+      item.title,
+      "png"
+    );
+
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -790,13 +927,17 @@ function Content() {
 
     try {
       const item = displayedContent;
+
       const body = isLearningStudioContent(item.content_type)
         ? learningMaterialToMarkdown(
             parseLearningMaterial(item.body, item.content_type)
           )
         : item.body;
 
-      const fileName = getLearningMaterialFileName(item.title, format);
+      const fileName = getLearningMaterialFileName(
+        item.title,
+        format
+      );
 
       if (format === "pdf") {
         exportContentAsPdf(item.title, body, fileName);
@@ -813,6 +954,7 @@ function Content() {
       }
     } finally {
       actionBusyRef.current = false;
+
       if (mountedRef.current) {
         setExporting(false);
       }
@@ -825,7 +967,10 @@ function Content() {
 
     if (isLearningStudioContent(item.content_type)) {
       try {
-        material = parseLearningMaterial(item.body, item.content_type);
+        material = parseLearningMaterial(
+          item.body,
+          item.content_type
+        );
       } catch (requestError) {
         parsingError = requestError.message;
       }
@@ -854,6 +999,7 @@ function Content() {
     }
 
     setEditError("");
+
     const title = editTitle.trim();
     let body;
 
@@ -862,7 +1008,9 @@ function Content() {
         throw new Error("Content title is required.");
       }
 
-      body = isLearningStudioContent(editingContent.content_type)
+      body = isLearningStudioContent(
+        editingContent.content_type
+      )
         ? serializeLearningMaterial(editMaterial)
         : editBody.trim();
 
@@ -878,13 +1026,18 @@ function Content() {
     setEditLoading(true);
 
     try {
-      const updated = await apiRequest(`/content/${editingContent.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ title, body }),
-      });
+      const updated = await apiRequest(
+        `/content/${editingContent.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ title, body }),
+        }
+      );
 
       if (!updated?.id) {
-        throw new Error("The server did not confirm the saved changes.");
+        throw new Error(
+          "The server did not confirm the saved changes."
+        );
       }
 
       if (mountedRef.current) {
@@ -898,6 +1051,7 @@ function Content() {
       }
     } finally {
       actionBusyRef.current = false;
+
       if (mountedRef.current) {
         setEditLoading(false);
       }
@@ -925,7 +1079,10 @@ function Content() {
   };
 
   const createWorkspace = async () => {
-    if (actionBusyRef.current || !newWorkspaceName.trim()) {
+    if (
+      actionBusyRef.current ||
+      !newWorkspaceName.trim()
+    ) {
       return;
     }
 
@@ -938,12 +1095,15 @@ function Content() {
         method: "POST",
         body: JSON.stringify({
           name: newWorkspaceName.trim(),
-          description: newWorkspaceDescription.trim() || null,
+          description:
+            newWorkspaceDescription.trim() || null,
         }),
       });
 
       if (!workspace?.id) {
-        throw new Error("The workspace could not be confirmed.");
+        throw new Error(
+          "The workspace could not be confirmed."
+        );
       }
 
       if (mountedRef.current) {
@@ -959,6 +1119,7 @@ function Content() {
       }
     } finally {
       actionBusyRef.current = false;
+
       if (mountedRef.current) {
         setMoveLoading(false);
       }
@@ -1000,7 +1161,9 @@ function Content() {
       });
 
       if (!project?.id) {
-        throw new Error("The project could not be confirmed.");
+        throw new Error(
+          "The project could not be confirmed."
+        );
       }
 
       if (mountedRef.current) {
@@ -1014,6 +1177,7 @@ function Content() {
       }
     } finally {
       actionBusyRef.current = false;
+
       if (mountedRef.current) {
         setMoveLoading(false);
       }
@@ -1021,11 +1185,19 @@ function Content() {
   };
 
   const moveContent = async () => {
-    if (!moveTarget || !moveProjectId || actionBusyRef.current) {
+    if (
+      !moveTarget ||
+      !moveProjectId ||
+      actionBusyRef.current
+    ) {
       return;
     }
 
-    if (!projects.some((project) => String(project.id) === moveProjectId)) {
+    if (
+      !projects.some(
+        (project) => String(project.id) === moveProjectId
+      )
+    ) {
       setMoveError("Choose one of your projects.");
       return;
     }
@@ -1036,12 +1208,16 @@ function Content() {
 
     try {
       const path = moveTarget.isLogo
-        ? `/product-architect/logos/${String(moveTarget.id).replace("logo-", "")}`
+        ? `/product-architect/logos/${String(
+            moveTarget.id
+          ).replace("logo-", "")}`
         : `/content/${moveTarget.id}`;
 
       await apiRequest(path, {
         method: "PUT",
-        body: JSON.stringify({ project_id: Number(moveProjectId) }),
+        body: JSON.stringify({
+          project_id: Number(moveProjectId),
+        }),
       });
 
       if (mountedRef.current) {
@@ -1054,6 +1230,7 @@ function Content() {
       }
     } finally {
       actionBusyRef.current = false;
+
       if (mountedRef.current) {
         setMoveLoading(false);
       }
@@ -1090,14 +1267,19 @@ function Content() {
 
     try {
       const path = deleteTarget.isLogo
-        ? `/product-architect/logos/${String(deleteTarget.id).replace("logo-", "")}`
+        ? `/product-architect/logos/${String(
+            deleteTarget.id
+          ).replace("logo-", "")}`
         : `/content/${deleteTarget.id}`;
 
       await apiRequest(path, { method: "DELETE" });
 
       if (mountedRef.current) {
         setContentItems((items) =>
-          items.filter((item) => String(item.id) !== String(deleteTarget.id))
+          items.filter(
+            (item) =>
+              String(item.id) !== String(deleteTarget.id)
+          )
         );
         setDeleteTarget(null);
       }
@@ -1107,6 +1289,7 @@ function Content() {
       }
     } finally {
       actionBusyRef.current = false;
+
       if (mountedRef.current) {
         setDeleteLoading(false);
       }
@@ -1116,65 +1299,113 @@ function Content() {
   const viewBusy = restoreLoading || exporting;
 
   return (
-    <main className="min-h-screen bg-slate-950 p-5 text-white sm:p-8">
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-cyan-500/20 bg-slate-900 p-6">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-bold">
-            <FaFolderOpen className="text-cyan-400" />
-            Content Vault
-          </h1>
-          <p className="mt-2 text-slate-400">
-            Revisit, edit, organize, and export your saved Tanio content.
-          </p>
+    <main className="min-h-screen w-full min-w-0 flex-1 bg-slate-950 p-5 text-white sm:p-8">
+      <header
+        aria-labelledby="content-vault-title"
+        className="w-full rounded-2xl border border-cyan-900/60 bg-[#071222] p-5 shadow-lg sm:p-7 lg:p-8"
+      >
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-cyan-900/60 bg-cyan-950/40 text-2xl text-cyan-400">
+                <FaFolderOpen aria-hidden="true" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
+                  Saved Content
+                </p>
+
+                <h1
+                  id="content-vault-title"
+                  className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl"
+                >
+                  Content Vault
+                </h1>
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm leading-7 text-slate-400 sm:text-base">
+              Revisit, edit, organize, and export your saved
+              Tanio content.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => loadLibrary(true)}
+            disabled={loading || refreshing}
+            className={`${BUTTON_CLASS} inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl px-5 py-3 lg:self-center`}
+          >
+            <FaSyncAlt
+              aria-hidden="true"
+              className={
+                refreshing
+                  ? "animate-spin motion-reduce:animate-none"
+                  : ""
+              }
+            />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => loadLibrary(true)}
-          disabled={loading || refreshing}
-          className={`${BUTTON_CLASS} inline-flex items-center gap-2`}
-        >
-          <FaSyncAlt className={refreshing ? "animate-spin" : ""} />
-          {refreshing ? "Refreshing..." : "Refresh"}
-        </button>
       </header>
 
       <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="content-search" className="mb-2 block text-sm">
+            <label
+              htmlFor="content-search"
+              className="mb-2 block text-sm"
+            >
               Search saved content
             </label>
+
             <div className="relative">
               <FaSearch className="pointer-events-none absolute left-3 top-4 text-slate-500" />
+
               <input
                 id="content-search"
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event) =>
+                  setSearchTerm(event.target.value)
+                }
                 placeholder="Search by title, topic, type, or project..."
                 className={`${FIELD_CLASS} pl-10`}
               />
             </div>
           </div>
+
           <div>
-            <label htmlFor="content-sort" className="mb-2 block text-sm">
+            <label
+              htmlFor="content-sort"
+              className="mb-2 block text-sm"
+            >
               Sort by
             </label>
+
             <select
               id="content-sort"
               value={sortOption}
-              onChange={(event) => setSortOption(event.target.value)}
+              onChange={(event) =>
+                setSortOption(event.target.value)
+              }
               className={FIELD_CLASS}
             >
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
               <option value="title-asc">Title A–Z</option>
               <option value="title-desc">Title Z–A</option>
-              <option value="type-asc">Content type A–Z</option>
+              <option value="type-asc">
+                Content type A–Z
+              </option>
             </select>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2" aria-label="Content categories">
+        <div
+          className="mt-4 flex flex-wrap gap-2"
+          aria-label="Content categories"
+        >
           {categories.map((category) => (
             <button
               key={category}
@@ -1182,12 +1413,15 @@ function Content() {
               onClick={() => setSelectedCategory(category)}
               aria-pressed={selectedCategory === category}
               className={
-                selectedCategory === category ? PRIMARY_BUTTON : BUTTON_CLASS
+                selectedCategory === category
+                  ? PRIMARY_BUTTON
+                  : BUTTON_CLASS
               }
             >
               {category}
             </button>
           ))}
+
           <button
             type="button"
             onClick={() => {
@@ -1217,6 +1451,7 @@ function Content() {
             {visibleContent.length} saved{" "}
             {visibleContent.length === 1 ? "item" : "items"}
           </p>
+
           <div className="mt-4 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {visibleContent.map((item) => (
               <article
@@ -1227,15 +1462,28 @@ function Content() {
                   <span className="text-xl text-cyan-300">
                     {getCategoryIcon(item.category)}
                   </span>
+
                   <span
-                    className={`rounded-full border px-3 py-1 text-xs ${getCategoryBadgeClasses(item.category)}`}
+                    className={`rounded-full border px-3 py-1 text-xs ${getCategoryBadgeClasses(
+                      item.category
+                    )}`}
                   >
                     {item.category}
                   </span>
                 </div>
-                <h2 className="mt-4 break-words text-xl font-bold">{item.title}</h2>
-                <p className="mt-2 text-sm text-slate-400">{item.content_type}</p>
-                <p className="mt-2 text-sm text-slate-500">{item.projectName}</p>
+
+                <h2 className="mt-4 break-words text-xl font-bold">
+                  {item.title}
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-400">
+                  {item.content_type}
+                </p>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  {item.projectName}
+                </p>
+
                 <SavedDates item={item} />
 
                 {item.isLogo ? (
@@ -1258,6 +1506,7 @@ function Content() {
                   >
                     <FaEye /> View
                   </button>
+
                   <div className="flex flex-wrap gap-2">
                     {item.isLogo ? (
                       <button
@@ -1276,6 +1525,7 @@ function Content() {
                         Edit
                       </button>
                     )}
+
                     <button
                       type="button"
                       onClick={() => openMove(item)}
@@ -1283,6 +1533,7 @@ function Content() {
                     >
                       Move
                     </button>
+
                     <button
                       type="button"
                       onClick={() => openDelete(item)}
@@ -1309,7 +1560,9 @@ function Content() {
               {selectedContent.isLogo ? (
                 <button
                   type="button"
-                  onClick={() => downloadLogo(selectedContent)}
+                  onClick={() =>
+                    downloadLogo(selectedContent)
+                  }
                   className={PRIMARY_BUTTON}
                 >
                   <FaDownload className="mr-2 inline" />
@@ -1318,8 +1571,10 @@ function Content() {
               ) : (
                 <>
                   {[
-                    ["pdf", "PDF"], ["md", "Markdown"],
-                    ["txt", "TXT"], ["docx", "DOCX"],
+                    ["pdf", "PDF"],
+                    ["md", "Markdown"],
+                    ["txt", "TXT"],
+                    ["docx", "DOCX"],
                   ].map(([format, label]) => (
                     <button
                       key={format}
@@ -1333,6 +1588,7 @@ function Content() {
                   ))}
                 </>
               )}
+
               <button
                 type="button"
                 onClick={closeView}
@@ -1347,21 +1603,29 @@ function Content() {
           <h3 className="break-words text-2xl font-bold">
             {displayedContent.title}
           </h3>
+
           <p className="mt-2 text-sm text-slate-400">
-            {displayedContent.content_type} · {selectedContent.projectName}
+            {displayedContent.content_type} ·{" "}
+            {selectedContent.projectName}
           </p>
+
           <SavedDates item={selectedContent} />
 
           {!selectedContent.isLogo && (
             <section className="mt-5 rounded-xl border border-slate-700 p-4">
               <h4 className="font-bold">Version History</h4>
+
               <p className="mt-2 text-sm text-slate-400">
                 View the active material or a preserved version.
-                Restoring keeps a snapshot of the active material.
+                Restoring keeps a snapshot of the active
+                material.
               </p>
 
               {versionsLoading ? (
-                <p role="status" className="mt-3 text-sm text-slate-400">
+                <p
+                  role="status"
+                  className="mt-3 text-sm text-slate-400"
+                >
                   Loading versions...
                 </p>
               ) : (
@@ -1373,22 +1637,30 @@ function Content() {
                       setExportError("");
                     }}
                     disabled={viewBusy}
-                    className={!selectedVersionId ? PRIMARY_BUTTON : BUTTON_CLASS}
+                    className={
+                      !selectedVersionId
+                        ? PRIMARY_BUTTON
+                        : BUTTON_CLASS
+                    }
                   >
                     Current Material
                   </button>
+
                   {versions.map((version) => (
                     <button
                       key={version.id}
                       type="button"
                       onClick={() => {
-                        setSelectedVersionId(String(version.id));
+                        setSelectedVersionId(
+                          String(version.id)
+                        );
                         setRestoreMessage("");
                         setExportError("");
                       }}
                       disabled={viewBusy}
                       className={
-                        selectedVersionId === String(version.id)
+                        selectedVersionId ===
+                        String(version.id)
                           ? PRIMARY_BUTTON
                           : BUTTON_CLASS
                       }
@@ -1401,7 +1673,8 @@ function Content() {
 
               {!versionsLoading && versions.length === 0 && (
                 <p className="mt-3 text-sm text-slate-500">
-                  No previous versions yet. Editing and saving creates history.
+                  No previous versions yet. Editing and saving
+                  creates history.
                 </p>
               )}
 
@@ -1418,11 +1691,14 @@ function Content() {
                   disabled={viewBusy || versionsLoading}
                   className={`${BUTTON_CLASS} mt-4`}
                 >
-                  {restoreLoading ? "Restoring..." : "Restore This Version"}
+                  {restoreLoading
+                    ? "Restoring..."
+                    : "Restore This Version"}
                 </button>
               )}
 
               <ErrorMessage>{versionsError}</ErrorMessage>
+
               {versionsError && (
                 <button
                   type="button"
@@ -1433,8 +1709,12 @@ function Content() {
                   Retry Version History
                 </button>
               )}
+
               {restoreMessage && (
-                <p role="status" className="mt-3 text-sm text-emerald-300">
+                <p
+                  role="status"
+                  className="mt-3 text-sm text-emerald-300"
+                >
                   {restoreMessage}
                 </p>
               )}
@@ -1449,17 +1729,25 @@ function Content() {
             />
           </div>
 
-          {isLearningStudioContent(displayedContent.content_type) && (
+          {isLearningStudioContent(
+            displayedContent.content_type
+          ) && (
             <p className="mt-4 text-xs leading-6 text-slate-400">
-              Quiz exports include all choices, correct answers, and explanations.
-              Flashcard exports include both questions and answers.
+              Quiz exports include all choices, correct
+              answers, and explanations. Flashcard exports
+              include both questions and answers.
             </p>
           )}
+
           {exporting && (
-            <p role="status" className="mt-3 text-sm text-cyan-200">
+            <p
+              role="status"
+              className="mt-3 text-sm text-cyan-200"
+            >
               Preparing your export...
             </p>
           )}
+
           <ErrorMessage>{exportError}</ErrorMessage>
         </Modal>
       )}
@@ -1480,13 +1768,16 @@ function Content() {
               >
                 Cancel
               </button>
+
               <button
                 type="submit"
                 form="content-edit-form"
                 disabled={
                   editLoading ||
                   !editTitle.trim() ||
-                  (isLearningStudioContent(editingContent.content_type)
+                  (isLearningStudioContent(
+                    editingContent.content_type
+                  )
                     ? !editMaterial
                     : !editBody.trim())
                 }
@@ -1497,10 +1788,18 @@ function Content() {
             </>
           }
         >
-          <form id="content-edit-form" onSubmit={saveEdits} noValidate>
-            <label htmlFor="edit-title" className="mb-2 block text-sm font-semibold">
+          <form
+            id="content-edit-form"
+            onSubmit={saveEdits}
+            noValidate
+          >
+            <label
+              htmlFor="edit-title"
+              className="mb-2 block text-sm font-semibold"
+            >
               Saved Title
             </label>
+
             <input
               id="edit-title"
               value={editTitle}
@@ -1513,7 +1812,9 @@ function Content() {
             />
 
             <div className="mt-5">
-              {isLearningStudioContent(editingContent.content_type) ? (
+              {isLearningStudioContent(
+                editingContent.content_type
+              ) ? (
                 editMaterial ? (
                   <LearningMaterialEditor
                     material={editMaterial}
@@ -1525,18 +1826,21 @@ function Content() {
                   />
                 ) : (
                   <p className="text-sm text-red-300">
-                    This material cannot be edited because its saved structure is invalid.
+                    This material cannot be edited because its
+                    saved structure is invalid.
                   </p>
                 )
               ) : (
                 <>
                   <FormattingHelp />
+
                   <label
                     htmlFor="edit-body"
                     className="mb-2 mt-4 block text-sm font-semibold"
                   >
                     Content Body
                   </label>
+
                   <textarea
                     id="edit-body"
                     value={editBody}
@@ -1551,6 +1855,7 @@ function Content() {
                 </>
               )}
             </div>
+
             <ErrorMessage>{editError}</ErrorMessage>
           </form>
         </Modal>
@@ -1571,10 +1876,15 @@ function Content() {
               >
                 Cancel
               </button>
+
               <button
                 type="button"
                 onClick={moveContent}
-                disabled={moveLoading || !moveProjectId || showCreateProject}
+                disabled={
+                  moveLoading ||
+                  !moveProjectId ||
+                  showCreateProject
+                }
                 className={PRIMARY_BUTTON}
               >
                 {moveLoading ? "Working..." : "Move Content"}
@@ -1582,7 +1892,10 @@ function Content() {
             </>
           }
         >
-          <p className="break-words font-semibold">{moveTarget.title}</p>
+          <p className="break-words font-semibold">
+            {moveTarget.title}
+          </p>
+
           <p className="mt-2 text-sm text-slate-400">
             Current project: {moveTarget.projectName}
           </p>
@@ -1596,25 +1909,35 @@ function Content() {
             disabled={moveLoading}
             className={`${BUTTON_CLASS} mt-4`}
           >
-            {showCreateProject ? "Choose Existing Project" : "Create New Project"}
+            {showCreateProject
+              ? "Choose Existing Project"
+              : "Create New Project"}
           </button>
 
           {!showCreateProject ? (
             <div className="mt-4">
-              <label htmlFor="move-project" className="mb-2 block text-sm">
+              <label
+                htmlFor="move-project"
+                className="mb-2 block text-sm"
+              >
                 Destination Project
               </label>
+
               <select
                 id="move-project"
                 value={moveProjectId}
-                onChange={(event) => setMoveProjectId(event.target.value)}
+                onChange={(event) =>
+                  setMoveProjectId(event.target.value)
+                }
                 disabled={moveLoading}
                 className={FIELD_CLASS}
               >
                 <option value="">Choose a project</option>
+
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
-                    {project.title} — Workspace {project.workspace_id}
+                    {project.title} — Workspace{" "}
+                    {project.workspace_id}
                   </option>
                 ))}
               </select>
@@ -1622,26 +1945,41 @@ function Content() {
           ) : (
             <div className="mt-4 space-y-4">
               <div>
-                <label htmlFor="new-project-title" className="mb-2 block text-sm">
+                <label
+                  htmlFor="new-project-title"
+                  className="mb-2 block text-sm"
+                >
                   New Project Name
                 </label>
+
                 <input
                   id="new-project-title"
                   value={newProjectTitle}
-                  onChange={(event) => setNewProjectTitle(event.target.value)}
+                  onChange={(event) =>
+                    setNewProjectTitle(event.target.value)
+                  }
                   maxLength={100}
                   disabled={moveLoading}
                   className={FIELD_CLASS}
                 />
               </div>
+
               <div>
-                <label htmlFor="new-project-description" className="mb-2 block text-sm">
+                <label
+                  htmlFor="new-project-description"
+                  className="mb-2 block text-sm"
+                >
                   Project Description
                 </label>
+
                 <textarea
                   id="new-project-description"
                   value={newProjectDescription}
-                  onChange={(event) => setNewProjectDescription(event.target.value)}
+                  onChange={(event) =>
+                    setNewProjectDescription(
+                      event.target.value
+                    )
+                  }
                   maxLength={5000}
                   rows={3}
                   disabled={moveLoading}
@@ -1651,7 +1989,9 @@ function Content() {
 
               <button
                 type="button"
-                onClick={() => setShowCreateWorkspace((value) => !value)}
+                onClick={() =>
+                  setShowCreateWorkspace((value) => !value)
+                }
                 disabled={moveLoading}
                 className={BUTTON_CLASS}
               >
@@ -1663,36 +2003,55 @@ function Content() {
               {showCreateWorkspace ? (
                 <div className="space-y-4 rounded-xl border border-slate-700 p-4">
                   <div>
-                    <label htmlFor="new-workspace-name" className="mb-2 block text-sm">
+                    <label
+                      htmlFor="new-workspace-name"
+                      className="mb-2 block text-sm"
+                    >
                       New Workspace Name
                     </label>
+
                     <input
                       id="new-workspace-name"
                       value={newWorkspaceName}
-                      onChange={(event) => setNewWorkspaceName(event.target.value)}
+                      onChange={(event) =>
+                        setNewWorkspaceName(
+                          event.target.value
+                        )
+                      }
                       disabled={moveLoading}
                       className={FIELD_CLASS}
                     />
                   </div>
+
                   <div>
-                    <label htmlFor="new-workspace-description" className="mb-2 block text-sm">
+                    <label
+                      htmlFor="new-workspace-description"
+                      className="mb-2 block text-sm"
+                    >
                       Workspace Description
                     </label>
+
                     <textarea
                       id="new-workspace-description"
                       value={newWorkspaceDescription}
                       onChange={(event) =>
-                        setNewWorkspaceDescription(event.target.value)
+                        setNewWorkspaceDescription(
+                          event.target.value
+                        )
                       }
                       rows={3}
                       disabled={moveLoading}
                       className={FIELD_CLASS}
                     />
                   </div>
+
                   <button
                     type="button"
                     onClick={createWorkspace}
-                    disabled={moveLoading || !newWorkspaceName.trim()}
+                    disabled={
+                      moveLoading ||
+                      !newWorkspaceName.trim()
+                    }
                     className={PRIMARY_BUTTON}
                   >
                     Create Workspace
@@ -1700,22 +2059,35 @@ function Content() {
                 </div>
               ) : (
                 <div>
-                  <label htmlFor="new-project-workspace" className="mb-2 block text-sm">
+                  <label
+                    htmlFor="new-project-workspace"
+                    className="mb-2 block text-sm"
+                  >
                     Workspace
                   </label>
+
                   <select
                     id="new-project-workspace"
                     value={newProjectWorkspaceId}
                     onChange={(event) =>
-                      setNewProjectWorkspaceId(event.target.value)
+                      setNewProjectWorkspaceId(
+                        event.target.value
+                      )
                     }
                     disabled={moveLoading}
                     className={FIELD_CLASS}
                   >
-                    <option value="">Choose a workspace</option>
+                    <option value="">
+                      Choose a workspace
+                    </option>
+
                     {workspaces.map((workspace) => (
-                      <option key={workspace.id} value={workspace.id}>
-                        {workspace.name || `Workspace #${workspace.id}`}
+                      <option
+                        key={workspace.id}
+                        value={workspace.id}
+                      >
+                        {workspace.name ||
+                          `Workspace #${workspace.id}`}
                       </option>
                     ))}
                   </select>
@@ -1737,6 +2109,7 @@ function Content() {
               </button>
             </div>
           )}
+
           <ErrorMessage>{moveError}</ErrorMessage>
         </Modal>
       )}
@@ -1756,6 +2129,7 @@ function Content() {
               >
                 Cancel
               </button>
+
               <button
                 type="button"
                 onClick={deleteContent}
@@ -1766,38 +2140,61 @@ function Content() {
                 }
                 className="rounded-lg bg-red-700 px-4 py-2 font-semibold text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {deleteLoading ? "Deleting..." : "Permanently Delete"}
+                {deleteLoading
+                  ? "Deleting..."
+                  : "Permanently Delete"}
               </button>
             </>
           }
         >
-          <p className="break-words font-semibold">{deleteTarget.title}</p>
+          <p className="break-words font-semibold">
+            {deleteTarget.title}
+          </p>
+
           <p className="mt-2 text-sm text-slate-400">
-            {deleteTarget.content_type} · {deleteTarget.projectName}
+            {deleteTarget.content_type} ·{" "}
+            {deleteTarget.projectName}
           </p>
+
           <p className="mt-4 text-sm leading-6 text-red-300">
-            This permanently deletes the item and its saved versions.
+            This permanently deletes the item and its saved
+            versions.
           </p>
-          <label htmlFor="delete-confirmation" className="mb-2 mt-5 block text-sm">
+
+          <label
+            htmlFor="delete-confirmation"
+            className="mb-2 mt-5 block text-sm"
+          >
             Type DELETE to confirm.
           </label>
+
           <input
             id="delete-confirmation"
             value={deleteText}
-            onChange={(event) => setDeleteText(event.target.value)}
+            onChange={(event) =>
+              setDeleteText(event.target.value)
+            }
             disabled={deleteLoading}
             className={FIELD_CLASS}
           />
+
           <label className="mt-4 flex items-start gap-3 text-sm leading-6 text-red-200">
             <input
               type="checkbox"
               checked={deleteConfirmed}
-              onChange={(event) => setDeleteConfirmed(event.target.checked)}
+              onChange={(event) =>
+                setDeleteConfirmed(event.target.checked)
+              }
               disabled={deleteLoading}
               className="mt-1"
             />
-            <span>I understand this item will be permanently deleted.</span>
+
+            <span>
+              I understand this item will be permanently
+              deleted.
+            </span>
           </label>
+
           <ErrorMessage>{deleteError}</ErrorMessage>
         </Modal>
       )}
