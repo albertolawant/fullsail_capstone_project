@@ -13,6 +13,8 @@ ExperienceLevel = Literal["beginner", "intermediate", "advanced"]
 OutputType = Literal["lesson", "flashcards", "quiz"]
 
 MAX_SOURCE_TEXT_LENGTH = 40000
+SUPPORTED_QUIZ_QUESTION_COUNTS = (5, 10, 15)
+DEFAULT_QUIZ_QUESTION_COUNT = 5
 
 NonEmptyText = Annotated[
     str,
@@ -52,6 +54,16 @@ SourceText = Annotated[
     ),
 ]
 
+QuizQuestionCount = Annotated[
+    int,
+    Field(
+        strict=True,
+        ge=5,
+        le=15,
+        description="Supported quiz question counts: 5, 10, or 15.",
+    ),
+]
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(
@@ -66,12 +78,30 @@ class LearningStudioRequest(StrictModel):
     experience_level: ExperienceLevel = "beginner"
     output_type: OutputType = "lesson"
     source_text: SourceText = ""
+    question_count: QuizQuestionCount = DEFAULT_QUIZ_QUESTION_COUNT
 
     @model_validator(mode="after")
     def validate_source_text(self):
         if self.source_text and self.output_type != "quiz":
             raise ValueError(
                 "Uploaded class notes can only be used for quizzes."
+            )
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_question_count(self):
+        if self.question_count not in SUPPORTED_QUIZ_QUESTION_COUNTS:
+            raise ValueError(
+                "Choose a quiz question count of 5, 10, or 15."
+            )
+
+        if (
+            self.output_type != "quiz"
+            and self.question_count != DEFAULT_QUIZ_QUESTION_COUNT
+        ):
+            raise ValueError(
+                "Custom question counts can only be used for quizzes."
             )
 
         return self

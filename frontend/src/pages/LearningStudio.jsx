@@ -21,6 +21,8 @@ const UPLOAD_TIMEOUT_MS = 30000;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_SOURCE_TEXT_LENGTH = 40000;
 const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".txt"];
+const QUIZ_QUESTION_COUNTS = [5, 10, 15];
+const DEFAULT_QUIZ_QUESTION_COUNT = 5;
 
 const EXPERIENCE_LEVELS = [
   { value: "beginner", label: "Beginner" },
@@ -117,6 +119,9 @@ function LearningStudioPanel({
   const [topic, setTopic] = useState("");
   const [learningGoal, setLearningGoal] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("beginner");
+  const [questionCount, setQuestionCount] = useState(
+    DEFAULT_QUIZ_QUESTION_COUNT
+  );
   const [topicError, setTopicError] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -125,7 +130,8 @@ function LearningStudioPanel({
   const [lastRequest, setLastRequest] = useState(null);
   const [lastRequestFilename, setLastRequestFilename] = useState("");
   const [generatedRequest, setGeneratedRequest] = useState(null);
-  const [generatedSourceFilename, setGeneratedSourceFilename] = useState("");
+  const [generatedSourceFilename, setGeneratedSourceFilename] =
+    useState("");
   const [resultVersion, setResultVersion] = useState(0);
 
   const [uploadedNotes, setUploadedNotes] = useState(null);
@@ -143,6 +149,7 @@ function LearningStudioPanel({
   const [exportError, setExportError] = useState("");
 
   const topicRef = useRef(null);
+  const questionCountRef = useRef(null);
   const fileInputRef = useRef(null);
   const requestControllerRef = useRef(null);
   const uploadControllerRef = useRef(null);
@@ -296,11 +303,12 @@ function LearningStudioPanel({
       if (
         typeof filename !== "string" ||
         !filename.trim() ||
-        filename.length > 255 ||
+        Array.from(filename).length > 255 ||
         typeof sourceText !== "string" ||
         !sourceText.trim() ||
-        sourceText.length > MAX_SOURCE_TEXT_LENGTH ||
         !Number.isInteger(data?.character_count) ||
+        data.character_count < 1 ||
+        data.character_count > MAX_SOURCE_TEXT_LENGTH ||
         data.character_count !== Array.from(sourceText).length
       ) {
         throw new Error(
@@ -312,7 +320,7 @@ function LearningStudioPanel({
         return;
       }
 
-      // Replace the previous notes only after a successful upload.
+      // Replace previous notes only after a successful upload.
       setUploadedNotes({
         filename,
         sourceText,
@@ -378,6 +386,14 @@ function LearningStudioPanel({
       setGenerationError(
         "Choose the matching tab for this study material."
       );
+      return;
+    }
+
+    if (
+      isQuiz &&
+      !QUIZ_QUESTION_COUNTS.includes(request.question_count)
+    ) {
+      setGenerationError("Choose 5, 10, or 15 quiz questions.");
       return;
     }
 
@@ -452,14 +468,23 @@ function LearningStudioPanel({
         );
       }
 
+      if (
+        isQuiz &&
+        data.content.questions.length !== request.question_count
+      ) {
+        throw new Error(
+          `The quiz did not contain the requested ${request.question_count} questions. Please try again.`
+        );
+      }
+
       if (!mountedRef.current) {
         return;
       }
 
       setGeneratedResult(data);
 
-      // Keep the source used by this successful result separate
-      // from the currently selected upload and failed requests.
+      // Preserve the successful request, including its count and notes.
+      // Form changes and failed requests do not replace this snapshot.
       setGeneratedRequest({ ...request });
       setGeneratedSourceFilename(sourceFilename);
 
@@ -470,7 +495,9 @@ function LearningStudioPanel({
       setSaveMessage("");
       setExportError("");
       setStatusMessage(
-        `${getOutputLabel(outputType)} ready. You can study, save, or export it.`
+        isQuiz
+          ? `Your ${request.question_count}-question quiz is ready. You can study, save, or export it.`
+          : `${getOutputLabel(outputType)} ready. You can study, save, or export it.`
       );
     } catch (error) {
       if (!mountedRef.current) {
@@ -542,6 +569,15 @@ function LearningStudioPanel({
       return;
     }
 
+    if (
+      isQuiz &&
+      !QUIZ_QUESTION_COUNTS.includes(questionCount)
+    ) {
+      setGenerationError("Choose 5, 10, or 15 quiz questions.");
+      questionCountRef.current?.focus();
+      return;
+    }
+
     const request = {
       topic: cleanedTopic,
       learning_goal: cleanedGoal,
@@ -549,8 +585,12 @@ function LearningStudioPanel({
       output_type: outputType,
     };
 
-    if (isQuiz && uploadedNotes) {
-      request.source_text = uploadedNotes.sourceText;
+    if (isQuiz) {
+      request.question_count = questionCount;
+
+      if (uploadedNotes) {
+        request.source_text = uploadedNotes.sourceText;
+      }
     }
 
     generateStudyMaterial(
@@ -583,6 +623,7 @@ function LearningStudioPanel({
     setTopic("");
     setLearningGoal("");
     setExperienceLevel("beginner");
+    setQuestionCount(DEFAULT_QUIZ_QUESTION_COUNT);
     setTopicError("");
     setGeneratedResult(null);
     setGeneratedRequest(null);
@@ -831,7 +872,7 @@ function LearningStudioPanel({
 
           <p className="mt-4 text-sm text-slate-400">
             {isQuiz
-              ? "Enter a topic and optionally upload your class notes to use as the quiz source."
+              ? "Enter a topic, choose your question count, and optionally upload class notes."
               : "Start with what you want to learn. Your learning goal is optional."}
           </p>
 
@@ -886,6 +927,45 @@ function LearningStudioPanel({
           </div>
 
           {isQuiz && (
+            <div className="mt-6">
+              <label
+                htmlFor={fieldId("question-count")}
+                className="mb-2 block text-sm font-semibold"
+              >
+                Number of Questions
+              </label>
+              <select
+                ref={questionCountRef}
+                id={fieldId("question-count")}
+                value={questionCount}
+                onChange={(event) => {
+                  setQuestionCount(Number(event.target.value));
+                  setLastRequest(null);
+                  setLastRequestFilename("");
+                  clearFeedback();
+                }}
+                disabled={busy}
+                aria-describedby={fieldId("question-count-help")}
+                className={FIELD_CLASS}
+              >
+                {QUIZ_QUESTION_COUNTS.map((count) => (
+                  <option key={count} value={count}>
+                    {count} questions
+                  </option>
+                ))}
+              </select>
+              <p
+                id={fieldId("question-count-help")}
+                className="mt-2 text-xs leading-6 text-slate-500"
+              >
+                Choose 5, 10, or 15 questions for a topic-based or
+                notes-based quiz. Uploaded notes must contain enough
+                information for the selected count.
+              </p>
+            </div>
+          )}
+
+          {isQuiz && (
             <section
               aria-labelledby={fieldId("notes-title")}
               aria-busy={uploading}
@@ -938,7 +1018,11 @@ function LearningStudioPanel({
                 className={`${FIELD_CLASS} file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-400 file:px-3 file:py-2 file:font-semibold file:text-slate-950`}
               />
 
-              <div role="status" aria-live="polite" aria-atomic="true">
+              <div
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 {uploading ? (
                   <p className="mt-3 text-sm text-cyan-200">
                     Uploading and reading your notes...
@@ -1119,16 +1203,21 @@ function LearningStudioPanel({
           </div>
 
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Regenerate uses the displayed material’s study settings
-            {isQuiz ? " and original notes, if any" : ""}.
-            For different settings{isQuiz ? " or notes" : ""},
-            update the form and select Generate.
+            {isQuiz
+              ? "Regenerate uses the displayed quiz’s topic, experience level, learning goal, question count, and original notes, if any. To use different settings, update the form and select Generate Quiz."
+              : "Regenerate uses the displayed material’s study settings. For different settings, update the form and select Generate."}
           </p>
 
-          <div role="status" aria-live="polite" aria-atomic="true">
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
             {loading ? (
               <p className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-200">
-                Generating {displayedOutputLabel.toLowerCase()}.
+                {isQuiz
+                  ? `Generating ${lastRequest?.question_count ?? questionCount} quiz questions.`
+                  : `Generating ${displayedOutputLabel.toLowerCase()}.`}
                 {generatedResult
                   ? " Your current material stays visible until the new result is ready."
                   : " This may take a moment."}
@@ -1157,6 +1246,9 @@ function LearningStudioPanel({
                   <p className="mt-2 break-words text-xs text-slate-400">
                     Retry uses your last submitted settings for{" "}
                     {lastRequest.topic}
+                    {isQuiz
+                      ? ` with ${lastRequest.question_count} questions`
+                      : ""}
                     {lastRequestFilename
                       ? ` and notes from ${lastRequestFilename}`
                       : ""}
@@ -1211,16 +1303,27 @@ function LearningStudioPanel({
                 )}
 
                 {isQuiz && (
-                  <div>
-                    <dt className="text-slate-400">
-                      Quiz Source
-                    </dt>
-                    <dd className="mt-1 break-words">
-                      {generatedSourceFilename
-                        ? `Class notes: ${generatedSourceFilename}`
-                        : "Topic-based generation"}
-                    </dd>
-                  </div>
+                  <>
+                    <div>
+                      <dt className="text-slate-400">
+                        Number of Questions
+                      </dt>
+                      <dd className="mt-1">
+                        {generatedResult.content.questions.length}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-slate-400">
+                        Quiz Source
+                      </dt>
+                      <dd className="mt-1 break-words">
+                        {generatedSourceFilename
+                          ? `Class notes: ${generatedSourceFilename}`
+                          : "Topic-based generation"}
+                      </dd>
+                    </div>
+                  </>
                 )}
               </dl>
 
@@ -1422,9 +1525,9 @@ function LearningStudioPanel({
                 appear here
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Enter a topic
-                {isQuiz ? ", optionally upload notes," : ""} and
-                select Generate {displayedOutputLabel}.
+                {isQuiz
+                  ? "Enter a topic, choose your question count, optionally upload notes, and select Generate Quiz."
+                  : `Enter a topic and select Generate ${displayedOutputLabel}.`}
               </p>
             </div>
           ) : null}
@@ -1555,9 +1658,9 @@ function LearningStudio() {
 
         <p className="mt-5 max-w-2xl leading-relaxed text-slate-400">
           Turn topics into lessons, flashcards, and quizzes tailored
-          to your experience level. Upload class notes in the Quiz
-          tab, save your materials to a project, or export them
-          for later.
+          to your experience level. Choose 5, 10, or 15 quiz
+          questions, upload class notes, and save or export your
+          materials for later.
         </p>
 
         <div
