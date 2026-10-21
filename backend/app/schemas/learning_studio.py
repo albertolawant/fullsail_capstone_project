@@ -12,6 +12,8 @@ from pydantic import (
 ExperienceLevel = Literal["beginner", "intermediate", "advanced"]
 OutputType = Literal["lesson", "flashcards", "quiz"]
 
+MAX_SOURCE_TEXT_LENGTH = 40000
+
 NonEmptyText = Annotated[
     str,
     StringConstraints(
@@ -41,6 +43,15 @@ GoalText = Annotated[
     ),
 ]
 
+SourceText = Annotated[
+    str,
+    StringConstraints(
+        strict=True,
+        strip_whitespace=True,
+        max_length=MAX_SOURCE_TEXT_LENGTH,
+    ),
+]
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(
@@ -54,6 +65,51 @@ class LearningStudioRequest(StrictModel):
     learning_goal: GoalText = ""
     experience_level: ExperienceLevel = "beginner"
     output_type: OutputType = "lesson"
+    source_text: SourceText = ""
+
+    @model_validator(mode="after")
+    def validate_source_text(self):
+        if self.source_text and self.output_type != "quiz":
+            raise ValueError(
+                "Uploaded class notes can only be used for quizzes."
+            )
+
+        return self
+
+
+class LearningStudioUploadResponse(StrictModel):
+    filename: Annotated[
+        str,
+        StringConstraints(
+            strict=True,
+            strip_whitespace=True,
+            min_length=1,
+            max_length=255,
+        ),
+    ]
+    source_text: Annotated[
+        str,
+        StringConstraints(
+            strict=True,
+            strip_whitespace=True,
+            min_length=1,
+            max_length=MAX_SOURCE_TEXT_LENGTH,
+        ),
+    ]
+    character_count: int = Field(
+        strict=True,
+        ge=1,
+        le=MAX_SOURCE_TEXT_LENGTH,
+    )
+
+    @model_validator(mode="after")
+    def validate_character_count(self):
+        if self.character_count != len(self.source_text):
+            raise ValueError(
+                "Character count must match the extracted text length."
+            )
+
+        return self
 
 
 class LessonExample(StrictModel):

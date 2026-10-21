@@ -17,6 +17,10 @@ import { notifyContentSaved } from "../utils/notifications";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const GENERATION_TIMEOUT_MS = 45000;
+const UPLOAD_TIMEOUT_MS = 30000;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_SOURCE_TEXT_LENGTH = 40000;
+const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".txt"];
 
 const EXPERIENCE_LEVELS = [
   { value: "beginner", label: "Beginner" },
@@ -44,7 +48,7 @@ const OUTPUT_TYPES = [
     label: "Quiz",
     icon: "✓",
     description:
-      "Check your understanding with practice questions about your topic.",
+      "Check your understanding with questions about a topic or your class notes.",
   },
 ];
 
@@ -74,8 +78,16 @@ function getErrorMessage(response, data, fallback) {
     return "You are not authorized to perform this action.";
   }
 
+  if (response.status === 413) {
+    return "The file is too large. Upload a file under 5 MB.";
+  }
+
+  if (response.status === 415) {
+    return "Unsupported file type. Upload a PDF, DOCX, or TXT file.";
+  }
+
   if (response.status === 422) {
-    return "Please check the information you entered.";
+    return "Please check your inputs and uploaded file.";
   }
 
   if (response.status === 429) {
@@ -93,8 +105,7 @@ function getErrorMessage(response, data, fallback) {
   return fallback;
 }
 
-// Each panel stays mounted so switching tabs preserves its form,
-// generated material, save state, and LearningMaterialView progress.
+// Every panel stays mounted to preserve its form and study progress.
 function LearningStudioPanel({
   outputType,
   active,
@@ -112,7 +123,14 @@ function LearningStudioPanel({
   const [loading, setLoading] = useState(false);
   const [generatedResult, setGeneratedResult] = useState(null);
   const [lastRequest, setLastRequest] = useState(null);
+  const [lastRequestFilename, setLastRequestFilename] = useState("");
+  const [generatedRequest, setGeneratedRequest] = useState(null);
+  const [generatedSourceFilename, setGeneratedSourceFilename] = useState("");
   const [resultVersion, setResultVersion] = useState(0);
+
+  const [uploadedNotes, setUploadedNotes] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [saveTitle, setSaveTitle] = useState("");
@@ -125,19 +143,28 @@ function LearningStudioPanel({
   const [exportError, setExportError] = useState("");
 
   const topicRef = useRef(null);
+  const fileInputRef = useRef(null);
   const requestControllerRef = useRef(null);
+  const uploadControllerRef = useRef(null);
   const saveControllerRef = useRef(null);
   const exportBusyRef = useRef(false);
   const mountedRef = useRef(false);
 
-  const busy = loading || saving || exporting;
+  const busy = loading || uploading || saving || exporting;
+  const isQuiz = outputType === "quiz";
   const selectedOutput = OUTPUT_TYPES.find(
     (type) => type.value === outputType
   );
   const displayedOutputLabel = getOutputLabel(outputType);
-
-  // Prefix every field ID because all three panels remain mounted.
   const fieldId = (name) => `learning-${outputType}-${name}`;
+
+  const hasPendingOperation = () =>
+    Boolean(
+      requestControllerRef.current ||
+        uploadControllerRef.current ||
+        saveControllerRef.current ||
+        exportBusyRef.current
+    );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -145,6 +172,7 @@ function LearningStudioPanel({
     return () => {
       mountedRef.current = false;
       requestControllerRef.current?.abort();
+      uploadControllerRef.current?.abort();
       saveControllerRef.current?.abort();
     };
   }, []);
@@ -166,18 +194,190 @@ function LearningStudioPanel({
     setStatusMessage("");
   };
 
-  const generateStudyMaterial = async (request) => {
-    if (
-      requestControllerRef.current ||
-      saveControllerRef.current ||
-      exportBusyRef.current
-    ) {
+  const handleNotesUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    // Allow the same file to be selected again after an error.
+    event.target.value = "";
+
+    if (!file || !isQuiz || hasPendingOperation()) {
       return;
     }
 
-    // Keep this panel's requests tied to its dedicated output type.
+    setUploadError("");
+    clearFeedback();
+    setLastRequest(null);
+    setLastRequestFilename("");
+
+    const extension = file.name
+      .slice(file.name.lastIndexOf("."))
+      .toLowerCase();
+
+    if (!SUPPORTED_EXTENSIONS.includes(extension)) {
+      setUploadError(
+        "Unsupported file type. Upload a PDF, DOCX, or TXT file."
+      );
+      return;
+    }
+
+    if (file.size === 0) {
+      setUploadError(
+        "This file is empty. Upload notes containing text."
+      );
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError(
+        "The file is too large. Upload a file under 5 MB."
+      );
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setUploadError(
+        "Your session has expired. Please sign in again."
+      );
+      return;
+    }
+
+    const controller = new AbortController();
+    uploadControllerRef.current = controller;
+    setUploading(true);
+
+    let timedOut = false;
+
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, UPLOAD_TIMEOUT_MS);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(
+        `${API_BASE_URL}/learning-studio/upload-notes`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+          signal: controller.signal,
+        }
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (controller.signal.aborted) {
+        if (timedOut) {
+          throw new Error("Upload timed out.");
+        }
+
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          getErrorMessage(
+            response,
+            data,
+            "The notes could not be uploaded."
+          )
+        );
+      }
+
+      const sourceText = data?.source_text;
+      const filename = data?.filename;
+
+      if (
+        typeof filename !== "string" ||
+        !filename.trim() ||
+        filename.length > 255 ||
+        typeof sourceText !== "string" ||
+        !sourceText.trim() ||
+        sourceText.length > MAX_SOURCE_TEXT_LENGTH ||
+        !Number.isInteger(data?.character_count) ||
+        data.character_count !== Array.from(sourceText).length
+      ) {
+        throw new Error(
+          "The server did not return valid text from this file."
+        );
+      }
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      // Replace the previous notes only after a successful upload.
+      setUploadedNotes({
+        filename,
+        sourceText,
+        characterCount: data.character_count,
+      });
+    } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
+
+      if (controller.signal.aborted && !timedOut) {
+        return;
+      }
+
+      setUploadError(
+        timedOut
+          ? "Reading the file took too long. Please try again or upload a smaller file."
+          : error instanceof TypeError
+            ? "Could not connect to the server. Check that the backend is running."
+            : error instanceof Error
+              ? error.message
+              : "The notes could not be uploaded."
+      );
+    } finally {
+      window.clearTimeout(timeoutId);
+
+      if (uploadControllerRef.current === controller) {
+        uploadControllerRef.current = null;
+      }
+
+      if (mountedRef.current) {
+        setUploading(false);
+      }
+    }
+  };
+
+  const handleRemoveNotes = () => {
+    if (busy || hasPendingOperation()) {
+      return;
+    }
+
+    setUploadedNotes(null);
+    setUploadError("");
+    setLastRequest(null);
+    setLastRequestFilename("");
+    clearFeedback();
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.focus();
+    }
+  };
+
+  const generateStudyMaterial = async (
+    request,
+    sourceFilename = ""
+  ) => {
+    if (hasPendingOperation()) {
+      return;
+    }
+
     if (request.output_type !== outputType) {
-      setGenerationError("Choose the matching tab for this study material.");
+      setGenerationError(
+        "Choose the matching tab for this study material."
+      );
       return;
     }
 
@@ -187,7 +387,8 @@ function LearningStudioPanel({
     setLoading(true);
     setGenerationError("");
     setStatusMessage("");
-    setLastRequest(request);
+    setLastRequest({ ...request });
+    setLastRequestFilename(sourceFilename);
 
     let timedOut = false;
 
@@ -200,7 +401,9 @@ function LearningStudioPanel({
       const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error("Your session has expired. Please sign in again.");
+        throw new Error(
+          "Your session has expired. Please sign in again."
+        );
       }
 
       const response = await fetch(
@@ -254,6 +457,12 @@ function LearningStudioPanel({
       }
 
       setGeneratedResult(data);
+
+      // Keep the source used by this successful result separate
+      // from the currently selected upload and failed requests.
+      setGeneratedRequest({ ...request });
+      setGeneratedSourceFilename(sourceFilename);
+
       setResultVersion((version) => version + 1);
       setSavedContentId(null);
       setSaveTitle(data.content.title);
@@ -297,24 +506,30 @@ function LearningStudioPanel({
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (busy) {
+    if (busy || hasPendingOperation()) {
       return;
     }
 
     clearFeedback();
     setTopicError("");
+    setLastRequest(null);
+    setLastRequestFilename("");
 
     const cleanedTopic = topic.trim();
     const cleanedGoal = learningGoal.trim();
 
     if (!cleanedTopic || cleanedTopic.length > 200) {
-      setTopicError("Enter a topic with between 1 and 200 characters.");
+      setTopicError(
+        "Enter a topic with between 1 and 200 characters."
+      );
       topicRef.current?.focus();
       return;
     }
 
     if (cleanedGoal.length > 1000) {
-      setGenerationError("Learning goal must be 1,000 characters or fewer.");
+      setGenerationError(
+        "Learning goal must be 1,000 characters or fewer."
+      );
       return;
     }
 
@@ -327,29 +542,41 @@ function LearningStudioPanel({
       return;
     }
 
-    generateStudyMaterial({
+    const request = {
       topic: cleanedTopic,
       learning_goal: cleanedGoal,
       experience_level: experienceLevel,
       output_type: outputType,
-    });
+    };
+
+    if (isQuiz && uploadedNotes) {
+      request.source_text = uploadedNotes.sourceText;
+    }
+
+    generateStudyMaterial(
+      request,
+      isQuiz && uploadedNotes ? uploadedNotes.filename : ""
+    );
   };
 
   const handleRegenerate = () => {
-    if (!generatedResult || busy) {
+    if (
+      !generatedResult ||
+      !generatedRequest ||
+      busy ||
+      hasPendingOperation()
+    ) {
       return;
     }
 
-    generateStudyMaterial({
-      topic: generatedResult.topic,
-      learning_goal: generatedResult.learning_goal,
-      experience_level: generatedResult.experience_level,
-      output_type: outputType,
-    });
+    generateStudyMaterial(
+      { ...generatedRequest },
+      generatedSourceFilename
+    );
   };
 
   const handleReset = () => {
-    if (busy) {
+    if (busy || hasPendingOperation()) {
       return;
     }
 
@@ -358,25 +585,30 @@ function LearningStudioPanel({
     setExperienceLevel("beginner");
     setTopicError("");
     setGeneratedResult(null);
+    setGeneratedRequest(null);
+    setGeneratedSourceFilename("");
     setLastRequest(null);
+    setLastRequestFilename("");
+    setUploadedNotes(null);
+    setUploadError("");
     setSavedContentId(null);
     setSaveTitle("");
     setSaveError("");
     setSaveMessage("");
     setExportError("");
     clearFeedback();
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
     topicRef.current?.focus();
   };
 
   const handleSave = async (event) => {
     event.preventDefault();
 
-    if (
-      !generatedResult ||
-      requestControllerRef.current ||
-      saveControllerRef.current ||
-      exportBusyRef.current
-    ) {
+    if (!generatedResult || hasPendingOperation()) {
       return;
     }
 
@@ -414,7 +646,9 @@ function LearningStudioPanel({
     const token = localStorage.getItem("token");
 
     if (!token) {
-      setSaveError("Your session has expired. Please sign in again.");
+      setSaveError(
+        "Your session has expired. Please sign in again."
+      );
       return;
     }
 
@@ -465,7 +699,9 @@ function LearningStudioPanel({
       }
 
       if (!Number.isInteger(data?.id)) {
-        throw new Error("The server did not confirm the saved material.");
+        throw new Error(
+          "The server did not confirm the saved material."
+        );
       }
 
       if (!mountedRef.current) {
@@ -486,7 +722,10 @@ function LearningStudioPanel({
           projectName: project.title,
         });
       } catch (notificationError) {
-        console.error("Save notification failed:", notificationError);
+        console.error(
+          "Save notification failed:",
+          notificationError
+        );
       }
     } catch (error) {
       if (mountedRef.current) {
@@ -512,12 +751,7 @@ function LearningStudioPanel({
   };
 
   const handleExport = async (format) => {
-    if (
-      !generatedResult ||
-      requestControllerRef.current ||
-      saveControllerRef.current ||
-      exportBusyRef.current
-    ) {
+    if (!generatedResult || hasPendingOperation()) {
       return;
     }
 
@@ -526,7 +760,8 @@ function LearningStudioPanel({
     setExportError("");
 
     try {
-      const title = saveTitle.trim() || generatedResult.content.title;
+      const title =
+        saveTitle.trim() || generatedResult.content.title;
       const body = learningMaterialToMarkdown(generatedResult);
       const fileName = getLearningMaterialFileName(title, format);
 
@@ -595,7 +830,9 @@ function LearningStudioPanel({
           </div>
 
           <p className="mt-4 text-sm text-slate-400">
-            Start with what you want to learn. Your learning goal is optional.
+            {isQuiz
+              ? "Enter a topic and optionally upload your class notes to use as the quiz source."
+              : "Start with what you want to learn. Your learning goal is optional."}
           </p>
 
           <div className="mt-6">
@@ -603,7 +840,8 @@ function LearningStudioPanel({
               htmlFor={fieldId("topic")}
               className="mb-2 block text-sm font-semibold"
             >
-              Topic <span className="text-cyan-300">(required)</span>
+              Topic{" "}
+              <span className="text-cyan-300">(required)</span>
             </label>
             <input
               ref={topicRef}
@@ -631,7 +869,10 @@ function LearningStudioPanel({
               id={fieldId("topic-help")}
               className="mt-2 text-xs text-slate-500"
             >
-              Choose a subject or concept. {topic.length}/200
+              {isQuiz && uploadedNotes
+                ? "Choose a topic covered in your uploaded notes."
+                : "Choose a subject or concept."}{" "}
+              {topic.length}/200
             </p>
             {topicError && (
               <p
@@ -643,6 +884,125 @@ function LearningStudioPanel({
               </p>
             )}
           </div>
+
+          {isQuiz && (
+            <section
+              aria-labelledby={fieldId("notes-title")}
+              aria-busy={uploading}
+              className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4"
+            >
+              <h3
+                id={fieldId("notes-title")}
+                className="font-semibold text-cyan-200"
+              >
+                Class Notes (optional)
+              </h3>
+
+              <p
+                id={fieldId("notes-help")}
+                className="mt-2 text-sm leading-6 text-slate-400"
+              >
+                Upload a PDF, DOCX, or TXT file under 5 MB.
+                Notes can contain up to 40,000 extracted characters.
+                PDFs must contain selectable text and no more than
+                100 pages.
+              </p>
+
+              <p className="mt-2 text-xs leading-6 text-slate-400">
+                When you generate a quiz, the extracted notes are
+                sent to the AI service as source material.
+              </p>
+
+              <label
+                htmlFor={fieldId("notes-file")}
+                className="mb-2 mt-4 block text-sm font-semibold"
+              >
+                {uploadedNotes
+                  ? "Replace Class Notes"
+                  : "Upload Class Notes"}
+              </label>
+
+              <input
+                ref={fileInputRef}
+                id={fieldId("notes-file")}
+                type="file"
+                accept=".pdf,.docx,.txt"
+                onChange={handleNotesUpload}
+                disabled={busy}
+                aria-invalid={Boolean(uploadError)}
+                aria-describedby={
+                  uploadError
+                    ? `${fieldId("notes-help")} ${fieldId("notes-error")}`
+                    : fieldId("notes-help")
+                }
+                className={`${FIELD_CLASS} file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-400 file:px-3 file:py-2 file:font-semibold file:text-slate-950`}
+              />
+
+              <div role="status" aria-live="polite" aria-atomic="true">
+                {uploading ? (
+                  <p className="mt-3 text-sm text-cyan-200">
+                    Uploading and reading your notes...
+                  </p>
+                ) : uploadedNotes ? (
+                  <p className="mt-3 break-words text-sm text-emerald-300">
+                    Ready: {uploadedNotes.filename} —{" "}
+                    {uploadedNotes.characterCount.toLocaleString()}{" "}
+                    characters extracted.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-400">
+                    No notes selected. The quiz will use your topic.
+                  </p>
+                )}
+              </div>
+
+              {uploadError && (
+                <div
+                  id={fieldId("notes-error")}
+                  role="alert"
+                  className="mt-3 rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-300"
+                >
+                  <p>{uploadError}</p>
+                  {uploadedNotes && (
+                    <p className="mt-2">
+                      Your previous notes, {uploadedNotes.filename},
+                      are still selected. Remove them below if you
+                      want to generate without notes.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {uploadedNotes && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleRemoveNotes}
+                    disabled={busy}
+                    className={`${SECONDARY_BUTTON} mt-4`}
+                  >
+                    Remove Notes
+                  </button>
+
+                  <details className="mt-4 rounded-lg border border-slate-700 bg-slate-950/50 p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-cyan-200">
+                      Preview Extracted Text
+                    </summary>
+                    <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-300">
+                      {uploadedNotes.sourceText}
+                    </pre>
+                  </details>
+                </>
+              )}
+
+              <p className="mt-3 text-xs leading-6 text-slate-400">
+                Replacing or removing notes affects the next Generate
+                Quiz request. Regenerate Quiz reuses the notes from
+                the displayed quiz. Notes are cleared when you leave
+                this page or select Clear This Tab.
+              </p>
+            </section>
+          )}
 
           <div className="mt-6">
             <label
@@ -704,9 +1064,9 @@ function LearningStudioPanel({
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-400">
               This tab generates{" "}
-              {displayedOutputLabel.toLowerCase()} material. Each tab
-              keeps its own study settings and results while you stay
-              on this page.
+              {displayedOutputLabel.toLowerCase()} material. Each
+              tab keeps its own study settings and results while
+              you stay on this page.
             </p>
           </div>
 
@@ -716,9 +1076,11 @@ function LearningStudioPanel({
               disabled={busy}
               className={PRIMARY_BUTTON}
             >
-              {loading
-                ? "Generating..."
-                : `Generate ${displayedOutputLabel}`}
+              {uploading
+                ? "Reading Notes..."
+                : loading
+                  ? "Generating..."
+                  : `Generate ${displayedOutputLabel}`}
             </button>
             <button
               type="button"
@@ -743,11 +1105,12 @@ function LearningStudioPanel({
             >
               Your {displayedOutputLabel}
             </h2>
+
             {generatedResult && (
               <button
                 type="button"
                 onClick={handleRegenerate}
-                disabled={busy}
+                disabled={busy || !generatedRequest}
                 className={SECONDARY_BUTTON}
               >
                 Regenerate {displayedOutputLabel}
@@ -756,8 +1119,10 @@ function LearningStudioPanel({
           </div>
 
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Regenerate uses the displayed material’s study settings.
-            For different settings, update the form and select Generate.
+            Regenerate uses the displayed material’s study settings
+            {isQuiz ? " and original notes, if any" : ""}.
+            For different settings{isQuiz ? " or notes" : ""},
+            update the form and select Generate.
           </p>
 
           <div role="status" aria-live="polite" aria-atomic="true">
@@ -786,15 +1151,25 @@ function LearningStudioPanel({
               <p className="mt-2 text-sm text-red-300">
                 {generationError}
               </p>
+
               {lastRequest && (
                 <>
                   <p className="mt-2 break-words text-xs text-slate-400">
                     Retry uses your last submitted settings for{" "}
-                    {lastRequest.topic}.
+                    {lastRequest.topic}
+                    {lastRequestFilename
+                      ? ` and notes from ${lastRequestFilename}`
+                      : ""}
+                    .
                   </p>
                   <button
                     type="button"
-                    onClick={() => generateStudyMaterial(lastRequest)}
+                    onClick={() =>
+                      generateStudyMaterial(
+                        lastRequest,
+                        lastRequestFilename
+                      )
+                    }
                     disabled={busy}
                     className={`${SECONDARY_BUTTON} mt-3`}
                   >
@@ -814,17 +1189,36 @@ function LearningStudioPanel({
                     {generatedResult.topic}
                   </dd>
                 </div>
+
                 <div>
-                  <dt className="text-slate-400">Experience Level</dt>
+                  <dt className="text-slate-400">
+                    Experience Level
+                  </dt>
                   <dd className="mt-1 capitalize">
                     {generatedResult.experience_level}
                   </dd>
                 </div>
+
                 {generatedResult.learning_goal && (
                   <div>
-                    <dt className="text-slate-400">Learning Goal</dt>
+                    <dt className="text-slate-400">
+                      Learning Goal
+                    </dt>
                     <dd className="mt-1 whitespace-pre-wrap break-words">
                       {generatedResult.learning_goal}
+                    </dd>
+                  </div>
+                )}
+
+                {isQuiz && (
+                  <div>
+                    <dt className="text-slate-400">
+                      Quiz Source
+                    </dt>
+                    <dd className="mt-1 break-words">
+                      {generatedSourceFilename
+                        ? `Class notes: ${generatedSourceFilename}`
+                        : "Topic-based generation"}
                     </dd>
                   </div>
                 )}
@@ -835,7 +1229,10 @@ function LearningStudioPanel({
                   Save and Export
                 </h3>
 
-                <form onSubmit={handleSave} className="mt-4 space-y-4">
+                <form
+                  onSubmit={handleSave}
+                  className="mt-4 space-y-4"
+                >
                   <div>
                     <label
                       htmlFor={fieldId("save-title")}
@@ -880,7 +1277,10 @@ function LearningStudioPanel({
                           : "Choose a project"}
                       </option>
                       {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
+                        <option
+                          key={project.id}
+                          value={project.id}
+                        >
                           {project.title}
                         </option>
                       ))}
@@ -891,13 +1291,16 @@ function LearningStudioPanel({
                     !projectsError &&
                     projects.length === 0 && (
                       <p className="text-sm text-slate-400">
-                        Create a project on the Projects page, then
-                        reload the project list here.
+                        Create a project on the Projects page,
+                        then reload the project list here.
                       </p>
                     )}
 
                   {projectsError && (
-                    <p role="alert" className="text-sm text-red-300">
+                    <p
+                      role="alert"
+                      className="text-sm text-red-300"
+                    >
                       {projectsError}
                     </p>
                   )}
@@ -931,19 +1334,26 @@ function LearningStudioPanel({
 
                   {savedContentId && (
                     <p className="text-xs leading-6 text-slate-400">
-                      Saving again updates this saved item and preserves
-                      its previous version. Generating new material
-                      starts a new item.
+                      Saving again updates this saved item and
+                      preserves its previous version. Generating
+                      new material starts a new item.
                     </p>
                   )}
 
                   {saveError && (
-                    <p role="alert" className="text-sm text-red-300">
+                    <p
+                      role="alert"
+                      className="text-sm text-red-300"
+                    >
                       {saveError}
                     </p>
                   )}
+
                   {saveMessage && (
-                    <p role="status" className="text-sm text-emerald-300">
+                    <p
+                      role="status"
+                      className="text-sm text-emerald-300"
+                    >
                       {saveMessage}
                     </p>
                   )}
@@ -969,16 +1379,25 @@ function LearningStudioPanel({
                 </div>
 
                 <p className="mt-3 text-xs leading-6 text-slate-400">
-                  Exports include the complete material. Quiz exports
-                  include correct answers and explanations in an answer key.
+                  Exports include the complete material. Quiz
+                  exports include correct answers and explanations
+                  in an answer key.
                 </p>
+
                 {exporting && (
-                  <p role="status" className="mt-2 text-sm text-cyan-200">
+                  <p
+                    role="status"
+                    className="mt-2 text-sm text-cyan-200"
+                  >
                     Preparing your export...
                   </p>
                 )}
+
                 {exportError && (
-                  <p role="alert" className="mt-2 text-sm text-red-300">
+                  <p
+                    role="alert"
+                    className="mt-2 text-sm text-red-300"
+                  >
                     {exportError}
                   </p>
                 )}
@@ -999,10 +1418,13 @@ function LearningStudioPanel({
                 {selectedOutput?.icon}
               </span>
               <p className="mt-3 font-semibold">
-                Your {displayedOutputLabel.toLowerCase()} will appear here
+                Your {displayedOutputLabel.toLowerCase()} will
+                appear here
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Enter a topic and select Generate {displayedOutputLabel}.
+                Enter a topic
+                {isQuiz ? ", optionally upload notes," : ""} and
+                select Generate {displayedOutputLabel}.
               </p>
             </div>
           ) : null}
@@ -1031,13 +1453,21 @@ function LearningStudio() {
         const token = localStorage.getItem("token");
 
         if (!token) {
-          throw new Error("Your session has expired. Please sign in again.");
+          throw new Error(
+            "Your session has expired. Please sign in again."
+          );
         }
 
-        const response = await fetch(`${API_BASE_URL}/projects/`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          `${API_BASE_URL}/projects/`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
         const data = await response.json().catch(() => null);
 
         if (controller.signal.aborted) {
@@ -1055,7 +1485,9 @@ function LearningStudio() {
         }
 
         if (!Array.isArray(data)) {
-          throw new Error("The server returned invalid project information.");
+          throw new Error(
+            "The server returned invalid project information."
+          );
         }
 
         setProjects(data);
@@ -1086,7 +1518,8 @@ function LearningStudio() {
       nextIndex = (currentIndex + 1) % OUTPUT_TYPES.length;
     } else if (event.key === "ArrowLeft") {
       nextIndex =
-        (currentIndex - 1 + OUTPUT_TYPES.length) % OUTPUT_TYPES.length;
+        (currentIndex - 1 + OUTPUT_TYPES.length) %
+        OUTPUT_TYPES.length;
     } else if (event.key === "Home") {
       nextIndex = 0;
     } else if (event.key === "End") {
@@ -1122,8 +1555,9 @@ function LearningStudio() {
 
         <p className="mt-5 max-w-2xl leading-relaxed text-slate-400">
           Turn topics into lessons, flashcards, and quizzes tailored
-          to your experience level. Save your materials to a project
-          or export them for later.
+          to your experience level. Upload class notes in the Quiz
+          tab, save your materials to a project, or export them
+          for later.
         </p>
 
         <div
@@ -1148,14 +1582,19 @@ function LearningStudio() {
                 aria-controls={`learning-studio-panel-${tab.value}`}
                 tabIndex={isActive ? 0 : -1}
                 onClick={() => setActiveTab(tab.value)}
-                onKeyDown={(event) => handleTabKeyDown(event, index)}
+                onKeyDown={(event) =>
+                  handleTabKeyDown(event, index)
+                }
                 className={`min-w-0 flex-1 rounded-xl px-2 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 sm:flex-none sm:px-5 ${
                   isActive
                     ? "border border-cyan-400/40 bg-cyan-400/15 text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,0.10)]"
                     : "border border-transparent text-slate-400 hover:bg-slate-900 hover:text-white"
                 }`}
               >
-                <span aria-hidden="true" className="mr-2 hidden sm:inline">
+                <span
+                  aria-hidden="true"
+                  className="mr-2 hidden sm:inline"
+                >
                   {tab.icon}
                 </span>
                 {tab.label}
