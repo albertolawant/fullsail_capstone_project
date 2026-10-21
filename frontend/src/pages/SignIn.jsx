@@ -5,6 +5,15 @@ import logo from "../assets/logo.png";
 
 const INTEREST_PROMPT_KEY = "tanioInterestPromptPending";
 
+const LOGO_STYLE = {
+  maskImage:
+    "linear-gradient(to right, transparent 0%, black 6%, black 95%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 26%, black 70%, transparent 100%)",
+  maskComposite: "intersect",
+  WebkitMaskImage:
+    "linear-gradient(to right, transparent 0%, black 6%, black 95%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 26%, black 70%, transparent 100%)",
+  WebkitMaskComposite: "source-in",
+};
+
 function SignIn() {
   const navigate = useNavigate();
 
@@ -101,16 +110,14 @@ function SignIn() {
           aria-labelledby="signin-title"
           className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 shadow-xl"
         >
-          {/* Existing logo artwork */}
-          <div className="border-b border-slate-800 bg-slate-950 px-6 py-6">
-            <div className="mx-auto w-full max-w-[240px] overflow-hidden rounded-2xl bg-[#010A24]">
-              <img
-                src={logo}
-                alt="Tanio AI"
-                className="block h-auto w-full object-contain"
-                draggable={false}
-              />
-            </div>
+          <div className="relative aspect-[2.7/1] w-full overflow-hidden border-b border-slate-800 bg-slate-950">
+            <img
+              src={logo}
+              alt="Tanio AI"
+              className="absolute left-1/2 top-1/2 block h-auto w-[105%] max-w-none -translate-x-1/2 -translate-y-1/2"
+              style={LOGO_STYLE}
+              draggable={false}
+            />
           </div>
 
           <div className="p-6 sm:p-8">
@@ -190,7 +197,9 @@ function SignIn() {
                 <dl className="mt-3 space-y-2">
                   <div className="flex flex-wrap gap-x-2">
                     <dt className="text-slate-400">Email:</dt>
-                    <dd className="break-all">demo@tanio.ai</dd>
+                    <dd className="break-all">
+                      demo@tanio.ai
+                    </dd>
                   </div>
 
                   <div className="flex flex-wrap gap-x-2">
