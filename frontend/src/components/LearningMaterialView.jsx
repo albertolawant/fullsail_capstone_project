@@ -10,6 +10,43 @@ const PRIMARY_BUTTON =
 const SECONDARY_BUTTON =
   "rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50";
 
+// Create independent question objects for an attempt.
+// The saved quiz and question bank are never modified.
+function prepareAttemptQuestions(questions, shuffleAnswers) {
+  return questions.map((question) => {
+    const choiceIndexes = question.choices.map(
+      (_, index) => index
+    );
+
+    if (shuffleAnswers) {
+      for (
+        let index = choiceIndexes.length - 1;
+        index > 0;
+        index -= 1
+      ) {
+        const randomIndex = Math.floor(
+          Math.random() * (index + 1)
+        );
+
+        [choiceIndexes[index], choiceIndexes[randomIndex]] = [
+          choiceIndexes[randomIndex],
+          choiceIndexes[index],
+        ];
+      }
+    }
+
+    return {
+      ...question,
+      choices: choiceIndexes.map(
+        (originalIndex) => question.choices[originalIndex]
+      ),
+      correct_answer_index: choiceIndexes.indexOf(
+        question.correct_answer_index
+      ),
+    };
+  });
+}
+
 export function LessonView({ lesson }) {
   return (
     <article className="mt-6 min-w-0 space-y-6">
@@ -223,21 +260,26 @@ export function FlashcardsView({ deck, disabled = false }) {
 }
 
 export function QuizView({ quiz, disabled = false }) {
-  // The backend already selected the initial attempt.
   const [attemptQuestions, setAttemptQuestions] = useState(
-    () => [...quiz.questions]
+    () => prepareAttemptQuestions(quiz.questions, false)
   );
   const [selectedAnswers, setSelectedAnswers] = useState(
     () => quiz.questions.map(() => null)
   );
   const [submitted, setSubmitted] = useState(false);
   const [attemptNumber, setAttemptNumber] = useState(1);
+
   const [randomizeQuestions, setRandomizeQuestions] = useState(
     () => quiz.randomize_questions ?? false
   );
   const [attemptRandomized, setAttemptRandomized] = useState(
     () => quiz.randomize_questions ?? false
   );
+
+  const [shuffleAnswers, setShuffleAnswers] = useState(false);
+  const [attemptAnswersShuffled, setAttemptAnswersShuffled] =
+    useState(false);
+
   const [attemptError, setAttemptError] = useState("");
   const [attemptMessage, setAttemptMessage] = useState("");
 
@@ -255,6 +297,7 @@ export function QuizView({ quiz, disabled = false }) {
   ).length;
   const allAnswered = answeredCount === totalQuestions;
 
+  // Each attempt question has its own correctly remapped answer index.
   const correctCount = attemptQuestions.reduce(
     (total, question, index) =>
       total +
@@ -306,6 +349,18 @@ export function QuizView({ quiz, disabled = false }) {
     setAttemptMessage("");
   };
 
+  const handleShuffleAnswersChange = (event) => {
+    if (disabled) {
+      return;
+    }
+
+    // This changes only the setting for the next attempt.
+    // The current choice order and selected answers stay fixed.
+    setShuffleAnswers(event.target.checked);
+    setAttemptError("");
+    setAttemptMessage("");
+  };
+
   const handleNewAttempt = () => {
     if (disabled) {
       return;
@@ -314,22 +369,35 @@ export function QuizView({ quiz, disabled = false }) {
     setAttemptError("");
 
     try {
-      const nextQuestions = createQuizAttempt(quiz, {
+      // Select canonical questions from the original quiz or bank.
+      const selectedQuestions = createQuizAttempt(quiz, {
         randomize: randomizeQuestions,
         previousQuestions: attemptQuestions,
       });
 
-      // Update the entire attempt together. A failed selection
-      // leaves the current questions, answers, and score intact.
+      // Shuffle only when an attempt starts, never during rendering.
+      const nextQuestions = prepareAttemptQuestions(
+        selectedQuestions,
+        shuffleAnswers
+      );
+
       setAttemptQuestions(nextQuestions);
       setSelectedAnswers(nextQuestions.map(() => null));
       setSubmitted(false);
       setAttemptNumber((number) => number + 1);
       setAttemptRandomized(randomizeQuestions);
+      setAttemptAnswersShuffled(shuffleAnswers);
+
       setAttemptMessage(
-        randomizeQuestions
-          ? "A different question set is ready. Previous answers and scores have been cleared."
-          : "The original question set is ready. Previous answers and scores have been cleared."
+        `${
+          randomizeQuestions
+            ? "A different question set is ready."
+            : "The original question set is ready."
+        } ${
+          shuffleAnswers
+            ? "Answer choices have been shuffled."
+            : "Answer choices use their original order."
+        } Previous answers and scores have been cleared.`
       );
 
       quizTitleRef.current?.focus();
@@ -372,7 +440,10 @@ export function QuizView({ quiz, disabled = false }) {
         <p className="mt-2 text-sm leading-6 text-slate-400">
           {attemptRandomized
             ? "This attempt uses a randomly selected question set."
-            : "This attempt uses the original question set."}
+            : "This attempt uses the original question set."}{" "}
+          {attemptAnswersShuffled
+            ? "Answer shuffling is on for this attempt."
+            : "Answers use their original order for this attempt."}
         </p>
 
         <label
@@ -400,8 +471,42 @@ export function QuizView({ quiz, disabled = false }) {
           className="mt-2 text-sm leading-6 text-slate-400"
         >
           Turn this on to select {requestedCount} questions from
-          the bank. Turn it off to repeat the original set.
-          Changes apply when you select Start New Attempt.
+          the bank. Turn it off to repeat the original question set.
+        </p>
+
+        <label
+          htmlFor={`${id}-shuffle-answers`}
+          className={`mt-4 flex items-start gap-3 ${
+            disabled ? "cursor-not-allowed" : "cursor-pointer"
+          }`}
+        >
+          <input
+            id={`${id}-shuffle-answers`}
+            type="checkbox"
+            checked={shuffleAnswers}
+            onChange={handleShuffleAnswersChange}
+            disabled={disabled}
+            aria-describedby={`${id}-shuffle-help`}
+            className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
+          />
+          <span className="text-sm font-semibold leading-6 text-white">
+            Shuffle answer choices for the next attempt
+          </span>
+        </label>
+
+        <p
+          id={`${id}-shuffle-help`}
+          className="mt-2 text-sm leading-6 text-slate-400"
+        >
+          Rearrange the answer choices when the next attempt
+          starts. Their order stays fixed while you answer and
+          review that attempt. This works even when random
+          question selection is off.
+        </p>
+
+        <p className="mt-3 text-xs leading-6 text-slate-400">
+          Both settings apply when you select Start New Attempt.
+          Changing a checkbox does not change your current attempt.
         </p>
 
         {randomizeQuestions && !canSelectDifferentSets && (
@@ -410,7 +515,7 @@ export function QuizView({ quiz, disabled = false }) {
             className="mt-3 rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-sm leading-6 text-amber-200"
           >
             {bankSize === 0
-              ? "This quiz has no question bank. Generate a new quiz with random selection enabled, or turn this option off to repeat the original questions."
+              ? "This quiz has no question bank. Generate a new quiz with random selection enabled, or turn random selection off. Answer shuffling can still be used with the original question set."
               : `The bank contains ${bankSize} questions. Different ${requestedCount}-question sets require at least ${
                   requestedCount + 1
                 } questions. Generate a larger bank or turn random selection off.`}
@@ -445,7 +550,11 @@ export function QuizView({ quiz, disabled = false }) {
           </p>
         )}
 
-        <div role="status" aria-live="polite" aria-atomic="true">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           {attemptMessage && (
             <p className="mt-3 text-sm text-emerald-300">
               {attemptMessage}
@@ -479,8 +588,8 @@ export function QuizView({ quiz, disabled = false }) {
           <div className="mt-6 space-y-5">
             {attemptQuestions.map((question, index) => {
               const selectedIndex = selectedAnswers[index];
-              const isCorrect =
-                selectedIndex === question.correct_answer_index;
+              const correctIndex = question.correct_answer_index;
+              const isCorrect = selectedIndex === correctIndex;
 
               return (
                 <article
@@ -516,6 +625,7 @@ export function QuizView({ quiz, disabled = false }) {
                         Your Answer
                       </dt>
                       <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-200">
+                        {String.fromCharCode(65 + selectedIndex)}.{" "}
                         {question.choices[selectedIndex]}
                       </dd>
                     </div>
@@ -524,11 +634,8 @@ export function QuizView({ quiz, disabled = false }) {
                         Correct Answer
                       </dt>
                       <dd className="mt-1 whitespace-pre-wrap break-words leading-7 text-slate-200">
-                        {
-                          question.choices[
-                            question.correct_answer_index
-                          ]
-                        }
+                        {String.fromCharCode(65 + correctIndex)}.{" "}
+                        {question.choices[correctIndex]}
                       </dd>
                     </div>
                     <div>
