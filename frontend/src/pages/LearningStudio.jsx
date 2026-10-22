@@ -897,7 +897,7 @@ function LearningStudioPanel({
           onSubmit={handleSubmit}
           noValidate
           aria-labelledby={fieldId("form-title")}
-          className="min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
+          className="relative min-w-0 rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
         >
           <div className="flex items-start gap-3">
             <div
@@ -1274,7 +1274,7 @@ function LearningStudioPanel({
         <section
           aria-labelledby={fieldId("output-title")}
           aria-busy={busy}
-          className="w-full min-w-0 rounded-2xl border border-slate-700 bg-slate-950/40 p-5 sm:p-6"
+          className="relative w-full min-w-0 rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.06),transparent_28%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2
@@ -1759,37 +1759,102 @@ function LearningStudio() {
   };
 
   return (
-    <main className="min-h-screen w-full bg-slate-950 p-5 text-white sm:p-8">
-      <section className="rounded-2xl border border-cyan-500/20 bg-slate-900 p-6 shadow-xl sm:p-8">
-        <header className="flex items-center gap-4">
-          <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-400/10 text-3xl"
-            aria-hidden="true"
-          >
-            🎓
+    <main className="min-h-screen w-full bg-slate-950 px-3 py-4 text-white sm:px-4 lg:px-5 xl:px-6">
+      <section>
+        {/* Hero Header */}
+        <div className="group relative mb-5 overflow-hidden rounded-[22px] border border-cyan-400/20 bg-slate-950/80 shadow-[0_30px_100px_rgba(0,0,0,0.34)] ring-1 ring-white/[0.035] backdrop-blur-2xl">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-20 -top-32 h-72 w-72 rounded-full bg-cyan-400/[0.13] blur-[90px]" />
+            <div className="absolute left-[35%] -top-40 h-80 w-80 rounded-full bg-sky-500/[0.07] blur-[110px]" />
+            <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-violet-500/[0.09] blur-[100px]" />
+            <div className="absolute inset-0 bg-[linear-gradient(110deg,transparent_0%,rgba(255,255,255,0.025)_38%,transparent_62%)]" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
+            <div className="absolute bottom-0 left-[8%] right-[8%] h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300">
-              Tanio AI
-            </p>
-            <h1 className="mt-2 text-3xl font-bold sm:text-4xl">
-              Learning Studio
-            </h1>
+
+          <div className="relative flex flex-col gap-5 p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between xl:px-7 xl:py-6">
+            <div className="flex min-w-0 items-center gap-5">
+              <div className="relative flex h-[68px] w-[68px] shrink-0 items-center justify-center">
+                <div className="absolute inset-0 rounded-[20px] bg-cyan-400/15 blur-xl transition duration-500 group-hover:bg-cyan-400/25" />
+                <div className="absolute inset-0 rotate-6 rounded-[20px] border border-cyan-400/15 bg-cyan-500/[0.04]" />
+
+                <div className="relative flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-[18px] border border-cyan-300/30 bg-gradient-to-br from-cyan-400/25 via-sky-500/10 to-slate-950 text-[28px] text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_35px_rgba(34,211,238,0.14)]">
+                  <span className="absolute inset-0 bg-gradient-to-br from-white/[0.12] via-transparent to-transparent" />
+                  <span className="relative drop-shadow-[0_0_12px_rgba(103,232,249,0.75)]">
+                    🎓
+                  </span>
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+                    Tanio Intelligence
+                  </span>
+
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-300/90">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_9px_rgba(52,211,153,0.85)]" />
+                    Online
+                  </span>
+                </div>
+
+                <h1 className="bg-gradient-to-r from-white via-slate-100 to-cyan-200 bg-clip-text text-3xl font-black tracking-[-0.035em] text-transparent sm:text-4xl">
+                  Learning Studio
+                </h1>
+
+                <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
+                  Turn topics and class notes into personalized lessons,
+                  flashcards, and quizzes. Practice, save, and export your
+                  study materials.
+                </p>
+              </div>
+            </div>
+
+            <div className="relative overflow-hidden rounded-2xl border border-cyan-400/15 bg-gradient-to-br from-slate-950/80 via-slate-950/60 to-violet-950/25 p-[1px] shadow-[0_16px_45px_rgba(0,0,0,0.20)] xl:min-w-[470px]">
+              <div className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-violet-400/[0.08] blur-3xl" />
+
+              <div className="relative flex items-center gap-4 rounded-[15px] bg-slate-950/65 px-4 py-3.5">
+                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/[0.08] text-lg text-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.10)]">
+                  <span className="absolute h-6 w-6 animate-ping rounded-full border border-cyan-400/10" />
+                  <span className="relative">◎</span>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate font-bold text-white">
+                      AI Learning Engine
+                    </p>
+
+                    <span className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+                      Ready
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-xs leading-5 text-slate-400 sm:text-sm">
+                    Explore → learn → practice → master
+                  </p>
+
+                  <div
+                    className="mt-2.5 flex items-center gap-1.5"
+                    aria-hidden="true"
+                  >
+                    <span className="h-1 flex-1 rounded-full bg-cyan-400/70 shadow-[0_0_8px_rgba(34,211,238,0.35)]" />
+                    <span className="h-1 flex-1 rounded-full bg-sky-400/55" />
+                    <span className="h-1 flex-1 rounded-full bg-violet-400/45" />
+                    <span className="h-1 flex-1 rounded-full bg-emerald-400/45" />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </header>
+        </div>
 
-        <p className="mt-5 max-w-2xl leading-relaxed text-slate-400">
-          Turn topics into lessons, flashcards, and quizzes tailored
-          to your experience level. Choose your quiz length, practice
-          with different question sets, upload class notes, and save
-          or export your materials for later.
-        </p>
-
+        {/* Learning Tools Tabs */}
         <div
           role="tablist"
           aria-label="Learning Studio tools"
           aria-orientation="horizontal"
-          className="mb-6 mt-8 flex gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.18)]"
+          className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.18)]"
         >
           {OUTPUT_TYPES.map((tab, index) => {
             const isActive = activeTab === tab.value;
