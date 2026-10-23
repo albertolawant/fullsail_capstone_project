@@ -64,6 +64,15 @@ const SECONDARY_BUTTON =
 const FIELD_CLASS =
   "w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 disabled:opacity-60";
 
+const SETUP_PANEL_CLASS =
+  "relative min-w-0 rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6";
+
+const OUTPUT_PANEL_CLASS =
+  "relative w-full min-w-0 rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.06),transparent_28%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6";
+
+const PRACTICE_BUTTON =
+  "inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-200/30 bg-gradient-to-r from-cyan-300 to-sky-400 px-5 py-3.5 font-bold text-slate-950 shadow-[0_10px_30px_rgba(34,211,238,0.12)] transition hover:from-cyan-200 hover:to-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50";
+
 function getOutputLabel(outputType) {
   return LEARNING_STUDIO_LABELS[outputType] || "Study Material";
 }
@@ -77,38 +86,20 @@ function getErrorMessage(response, data, fallback) {
     return data.detail;
   }
 
-  if (response.status === 403) {
-    return "You are not authorized to perform this action.";
-  }
+  const messages = {
+    403: "You are not authorized to perform this action.",
+    413: "The file is too large. Upload a file under 5 MB.",
+    415: "Unsupported file type. Upload a PDF, DOCX, or TXT file.",
+    422: "Please check your inputs and uploaded file.",
+    429: "Too many requests. Please wait a moment and retry.",
+    503: "The service is temporarily unavailable. Please retry shortly.",
+    504: "The request took too long. Please retry.",
+  };
 
-  if (response.status === 413) {
-    return "The file is too large. Upload a file under 5 MB.";
-  }
-
-  if (response.status === 415) {
-    return "Unsupported file type. Upload a PDF, DOCX, or TXT file.";
-  }
-
-  if (response.status === 422) {
-    return "Please check your inputs and uploaded file.";
-  }
-
-  if (response.status === 429) {
-    return "Too many requests. Please wait a moment and retry.";
-  }
-
-  if (response.status === 503) {
-    return "The service is temporarily unavailable. Please retry shortly.";
-  }
-
-  if (response.status === 504) {
-    return "The request took too long. Please retry.";
-  }
-
-  return fallback;
+  return messages[response.status] || fallback;
 }
 
-// Every panel stays mounted to preserve its form and study progress.
+// Panels stay mounted to preserve their forms and study progress.
 function LearningStudioPanel({
   outputType,
   active,
@@ -149,7 +140,11 @@ function LearningStudioPanel({
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [sidebarHeight, setSidebarHeight] = useState(600);
 
+  const sidebarRef = useRef(null);
+  const lessonOutputRef = useRef(null);
+  const practiceOutputRef = useRef(null);
   const topicRef = useRef(null);
   const questionCountRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -161,6 +156,10 @@ function LearningStudioPanel({
 
   const busy = loading || uploading || saving || exporting;
   const isQuiz = outputType === "quiz";
+  const isLesson = outputType === "lesson";
+  const isFlashcards = outputType === "flashcards";
+  const isPractice = isQuiz || isFlashcards;
+
   const selectedOutput = OUTPUT_TYPES.find(
     (type) => type.value === outputType
   );
@@ -198,6 +197,48 @@ function LearningStudioPanel({
     );
   }, [projects, projectsLoading, projectsError]);
 
+  // Every output panel follows its own sidebar height.
+  // Measuring only the sidebar prevents generated content from growing the row.
+  useEffect(() => {
+    if (!active || !sidebarRef.current) {
+      return undefined;
+    }
+
+    const sidebar = sidebarRef.current;
+
+    const updateHeight = () => {
+      const height = Math.ceil(sidebar.getBoundingClientRect().height);
+
+      if (height > 0) {
+        setSidebarHeight((currentHeight) =>
+          currentHeight === height ? currentHeight : height
+        );
+      }
+    };
+
+    updateHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateHeight);
+      return () => window.removeEventListener("resize", updateHeight);
+    }
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(sidebar);
+
+    return () => observer.disconnect();
+  }, [active]);
+
+  useEffect(() => {
+    if (isLesson && lessonOutputRef.current) {
+      lessonOutputRef.current.scrollTop = 0;
+    }
+
+    if (isPractice && practiceOutputRef.current) {
+      practiceOutputRef.current.scrollTop = 0;
+    }
+  }, [isLesson, isPractice, resultVersion]);
+
   const clearFeedback = () => {
     setGenerationError("");
     setStatusMessage("");
@@ -210,8 +251,6 @@ function LearningStudioPanel({
 
   const handleNotesUpload = async (event) => {
     const file = event.target.files?.[0];
-
-    // Allow the same file to be selected again after an error.
     event.target.value = "";
 
     if (!file || !isQuiz || hasPendingOperation()) {
@@ -234,25 +273,19 @@ function LearningStudioPanel({
     }
 
     if (file.size === 0) {
-      setUploadError(
-        "This file is empty. Upload notes containing text."
-      );
+      setUploadError("This file is empty. Upload notes containing text.");
       return;
     }
 
     if (file.size > MAX_UPLOAD_BYTES) {
-      setUploadError(
-        "The file is too large. Upload a file under 5 MB."
-      );
+      setUploadError("The file is too large. Upload a file under 5 MB.");
       return;
     }
 
     const token = localStorage.getItem("token");
 
     if (!token) {
-      setUploadError(
-        "Your session has expired. Please sign in again."
-      );
+      setUploadError("Your session has expired. Please sign in again.");
       return;
     }
 
@@ -275,9 +308,7 @@ function LearningStudioPanel({
         `${API_BASE_URL}/learning-studio/upload-notes`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
           body: formData,
           signal: controller.signal,
         }
@@ -289,7 +320,6 @@ function LearningStudioPanel({
         if (timedOut) {
           throw new Error("Upload timed out.");
         }
-
         return;
       }
 
@@ -378,10 +408,7 @@ function LearningStudioPanel({
     }
   };
 
-  const generateStudyMaterial = async (
-    request,
-    sourceFilename = ""
-  ) => {
+  const generateStudyMaterial = async (request, sourceFilename = "") => {
     if (hasPendingOperation()) {
       return;
     }
@@ -401,10 +428,7 @@ function LearningStudioPanel({
       return;
     }
 
-    if (
-      isQuiz &&
-      typeof request.randomize_questions !== "boolean"
-    ) {
+    if (isQuiz && typeof request.randomize_questions !== "boolean") {
       setGenerationError(
         "Choose whether to enable random question selection."
       );
@@ -436,9 +460,7 @@ function LearningStudioPanel({
       const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error(
-          "Your session has expired. Please sign in again."
-        );
+        throw new Error("Your session has expired. Please sign in again.");
       }
 
       const response = await fetch(
@@ -460,7 +482,6 @@ function LearningStudioPanel({
         if (timedOut) {
           throw new Error("Generation timed out.");
         }
-
         return;
       }
 
@@ -488,17 +509,14 @@ function LearningStudioPanel({
       }
 
       if (isQuiz) {
-        if (
-          data.content.questions.length !== request.question_count
-        ) {
+        if (data.content.questions.length !== request.question_count) {
           throw new Error(
             `The quiz did not contain the requested ${request.question_count} questions. Please try again.`
           );
         }
 
         if (
-          data.content.randomize_questions !==
-          request.randomize_questions
+          data.content.randomize_questions !== request.randomize_questions
         ) {
           throw new Error(
             "The quiz did not match your random selection setting. Please try again."
@@ -507,8 +525,7 @@ function LearningStudioPanel({
 
         if (
           request.randomize_questions &&
-          (data.content.question_bank?.length ?? 0) <=
-            request.question_count
+          (data.content.question_bank?.length ?? 0) <= request.question_count
         ) {
           throw new Error(
             "The question bank is too small for different question sets. Choose fewer questions, disable random selection, or provide more detailed notes."
@@ -521,12 +538,8 @@ function LearningStudioPanel({
       }
 
       setGeneratedResult(data);
-
-      // Preserve all settings used for the successful generation.
-      // Form edits and failed requests do not replace this snapshot.
       setGeneratedRequest({ ...request });
       setGeneratedSourceFilename(sourceFilename);
-
       setResultVersion((version) => version + 1);
       setSavedContentId(null);
       setSaveTitle(data.content.title);
@@ -536,11 +549,11 @@ function LearningStudioPanel({
 
       if (isQuiz && request.randomize_questions) {
         setStatusMessage(
-          `Your ${request.question_count}-question quiz is ready with a bank of ${data.content.question_bank.length} questions. Use Start New Attempt below to select a different set.`
+          `Your ${request.question_count}-question quiz is ready with a bank of ${data.content.question_bank.length} questions. Use Start New Attempt to select a different set.`
         );
       } else if (isQuiz) {
         setStatusMessage(
-          `Your ${request.question_count}-question quiz is ready. You can study, save, or export it.`
+          `Your ${request.question_count}-question quiz is ready. You can practice, save, or export it.`
         );
       } else {
         setStatusMessage(
@@ -593,17 +606,13 @@ function LearningStudioPanel({
     const cleanedGoal = learningGoal.trim();
 
     if (!cleanedTopic || cleanedTopic.length > 200) {
-      setTopicError(
-        "Enter a topic with between 1 and 200 characters."
-      );
+      setTopicError("Enter a topic with between 1 and 200 characters.");
       topicRef.current?.focus();
       return;
     }
 
     if (cleanedGoal.length > 1000) {
-      setGenerationError(
-        "Learning goal must be 1,000 characters or fewer."
-      );
+      setGenerationError("Learning goal must be 1,000 characters or fewer.");
       return;
     }
 
@@ -616,10 +625,7 @@ function LearningStudioPanel({
       return;
     }
 
-    if (
-      isQuiz &&
-      !QUIZ_QUESTION_COUNTS.includes(questionCount)
-    ) {
+    if (isQuiz && !QUIZ_QUESTION_COUNTS.includes(questionCount)) {
       setGenerationError("Choose 5, 10, or 15 quiz questions.");
       questionCountRef.current?.focus();
       return;
@@ -722,7 +728,6 @@ function LearningStudioPanel({
     let body;
 
     try {
-      // Includes the original set and full question bank.
       body = serializeLearningMaterial(generatedResult);
     } catch (error) {
       setSaveError(
@@ -736,9 +741,7 @@ function LearningStudioPanel({
     const token = localStorage.getItem("token");
 
     if (!token) {
-      setSaveError(
-        "Your session has expired. Please sign in again."
-      );
+      setSaveError("Your session has expired. Please sign in again.");
       return;
     }
 
@@ -789,9 +792,7 @@ function LearningStudioPanel({
       }
 
       if (!Number.isInteger(data?.id)) {
-        throw new Error(
-          "The server did not confirm the saved material."
-        );
+        throw new Error("The server did not confirm the saved material.");
       }
 
       if (!mountedRef.current) {
@@ -812,10 +813,7 @@ function LearningStudioPanel({
           projectName: project.title,
         });
       } catch (notificationError) {
-        console.error(
-          "Save notification failed:",
-          notificationError
-        );
+        console.error("Save notification failed:", notificationError);
       }
     } catch (error) {
       if (mountedRef.current) {
@@ -850,8 +848,7 @@ function LearningStudioPanel({
     setExportError("");
 
     try {
-      const title =
-        saveTitle.trim() || generatedResult.content.title;
+      const title = saveTitle.trim() || generatedResult.content.title;
       const body = learningMaterialToMarkdown(generatedResult);
       const fileName = getLearningMaterialFileName(title, format);
 
@@ -883,6 +880,499 @@ function LearningStudioPanel({
     }
   };
 
+  const generationFeedback = (
+    <>
+      <div role="status" aria-live="polite" aria-atomic="true">
+        {loading ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm leading-6 text-cyan-200">
+            <span
+              aria-hidden="true"
+              className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-cyan-800 border-t-cyan-300 motion-reduce:animate-none"
+            />
+            <p>
+              {isQuiz
+                ? lastRequest?.randomize_questions
+                  ? `Building a question bank for ${lastRequest.question_count}-question attempts.`
+                  : `Generating ${
+                      lastRequest?.question_count ?? questionCount
+                    } quiz questions.`
+                : `Generating ${displayedOutputLabel.toLowerCase()}.`}
+              {generatedResult
+                ? " Your current material stays visible until the new result is ready."
+                : " This may take a moment."}
+            </p>
+          </div>
+        ) : statusMessage ? (
+          <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm leading-6 text-emerald-200">
+            {statusMessage}
+          </p>
+        ) : null}
+      </div>
+
+      {generationError && (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-800 bg-red-950/40 p-4"
+        >
+          <p className="font-semibold text-red-200">
+            {isQuiz
+              ? "Your quiz could not be generated"
+              : isFlashcards
+                ? "Your deck could not be generated"
+                : "Study material could not be generated"}
+          </p>
+          <p className="mt-2 text-sm text-red-300">{generationError}</p>
+
+          {lastRequest && (
+            <>
+              <p className="mt-2 break-words text-xs leading-6 text-slate-400">
+                Retry uses your last submitted settings for{" "}
+                {lastRequest.topic}
+                {isQuiz
+                  ? ` with ${lastRequest.question_count} questions and random selection ${
+                      lastRequest.randomize_questions ? "enabled" : "disabled"
+                    }`
+                  : ""}
+                {lastRequestFilename
+                  ? ` and notes from ${lastRequestFilename}`
+                  : ""}
+                .
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  generateStudyMaterial(lastRequest, lastRequestFilename)
+                }
+                disabled={busy}
+                className={`${SECONDARY_BUTTON} mt-3`}
+              >
+                Retry Generation
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  const materialControls = (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id={fieldId("output-title")} className="text-xl font-bold">
+          {isLesson
+            ? "Lesson Controls"
+            : isQuiz
+              ? "Quiz Controls"
+              : "Deck Controls"}
+        </h2>
+
+        {generatedResult && (
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={busy || !generatedRequest}
+            className={`${SECONDARY_BUTTON} ${
+              isPractice ? "w-full text-sm" : ""
+            }`}
+          >
+            Regenerate {displayedOutputLabel}
+          </button>
+        )}
+      </div>
+
+      <p className="mt-2 text-sm leading-6 text-slate-400">
+        {isQuiz
+          ? "Regenerate creates a new quiz using the original settings and notes. Start New Attempt in the quiz workspace reuses the existing questions or question bank."
+          : "Regenerate uses the displayed material’s study settings. For different settings, update the form and select Generate."}
+      </p>
+
+      {isLesson && (
+        <div className="mt-5 space-y-4">{generationFeedback}</div>
+      )}
+
+      {generatedResult && (
+        <>
+          <dl className="mt-5 space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-sm">
+            <div>
+              <dt className="text-slate-400">Topic</dt>
+              <dd className="mt-1 break-words font-semibold">
+                {generatedResult.topic}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-slate-400">Experience Level</dt>
+              <dd className="mt-1 capitalize">
+                {generatedResult.experience_level}
+              </dd>
+            </div>
+
+            {generatedResult.learning_goal && (
+              <div>
+                <dt className="text-slate-400">Learning Goal</dt>
+                <dd className="mt-1 whitespace-pre-wrap break-words">
+                  {generatedResult.learning_goal}
+                </dd>
+              </div>
+            )}
+
+            {isFlashcards && (
+              <div>
+                <dt className="text-slate-400">Deck Size</dt>
+                <dd className="mt-1">
+                  {generatedResult.content.cards.length} cards
+                </dd>
+              </div>
+            )}
+
+            {isQuiz && (
+              <>
+                <div>
+                  <dt className="text-slate-400">Questions per Attempt</dt>
+                  <dd className="mt-1">
+                    {generatedResult.content.questions.length}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-400">Question Bank</dt>
+                  <dd className="mt-1">
+                    {generatedResult.content.question_bank?.length
+                      ? `${generatedResult.content.question_bank.length} questions available`
+                      : "Original question set only"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-400">Quiz Source</dt>
+                  <dd className="mt-1 break-words">
+                    {generatedSourceFilename
+                      ? `Class notes: ${generatedSourceFilename}`
+                      : "Topic-based generation"}
+                  </dd>
+                </div>
+              </>
+            )}
+          </dl>
+
+          <section
+            className={
+              isPractice
+                ? "mt-5 border-t border-slate-800 pt-5"
+                : "mt-5 rounded-xl border border-slate-700 p-4"
+            }
+          >
+            <h3 className="font-bold text-cyan-200">Save and Export</h3>
+
+            <form onSubmit={handleSave} className="mt-4 space-y-4">
+              <div>
+                <label
+                  htmlFor={fieldId("save-title")}
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Saved Title
+                </label>
+                <input
+                  id={fieldId("save-title")}
+                  value={saveTitle}
+                  onChange={(event) => {
+                    setSaveTitle(event.target.value);
+                    setSaveError("");
+                    setSaveMessage("");
+                  }}
+                  disabled={busy}
+                  className={FIELD_CLASS}
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor={fieldId("save-project")}
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Project
+                </label>
+                <select
+                  id={fieldId("save-project")}
+                  value={selectedProjectId}
+                  onChange={(event) => {
+                    setSelectedProjectId(event.target.value);
+                    setSaveError("");
+                    setSaveMessage("");
+                  }}
+                  disabled={busy || projectsLoading}
+                  className={FIELD_CLASS}
+                >
+                  <option value="">
+                    {projectsLoading ? "Loading projects..." : "Choose a project"}
+                  </option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {!projectsLoading &&
+                !projectsError &&
+                projects.length === 0 && (
+                  <p className="text-sm text-slate-400">
+                    Create a project on the Projects page, then reload the
+                    project list here.
+                  </p>
+                )}
+
+              {projectsError && (
+                <p role="alert" className="text-sm text-red-300">
+                  {projectsError}
+                </p>
+              )}
+
+              <div
+                className={
+                  isPractice
+                    ? "flex flex-col gap-3"
+                    : "flex flex-wrap gap-3"
+                }
+              >
+                <button
+                  type="submit"
+                  disabled={
+                    busy ||
+                    projectsLoading ||
+                    !selectedProjectId ||
+                    !saveTitle.trim()
+                  }
+                  className={PRIMARY_BUTTON}
+                >
+                  {saving
+                    ? "Saving..."
+                    : savedContentId
+                      ? "Update Saved Material"
+                      : "Save to Project"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onReloadProjects}
+                  disabled={busy || projectsLoading}
+                  className={SECONDARY_BUTTON}
+                >
+                  Reload Projects
+                </button>
+              </div>
+
+              {savedContentId && (
+                <p className="text-xs leading-6 text-slate-400">
+                  Saving again updates this saved item and preserves its
+                  previous version. Generating new material starts a new item.
+                </p>
+              )}
+
+              {isQuiz && (
+                <p className="text-xs leading-6 text-slate-400">
+                  Saving preserves the original question set, question bank,
+                  and initial random-selection setting. Practice answers
+                  and scores are not saved.
+                </p>
+              )}
+
+              {saveError && (
+                <p role="alert" className="text-sm text-red-300">
+                  {saveError}
+                </p>
+              )}
+
+              {saveMessage && (
+                <p role="status" className="text-sm text-emerald-300">
+                  {saveMessage}
+                </p>
+              )}
+            </form>
+
+            <div
+              className={
+                isPractice
+                  ? "mt-5 grid grid-cols-2 gap-2 border-t border-slate-800 pt-5"
+                  : "mt-5 flex flex-wrap gap-3 border-t border-slate-800 pt-5"
+              }
+            >
+              {[
+                ["pdf", "PDF"],
+                ["md", "Markdown"],
+                ["txt", "TXT"],
+                ["docx", "DOCX"],
+              ].map(([format, label]) => (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => handleExport(format)}
+                  disabled={busy}
+                  className={
+                    isPractice
+                      ? "rounded-xl border border-slate-700 bg-slate-800 px-2 py-3 text-xs font-semibold text-white transition hover:border-cyan-500/30 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      : SECONDARY_BUTTON
+                  }
+                >
+                  Export {label}
+                </button>
+              ))}
+            </div>
+
+            <p className="mt-3 text-xs leading-6 text-slate-400">
+              {isQuiz
+                ? "Quiz exports contain the initially generated question set, correct answers, and explanations. The full bank remains in saved app material."
+                : "Exports include the complete learning material."}
+            </p>
+
+            {exporting && (
+              <p role="status" className="mt-2 text-sm text-cyan-200">
+                Preparing your export...
+              </p>
+            )}
+
+            {exportError && (
+              <p role="alert" className="mt-2 text-sm text-red-300">
+                {exportError}
+              </p>
+            )}
+          </section>
+        </>
+      )}
+    </>
+  );
+
+  const lessonEmptyState = (
+    <div className="flex min-h-[350px] flex-1 flex-col items-center justify-center rounded-2xl border border-slate-800/80 bg-slate-950/45 p-8 text-center shadow-inner shadow-black/15">
+      <span className="text-3xl text-cyan-300" aria-hidden="true">
+        ▤
+      </span>
+      <p className="mt-3 font-semibold">Your lesson will appear here</p>
+      <p className="mt-2 text-sm text-slate-400">
+        Enter a topic and select Generate Lesson.
+      </p>
+    </div>
+  );
+
+  // The outer workspace owns the height, border, background, and scrolling.
+  // This empty state fills its available space instead of creating a short card.
+  const practiceEmptyState = (
+    <section
+      aria-label={isQuiz ? "Quiz workspace preview" : "Flashcard deck preview"}
+      aria-busy={loading}
+      className="relative isolate flex min-h-[620px] min-w-0 flex-1 shrink-0 flex-col items-center justify-center p-6 text-center sm:p-10 xl:min-h-0"
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      >
+        <div className="absolute -left-20 -top-20 h-80 w-80 rounded-full bg-cyan-500/10 blur-[100px]" />
+        <div className="absolute -bottom-24 -right-20 h-96 w-96 rounded-full bg-violet-500/10 blur-[110px]" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/50 to-transparent" />
+      </div>
+
+      <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-300">
+        {isQuiz ? "Quiz Studio" : "Flashcard Studio"}
+      </p>
+
+      {isQuiz ? (
+        <div
+          aria-hidden="true"
+          className="relative mb-9 mt-10 w-full max-w-sm"
+        >
+          <div className="absolute inset-3 translate-y-3 rotate-3 rounded-2xl border border-violet-400/20 bg-slate-900" />
+          <div className="relative rounded-2xl border border-cyan-300/25 bg-gradient-to-br from-cyan-950 via-slate-900 to-slate-950 p-6 text-left shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">
+                Your next challenge
+              </span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-200">
+                ✓
+              </span>
+            </div>
+
+            <div className="mb-6 mt-5 space-y-2">
+              <div className="h-2.5 w-4/5 rounded-full bg-slate-500/35" />
+              <div className="h-2.5 w-3/5 rounded-full bg-slate-600/30" />
+            </div>
+
+            {["A", "B", "C"].map((letter, index) => (
+              <div
+                key={letter}
+                className={`mt-2 flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
+                  index === 1
+                    ? "border-cyan-400/35 bg-cyan-400/10"
+                    : "border-slate-700/60 bg-slate-950/30"
+                }`}
+              >
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-lg text-[10px] font-bold ${
+                    index === 1
+                      ? "bg-cyan-300 text-slate-950"
+                      : "bg-slate-800 text-slate-400"
+                  }`}
+                >
+                  {letter}
+                </span>
+                <div
+                  className={`h-2 w-1/2 rounded-full ${
+                    index === 1 ? "bg-cyan-200/40" : "bg-slate-600/40"
+                  }`}
+                />
+                {index === 1 && (
+                  <span className="ml-auto text-cyan-200">✓</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div
+          aria-hidden="true"
+          className="relative mb-9 mt-10 h-40 w-52 sm:h-44 sm:w-60"
+        >
+          <div className="absolute inset-0 translate-x-4 translate-y-4 rotate-6 rounded-2xl border border-violet-400/20 bg-slate-900" />
+          <div className="absolute inset-0 -translate-x-3 translate-y-2 -rotate-6 rounded-2xl border border-cyan-400/20 bg-slate-900" />
+          <div className="absolute inset-0 flex items-center justify-center rounded-2xl border border-cyan-300/30 bg-gradient-to-br from-cyan-950 via-slate-900 to-slate-950 shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+            <span className="text-6xl text-cyan-200">◇</span>
+          </div>
+        </div>
+      )}
+
+      <h2 className="max-w-xl text-2xl font-black tracking-tight text-white sm:text-3xl">
+        {isQuiz
+          ? loading
+            ? "Your next challenge is taking shape"
+            : "Put your knowledge into practice."
+          : loading
+            ? "Your next deck is taking shape"
+            : "Big ideas. One card at a time."}
+      </h2>
+
+      <p className="mt-4 max-w-md text-sm leading-7 text-slate-400">
+        {isQuiz
+          ? loading
+            ? "We’re turning your topic and study settings into questions that test your understanding."
+            : "Choose your topic and quiz settings, or add class notes to practice what you’re studying."
+          : loading
+            ? "We’re turning your topic into focused questions and clear answers."
+            : "Choose a topic in the setup panel and generate your deck to start practicing."}
+      </p>
+
+      <div className="mt-7 flex flex-wrap justify-center gap-2">
+        {(isQuiz
+          ? ["Answer", "Review", "Improve"]
+          : ["Recall", "Reveal", "Repeat"]
+        ).map((label) => (
+          <span
+            key={label}
+            className="rounded-full border border-slate-700/70 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-400"
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+
   return (
     <div
       id={`learning-studio-panel-${outputType}`}
@@ -892,768 +1382,595 @@ function LearningStudioPanel({
       tabIndex={0}
       className="rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
     >
-      <div className="flex flex-col gap-6">
-        <form
-          onSubmit={handleSubmit}
-          noValidate
-          aria-labelledby={fieldId("form-title")}
-          className="relative min-w-0 rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.06),transparent_26%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
-        >
-          <div className="flex items-start gap-3">
-            <div
-              aria-hidden="true"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-xl text-cyan-300"
-            >
-              {selectedOutput?.icon}
-            </div>
-            <div>
-              <h2
-                id={fieldId("form-title")}
-                className="text-xl font-bold"
+      <div
+        className={
+          isPractice
+            ? "grid items-start gap-5 xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] 2xl:gap-6"
+            : "grid items-start gap-4 xl:grid-cols-2 2xl:gap-5"
+        }
+      >
+        <div ref={sidebarRef} className="min-w-0 space-y-5">
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+            aria-labelledby={fieldId("form-title")}
+            className={SETUP_PANEL_CLASS}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                aria-hidden="true"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-xl text-cyan-300"
               >
-                Set Up Your {displayedOutputLabel}
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-400">
-                {selectedOutput?.description}
-              </p>
-            </div>
-          </div>
-
-          <p className="mt-4 text-sm text-slate-400">
-            {isQuiz
-              ? "Enter a topic, choose your question count, and optionally enable random selection or upload class notes."
-              : "Start with what you want to learn. Your learning goal is optional."}
-          </p>
-
-          <div className="mt-6">
-            <label
-              htmlFor={fieldId("topic")}
-              className="mb-2 block text-sm font-semibold"
-            >
-              Topic{" "}
-              <span className="text-cyan-300">(required)</span>
-            </label>
-            <input
-              ref={topicRef}
-              id={fieldId("topic")}
-              type="text"
-              value={topic}
-              onChange={(event) => {
-                setTopic(event.target.value);
-                setTopicError("");
-                clearFeedback();
-              }}
-              required
-              maxLength={200}
-              disabled={busy}
-              aria-invalid={Boolean(topicError)}
-              aria-describedby={
-                topicError
-                  ? `${fieldId("topic-help")} ${fieldId("topic-error")}`
-                  : fieldId("topic-help")
-              }
-              placeholder="e.g. Python loops or network security"
-              className={FIELD_CLASS}
-            />
-            <p
-              id={fieldId("topic-help")}
-              className="mt-2 text-xs text-slate-500"
-            >
-              {isQuiz && uploadedNotes
-                ? "Choose a topic covered in your uploaded notes."
-                : "Choose a subject or concept."}{" "}
-              {topic.length}/200
-            </p>
-            {topicError && (
-              <p
-                id={fieldId("topic-error")}
-                role="alert"
-                className="mt-2 text-sm text-red-300"
-              >
-                {topicError}
-              </p>
-            )}
-          </div>
-
-          {isQuiz && (
-            <>
-              <div className="mt-6">
-                <label
-                  htmlFor={fieldId("question-count")}
-                  className="mb-2 block text-sm font-semibold"
+                {selectedOutput?.icon}
+              </div>
+              <div className="min-w-0">
+                <h2
+                  id={fieldId("form-title")}
+                  className="text-xl font-bold"
                 >
-                  Number of Questions per Attempt
-                </label>
-                <select
-                  ref={questionCountRef}
-                  id={fieldId("question-count")}
-                  value={questionCount}
-                  onChange={(event) => {
-                    setQuestionCount(Number(event.target.value));
-                    clearLastRequest();
-                    clearFeedback();
-                  }}
-                  disabled={busy}
-                  aria-describedby={fieldId("question-count-help")}
-                  className={FIELD_CLASS}
-                >
-                  {QUIZ_QUESTION_COUNTS.map((count) => (
-                    <option key={count} value={count}>
-                      {count} questions
-                    </option>
-                  ))}
-                </select>
-                <p
-                  id={fieldId("question-count-help")}
-                  className="mt-2 text-xs leading-6 text-slate-500"
-                >
-                  Choose 5, 10, or 15 questions for each attempt.
-                  This works with topics and uploaded notes.
+                  {isQuiz
+                    ? "Build Your Quiz"
+                    : isFlashcards
+                      ? "Build Your Deck"
+                      : "Set Up Your Lesson"}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  {selectedOutput?.description}
                 </p>
               </div>
+            </div>
 
-              <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-                <label
-                  htmlFor={fieldId("randomize-questions")}
-                  className={`flex items-start gap-3 ${
-                    busy
-                      ? "cursor-not-allowed"
-                      : "cursor-pointer"
-                  }`}
+            <p className="mt-4 text-sm leading-6 text-slate-400">
+              {isQuiz
+                ? "Choose what you want to practice, then tailor the challenge to your level."
+                : isFlashcards
+                  ? "Choose a topic and tailor your cards to what you want to learn."
+                  : "Start with what you want to learn. Your learning goal is optional."}
+            </p>
+
+            {isQuiz && (
+              <div className="mt-6 flex items-center gap-3 border-t border-slate-800/80 pt-5">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-cyan-400/20 bg-cyan-400/10 text-[10px] font-bold text-cyan-200">
+                  01
+                </span>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  Study Focus
+                </p>
+              </div>
+            )}
+
+            <div className={isQuiz ? "mt-4" : "mt-6"}>
+              <label
+                htmlFor={fieldId("topic")}
+                className="mb-2 block text-sm font-semibold"
+              >
+                Topic{" "}
+                <span className="text-cyan-300">(required)</span>
+              </label>
+              <input
+                ref={topicRef}
+                id={fieldId("topic")}
+                type="text"
+                value={topic}
+                onChange={(event) => {
+                  setTopic(event.target.value);
+                  setTopicError("");
+                  clearFeedback();
+                }}
+                required
+                maxLength={200}
+                disabled={busy}
+                aria-invalid={Boolean(topicError)}
+                aria-describedby={
+                  topicError
+                    ? `${fieldId("topic-help")} ${fieldId("topic-error")}`
+                    : fieldId("topic-help")
+                }
+                placeholder="e.g. Python loops or network security"
+                className={FIELD_CLASS}
+              />
+              <p
+                id={fieldId("topic-help")}
+                className="mt-2 text-xs leading-5 text-slate-500"
+              >
+                {isQuiz && uploadedNotes
+                  ? "Choose a topic covered in your uploaded notes."
+                  : "Choose a subject or concept."}{" "}
+                {topic.length}/200
+              </p>
+
+              {topicError && (
+                <p
+                  id={fieldId("topic-error")}
+                  role="alert"
+                  className="mt-2 text-sm text-red-300"
                 >
-                  <input
-                    id={fieldId("randomize-questions")}
-                    type="checkbox"
-                    checked={randomizeQuestions}
+                  {topicError}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <label
+                htmlFor={fieldId("goal")}
+                className="mb-2 block text-sm font-semibold"
+              >
+                Learning Goal (optional)
+              </label>
+              <textarea
+                id={fieldId("goal")}
+                value={learningGoal}
+                onChange={(event) => {
+                  setLearningGoal(event.target.value);
+                  clearFeedback();
+                }}
+                rows={isPractice ? 3 : 4}
+                maxLength={1000}
+                disabled={busy}
+                aria-describedby={fieldId("goal-help")}
+                placeholder="What do you want to understand or achieve?"
+                className={`${FIELD_CLASS} resize-y`}
+              />
+              <p
+                id={fieldId("goal-help")}
+                className="mt-2 text-xs text-slate-500"
+              >
+                {learningGoal.length}/1000
+              </p>
+            </div>
+
+            <div className="mt-6">
+              <label
+                htmlFor={fieldId("experience")}
+                className="mb-2 block text-sm font-semibold"
+              >
+                Experience Level
+              </label>
+              <select
+                id={fieldId("experience")}
+                value={experienceLevel}
+                onChange={(event) => {
+                  setExperienceLevel(event.target.value);
+                  clearFeedback();
+                }}
+                disabled={busy}
+                className={FIELD_CLASS}
+              >
+                {EXPERIENCE_LEVELS.map((level) => (
+                  <option key={level.value} value={level.value}>
+                    {level.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {isQuiz && (
+              <>
+                <div className="mt-6 flex items-center gap-3 border-t border-slate-800/80 pt-5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-violet-400/20 bg-violet-400/10 text-[10px] font-bold text-violet-200">
+                    02
+                  </span>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    Your Challenge
+                  </p>
+                </div>
+
+                <div className="mt-4">
+                  <label
+                    htmlFor={fieldId("question-count")}
+                    className="mb-2 block text-sm font-semibold"
+                  >
+                    Questions per Attempt
+                  </label>
+                  <select
+                    ref={questionCountRef}
+                    id={fieldId("question-count")}
+                    value={questionCount}
                     onChange={(event) => {
-                      setRandomizeQuestions(event.target.checked);
+                      setQuestionCount(Number(event.target.value));
                       clearLastRequest();
                       clearFeedback();
                     }}
                     disabled={busy}
-                    aria-describedby={fieldId("randomize-help")}
-                    className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
-                  />
-                  <span className="text-sm font-semibold leading-6 text-cyan-200">
-                    Enable Random Question Selection
-                  </span>
-                </label>
-
-                <p
-                  id={fieldId("randomize-help")}
-                  className="mt-2 text-sm leading-6 text-slate-400"
-                >
-                  {randomizeQuestions
-                    ? `Build a bank of up to ${
-                        questionCount * 2
-                      } questions, then select ${questionCount} for each attempt. Use Start New Attempt to practice with a different set.`
-                    : "Generate one question set. New attempts repeat the original questions."}
-                </p>
-
-                {randomizeQuestions && (
-                  <p className="mt-2 text-xs leading-6 text-slate-400">
-                    Building a question bank may take longer.
-                    Uploaded notes must support at least{" "}
-                    {questionCount + 1} distinct questions.
+                    aria-describedby={fieldId("question-count-help")}
+                    className={FIELD_CLASS}
+                  >
+                    {QUIZ_QUESTION_COUNTS.map((count) => (
+                      <option key={count} value={count}>
+                        {count} questions
+                      </option>
+                    ))}
+                  </select>
+                  <p
+                    id={fieldId("question-count-help")}
+                    className="mt-2 text-xs leading-5 text-slate-500"
+                  >
+                    Choose 5, 10, or 15 questions. Works with topics
+                    and uploaded notes.
                   </p>
-                )}
-              </div>
+                </div>
 
-              <section
-                aria-labelledby={fieldId("notes-title")}
-                aria-busy={uploading}
-                className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4"
-              >
-                <h3
-                  id={fieldId("notes-title")}
-                  className="font-semibold text-cyan-200"
-                >
-                  Class Notes (optional)
-                </h3>
+                <div className="mt-5 rounded-xl border border-violet-400/20 bg-violet-400/[0.05] p-4">
+                  <label
+                    htmlFor={fieldId("randomize-questions")}
+                    className={`flex items-start gap-3 ${
+                      busy ? "cursor-not-allowed" : "cursor-pointer"
+                    }`}
+                  >
+                    <input
+                      id={fieldId("randomize-questions")}
+                      type="checkbox"
+                      checked={randomizeQuestions}
+                      onChange={(event) => {
+                        setRandomizeQuestions(event.target.checked);
+                        clearLastRequest();
+                        clearFeedback();
+                      }}
+                      disabled={busy}
+                      aria-describedby={fieldId("randomize-help")}
+                      className="mt-1 h-4 w-4 shrink-0 accent-cyan-400"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold leading-6 text-violet-100">
+                        Random Question Selection
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-400">
+                        Build a larger bank for varied attempts.
+                      </span>
+                    </span>
+                  </label>
 
-                <p
-                  id={fieldId("notes-help")}
-                  className="mt-2 text-sm leading-6 text-slate-400"
-                >
-                  Upload a PDF, DOCX, or TXT file under 5 MB.
-                  Notes can contain up to 40,000 extracted
-                  characters. PDFs must contain selectable text
-                  and no more than 100 pages.
-                </p>
+                  <p
+                    id={fieldId("randomize-help")}
+                    className="mt-3 text-xs leading-6 text-slate-400"
+                  >
+                    {randomizeQuestions
+                      ? `Build a bank of up to ${
+                          questionCount * 2
+                        } questions, then select ${questionCount} per attempt. Use Start New Attempt to practice with a different set.`
+                      : "Generate one question set. New attempts repeat the original questions."}
+                  </p>
 
-                <p className="mt-2 text-xs leading-6 text-slate-400">
-                  When you generate a quiz, the extracted notes are
-                  sent to the AI service as source material.
-                </p>
-
-                <label
-                  htmlFor={fieldId("notes-file")}
-                  className="mb-2 mt-4 block text-sm font-semibold"
-                >
-                  {uploadedNotes
-                    ? "Replace Class Notes"
-                    : "Upload Class Notes"}
-                </label>
-
-                <input
-                  ref={fileInputRef}
-                  id={fieldId("notes-file")}
-                  type="file"
-                  accept=".pdf,.docx,.txt"
-                  onChange={handleNotesUpload}
-                  disabled={busy}
-                  aria-invalid={Boolean(uploadError)}
-                  aria-describedby={
-                    uploadError
-                      ? `${fieldId("notes-help")} ${fieldId("notes-error")}`
-                      : fieldId("notes-help")
-                  }
-                  className={`${FIELD_CLASS} file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-400 file:px-3 file:py-2 file:font-semibold file:text-slate-950`}
-                />
-
-                <div
-                  role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
-                >
-                  {uploading ? (
-                    <p className="mt-3 text-sm text-cyan-200">
-                      Uploading and reading your notes...
-                    </p>
-                  ) : uploadedNotes ? (
-                    <p className="mt-3 break-words text-sm text-emerald-300">
-                      Ready: {uploadedNotes.filename} —{" "}
-                      {uploadedNotes.characterCount.toLocaleString()}{" "}
-                      characters extracted.
-                    </p>
-                  ) : (
-                    <p className="mt-3 text-sm text-slate-400">
-                      No notes selected. The quiz will use your topic.
+                  {randomizeQuestions && (
+                    <p className="mt-2 text-xs leading-6 text-violet-200/80">
+                      Building a bank may take longer. Uploaded notes
+                      must support at least {questionCount + 1} distinct
+                      questions.
                     </p>
                   )}
                 </div>
 
-                {uploadError && (
-                  <div
-                    id={fieldId("notes-error")}
-                    role="alert"
-                    className="mt-3 rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-300"
-                  >
-                    <p>{uploadError}</p>
+                <details className="mt-5 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.04] p-4">
+                  <summary className="cursor-pointer rounded-lg text-sm font-semibold leading-6 text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                    Class Notes{" "}
+                    <span className="font-normal text-slate-500">
+                      (optional)
+                    </span>
                     {uploadedNotes && (
-                      <p className="mt-2">
-                        Your previous notes, {uploadedNotes.filename},
-                        are still selected. Remove them below if you
-                        want to generate without notes.
-                      </p>
+                      <span className="ml-2 text-xs text-emerald-300">
+                        ✓ Added
+                      </span>
                     )}
-                  </div>
-                )}
+                  </summary>
+
+                  <section
+                    aria-labelledby={fieldId("notes-title")}
+                    aria-busy={uploading}
+                    className="mt-4 min-w-0"
+                  >
+                    <h3 id={fieldId("notes-title")} className="sr-only">
+                      Upload Class Notes
+                    </h3>
+
+                    <p
+                      id={fieldId("notes-help")}
+                      className="text-xs leading-6 text-slate-400"
+                    >
+                      Upload a PDF, DOCX, or TXT file under 5 MB.
+                      Notes can contain up to 40,000 extracted
+                      characters. PDFs must contain selectable text
+                      and no more than 100 pages.
+                    </p>
+
+                    <p className="mt-2 text-xs leading-6 text-slate-400">
+                      Extracted notes are sent to the AI service as
+                      source material when you generate your quiz.
+                    </p>
+
+                    <label
+                      htmlFor={fieldId("notes-file")}
+                      className="mb-2 mt-4 block text-sm font-semibold"
+                    >
+                      {uploadedNotes
+                        ? "Replace Class Notes"
+                        : "Upload Class Notes"}
+                    </label>
+
+                    <input
+                      ref={fileInputRef}
+                      id={fieldId("notes-file")}
+                      type="file"
+                      accept=".pdf,.docx,.txt"
+                      onChange={handleNotesUpload}
+                      disabled={busy}
+                      aria-invalid={Boolean(uploadError)}
+                      aria-describedby={
+                        uploadError
+                          ? `${fieldId("notes-help")} ${fieldId("notes-error")}`
+                          : fieldId("notes-help")
+                      }
+                      className="block w-full min-w-0 rounded-xl border border-slate-700 bg-slate-950/70 p-2 text-xs text-slate-400 file:mb-2 file:mr-2 file:rounded-lg file:border-0 file:bg-cyan-400 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:opacity-60"
+                    />
+
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      {uploading ? (
+                        <p className="mt-3 text-sm text-cyan-200">
+                          Uploading and reading your notes...
+                        </p>
+                      ) : uploadedNotes ? (
+                        <p className="mt-3 break-words text-xs leading-6 text-emerald-300">
+                          Ready: {uploadedNotes.filename} —{" "}
+                          {uploadedNotes.characterCount.toLocaleString()}{" "}
+                          characters extracted.
+                        </p>
+                      ) : (
+                        <p className="mt-3 text-xs leading-6 text-slate-400">
+                          No notes selected. The quiz will use your topic.
+                        </p>
+                      )}
+                    </div>
+
+                    {uploadError && (
+                      <div
+                        id={fieldId("notes-error")}
+                        role="alert"
+                        className="mt-3 rounded-lg border border-red-800 bg-red-950/40 p-3 text-xs leading-6 text-red-300"
+                      >
+                        <p>{uploadError}</p>
+                        {uploadedNotes && (
+                          <p className="mt-2">
+                            Your previous notes, {uploadedNotes.filename},
+                            are still selected. Remove them below to
+                            generate without notes.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {uploadedNotes && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleRemoveNotes}
+                          disabled={busy}
+                          className={`${SECONDARY_BUTTON} mt-4 w-full text-sm`}
+                        >
+                          Remove Notes
+                        </button>
+
+                        <details className="mt-4 rounded-lg border border-slate-700 bg-slate-950/50 p-3">
+                          <summary className="cursor-pointer text-xs font-semibold text-cyan-200">
+                            Preview Extracted Text
+                          </summary>
+                          <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-sans text-xs leading-6 text-slate-300">
+                            {uploadedNotes.sourceText}
+                          </pre>
+                        </details>
+                      </>
+                    )}
+
+                    <p className="mt-3 text-xs leading-6 text-slate-500">
+                      Replacing or removing notes affects the next
+                      Generate Quiz request. Regenerate reuses the
+                      original notes. Notes are cleared when you leave
+                      this page or select Clear This Tab.
+                    </p>
+                  </section>
+                </details>
 
                 {uploadedNotes && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleRemoveNotes}
-                      disabled={busy}
-                      className={`${SECONDARY_BUTTON} mt-4`}
-                    >
-                      Remove Notes
-                    </button>
-
-                    <details className="mt-4 rounded-lg border border-slate-700 bg-slate-950/50 p-3">
-                      <summary className="cursor-pointer text-sm font-semibold text-cyan-200">
-                        Preview Extracted Text
-                      </summary>
-                      <pre className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-300">
-                        {uploadedNotes.sourceText}
-                      </pre>
-                    </details>
-                  </>
-                )}
-
-                <p className="mt-3 text-xs leading-6 text-slate-400">
-                  Replacing or removing notes affects the next
-                  Generate Quiz request. Regenerate reuses the
-                  original notes. Notes are cleared when you leave
-                  this page or select Clear This Tab.
-                </p>
-              </section>
-            </>
-          )}
-
-          <div className="mt-6">
-            <label
-              htmlFor={fieldId("goal")}
-              className="mb-2 block text-sm font-semibold"
-            >
-              Learning Goal (optional)
-            </label>
-            <textarea
-              id={fieldId("goal")}
-              value={learningGoal}
-              onChange={(event) => {
-                setLearningGoal(event.target.value);
-                clearFeedback();
-              }}
-              rows={4}
-              maxLength={1000}
-              disabled={busy}
-              aria-describedby={fieldId("goal-help")}
-              placeholder="What do you want to understand or achieve?"
-              className={`${FIELD_CLASS} resize-y`}
-            />
-            <p
-              id={fieldId("goal-help")}
-              className="mt-2 text-xs text-slate-500"
-            >
-              {learningGoal.length}/1000
-            </p>
-          </div>
-
-          <div className="mt-6">
-            <label
-              htmlFor={fieldId("experience")}
-              className="mb-2 block text-sm font-semibold"
-            >
-              Experience Level
-            </label>
-            <select
-              id={fieldId("experience")}
-              value={experienceLevel}
-              onChange={(event) => {
-                setExperienceLevel(event.target.value);
-                clearFeedback();
-              }}
-              disabled={busy}
-              className={FIELD_CLASS}
-            >
-              {EXPERIENCE_LEVELS.map((level) => (
-                <option key={level.value} value={level.value}>
-                  {level.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-            <p className="text-sm font-semibold text-cyan-200">
-              {displayedOutputLabel} Generator
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              This tab generates{" "}
-              {displayedOutputLabel.toLowerCase()} material. Each
-              tab keeps its own study settings and results while
-              you stay on this page.
-            </p>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              type="submit"
-              disabled={busy}
-              className={PRIMARY_BUTTON}
-            >
-              {uploading
-                ? "Reading Notes..."
-                : loading
-                  ? "Generating..."
-                  : `Generate ${displayedOutputLabel}`}
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              disabled={busy}
-              className={SECONDARY_BUTTON}
-            >
-              Clear This Tab
-            </button>
-          </div>
-        </form>
-
-        <section
-          aria-labelledby={fieldId("output-title")}
-          aria-busy={busy}
-          className="relative w-full min-w-0 rounded-2xl border border-cyan-500/15 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.06),transparent_28%),linear-gradient(to_bottom,rgba(15,23,42,0.98),rgba(15,23,42,0.84))] p-5 shadow-[0_26px_80px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.02] backdrop-blur sm:p-6"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2
-              id={fieldId("output-title")}
-              className="text-xl font-bold"
-            >
-              Your {displayedOutputLabel}
-            </h2>
-
-            {generatedResult && (
-              <button
-                type="button"
-                onClick={handleRegenerate}
-                disabled={busy || !generatedRequest}
-                className={SECONDARY_BUTTON}
-              >
-                Regenerate {displayedOutputLabel}
-              </button>
-            )}
-          </div>
-
-          <p className="mt-2 text-sm leading-6 text-slate-400">
-            {isQuiz
-              ? "Regenerate creates new material using the original generation settings and notes. Start New Attempt below reuses the existing question bank. To change generation settings, update the form and select Generate Quiz."
-              : "Regenerate uses the displayed material’s study settings. For different settings, update the form and select Generate."}
-          </p>
-
-          <div
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {loading ? (
-              <p className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-200">
-                {isQuiz && lastRequest?.randomize_questions
-                  ? `Building a question bank for ${lastRequest.question_count}-question attempts.`
-                  : isQuiz
-                    ? `Generating ${
-                        lastRequest?.question_count ?? questionCount
-                      } quiz questions.`
-                    : `Generating ${displayedOutputLabel.toLowerCase()}.`}
-                {generatedResult
-                  ? " Your current material stays visible until the new result is ready."
-                  : " This may take a moment."}
-              </p>
-            ) : statusMessage ? (
-              <p className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm text-emerald-200">
-                {statusMessage}
-              </p>
-            ) : null}
-          </div>
-
-          {generationError && (
-            <div
-              role="alert"
-              className="mt-5 rounded-xl border border-red-800 bg-red-950/40 p-4"
-            >
-              <p className="font-semibold text-red-200">
-                Study material could not be generated
-              </p>
-              <p className="mt-2 text-sm text-red-300">
-                {generationError}
-              </p>
-
-              {lastRequest && (
-                <>
-                  <p className="mt-2 break-words text-xs text-slate-400">
-                    Retry uses your last submitted settings for{" "}
-                    {lastRequest.topic}
-                    {isQuiz
-                      ? ` with ${lastRequest.question_count} questions and random selection ${
-                          lastRequest.randomize_questions
-                            ? "enabled"
-                            : "disabled"
-                        }`
-                      : ""}
-                    {lastRequestFilename
-                      ? ` and notes from ${lastRequestFilename}`
-                      : ""}
-                    .
+                  <p className="mt-3 break-words text-xs leading-6 text-emerald-300">
+                    ✓ Using notes: {uploadedNotes.filename}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      generateStudyMaterial(
-                        lastRequest,
-                        lastRequestFilename
-                      )
-                    }
-                    disabled={busy}
-                    className={`${SECONDARY_BUTTON} mt-3`}
-                  >
-                    Retry Generation
-                  </button>
+                )}
+              </>
+            )}
+
+            <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+              <p className="text-sm font-semibold text-cyan-200">
+                {isQuiz
+                  ? "Ready for your next challenge"
+                  : isFlashcards
+                    ? "Your next study session"
+                    : "Lesson Generator"}
+              </p>
+
+              {isQuiz ? (
+                <>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold text-cyan-200">
+                      {questionCount} questions
+                    </span>
+                    <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[10px] font-semibold capitalize text-violet-200">
+                      {experienceLevel}
+                    </span>
+                    <span className="rounded-full border border-slate-600/40 bg-slate-900/50 px-2.5 py-1 text-[10px] font-semibold text-slate-300">
+                      {uploadedNotes ? "Class notes" : "Topic-based"}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-6 text-slate-400">
+                    {randomizeQuestions
+                      ? "Includes a question bank for varied practice."
+                      : "Generate your quiz, answer the questions, and review the explanations."}
+                  </p>
                 </>
+              ) : (
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  {isFlashcards
+                    ? "Generate a deck, test your recall, and reveal each answer when you’re ready."
+                    : "This tab generates lesson material. Each tab keeps its own study settings and results while you stay on this page."}
+                </p>
               )}
             </div>
+
+            <div
+              className={
+                isPractice
+                  ? "mt-5 flex flex-col gap-3"
+                  : "mt-5 flex flex-wrap gap-3"
+              }
+            >
+              <button
+                type="submit"
+                disabled={busy}
+                className={isPractice ? PRACTICE_BUTTON : PRIMARY_BUTTON}
+              >
+                {isPractice && <span aria-hidden="true">✦</span>}
+                {uploading
+                  ? "Reading Notes..."
+                  : loading
+                    ? "Generating..."
+                    : `Generate ${displayedOutputLabel}`}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={busy}
+                className={SECONDARY_BUTTON}
+              >
+                Clear This Tab
+              </button>
+            </div>
+          </form>
+
+          {isPractice ? (
+            <details className={`${SETUP_PANEL_CLASS} group`}>
+              <summary className="cursor-pointer rounded-lg text-sm font-bold leading-6 text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                {isQuiz
+                  ? "Quiz Controls, Save and Export"
+                  : "Deck Controls, Save and Export"}
+              </summary>
+              <div className="mt-5">{materialControls}</div>
+            </details>
+          ) : (
+            <section
+              aria-labelledby={fieldId("output-title")}
+              className={SETUP_PANEL_CLASS}
+            >
+              {materialControls}
+            </section>
           )}
+        </div>
 
-          {generatedResult ? (
-            <>
-              <dl className="mt-5 space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-sm">
-                <div>
-                  <dt className="text-slate-400">Topic</dt>
-                  <dd className="mt-1 break-words font-semibold">
-                    {generatedResult.topic}
-                  </dd>
-                </div>
+        {isPractice ? (
+          <div
+            ref={practiceOutputRef}
+            role="region"
+            aria-label={
+              isQuiz
+                ? "Scrollable quiz workspace"
+                : "Scrollable flashcard workspace"
+            }
+            aria-busy={loading}
+            tabIndex={0}
+            style={{
+              "--practice-panel-height": `${sidebarHeight}px`,
+            }}
+            className="relative flex min-h-0 min-w-0 max-h-[80vh] flex-col gap-4 overflow-y-auto overscroll-contain rounded-[28px] border border-cyan-400/15 bg-slate-950/70 shadow-[0_24px_80px_rgba(0,0,0,0.25)] [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 xl:h-[var(--practice-panel-height)] xl:max-h-[var(--practice-panel-height)] [&>*]:shrink-0"
+          >
+            {(loading || statusMessage || generationError) && (
+              <div className="space-y-4 p-4 pb-0">
+                {generationFeedback}
+              </div>
+            )}
 
-                <div>
-                  <dt className="text-slate-400">
-                    Experience Level
-                  </dt>
-                  <dd className="mt-1 capitalize">
-                    {generatedResult.experience_level}
-                  </dd>
-                </div>
-
-                {generatedResult.learning_goal && (
-                  <div>
-                    <dt className="text-slate-400">
-                      Learning Goal
-                    </dt>
-                    <dd className="mt-1 whitespace-pre-wrap break-words">
-                      {generatedResult.learning_goal}
-                    </dd>
-                  </div>
-                )}
-
-                {isQuiz && (
-                  <>
-                    <div>
-                      <dt className="text-slate-400">
-                        Questions per Attempt
-                      </dt>
-                      <dd className="mt-1">
-                        {generatedResult.content.questions.length}
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-slate-400">
-                        Question Bank
-                      </dt>
-                      <dd className="mt-1">
-                        {generatedResult.content.question_bank?.length
-                          ? `${generatedResult.content.question_bank.length} questions available`
-                          : "Original question set only"}
-                      </dd>
-                    </div>
-
-                    <div>
-                      <dt className="text-slate-400">
-                        Quiz Source
-                      </dt>
-                      <dd className="mt-1 break-words">
-                        {generatedSourceFilename
-                          ? `Class notes: ${generatedSourceFilename}`
-                          : "Topic-based generation"}
-                      </dd>
-                    </div>
-                  </>
-                )}
-              </dl>
-
-              <section className="mt-5 rounded-xl border border-slate-700 p-4">
-                <h3 className="font-bold text-cyan-200">
-                  Save and Export
-                </h3>
-
-                <form
-                  onSubmit={handleSave}
-                  className="mt-4 space-y-4"
+            {generatedResult ? (
+              isQuiz ? (
+                <section
+                  aria-label="Quiz workspace"
+                  className="relative isolate min-w-0 p-5 sm:p-8"
                 >
-                  <div>
-                    <label
-                      htmlFor={fieldId("save-title")}
-                      className="mb-2 block text-sm font-semibold"
-                    >
-                      Saved Title
-                    </label>
-                    <input
-                      id={fieldId("save-title")}
-                      value={saveTitle}
-                      onChange={(event) => {
-                        setSaveTitle(event.target.value);
-                        setSaveError("");
-                        setSaveMessage("");
-                      }}
-                      disabled={busy}
-                      className={FIELD_CLASS}
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor={fieldId("save-project")}
-                      className="mb-2 block text-sm font-semibold"
-                    >
-                      Project
-                    </label>
-                    <select
-                      id={fieldId("save-project")}
-                      value={selectedProjectId}
-                      onChange={(event) => {
-                        setSelectedProjectId(event.target.value);
-                        setSaveError("");
-                        setSaveMessage("");
-                      }}
-                      disabled={busy || projectsLoading}
-                      className={FIELD_CLASS}
-                    >
-                      <option value="">
-                        {projectsLoading
-                          ? "Loading projects..."
-                          : "Choose a project"}
-                      </option>
-                      {projects.map((project) => (
-                        <option
-                          key={project.id}
-                          value={project.id}
-                        >
-                          {project.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {!projectsLoading &&
-                    !projectsError &&
-                    projects.length === 0 && (
-                      <p className="text-sm text-slate-400">
-                        Create a project on the Projects page,
-                        then reload the project list here.
-                      </p>
-                    )}
-
-                  {projectsError && (
-                    <p
-                      role="alert"
-                      className="text-sm text-red-300"
-                    >
-                      {projectsError}
-                    </p>
-                  )}
-
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="submit"
-                      disabled={
-                        busy ||
-                        projectsLoading ||
-                        !selectedProjectId ||
-                        !saveTitle.trim()
-                      }
-                      className={PRIMARY_BUTTON}
-                    >
-                      {saving
-                        ? "Saving..."
-                        : savedContentId
-                          ? "Update Saved Material"
-                          : "Save to Project"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onReloadProjects}
-                      disabled={busy || projectsLoading}
-                      className={SECONDARY_BUTTON}
-                    >
-                      Reload Projects
-                    </button>
-                  </div>
-
-                  {savedContentId && (
-                    <p className="text-xs leading-6 text-slate-400">
-                      Saving again updates this saved item and
-                      preserves its previous version. Generating
-                      new material starts a new item.
-                    </p>
-                  )}
-
-                  {isQuiz && (
-                    <p className="text-xs leading-6 text-slate-400">
-                      Saving preserves the original question set,
-                      question bank, and initial random-selection
-                      setting. Practice answers and scores are not
-                      saved.
-                    </p>
-                  )}
-
-                  {saveError && (
-                    <p
-                      role="alert"
-                      className="text-sm text-red-300"
-                    >
-                      {saveError}
-                    </p>
-                  )}
-
-                  {saveMessage && (
-                    <p
-                      role="status"
-                      className="text-sm text-emerald-300"
-                    >
-                      {saveMessage}
-                    </p>
-                  )}
-                </form>
-
-                <div className="mt-5 flex flex-wrap gap-3 border-t border-slate-800 pt-5">
-                  {[
-                    ["pdf", "PDF"],
-                    ["md", "Markdown"],
-                    ["txt", "TXT"],
-                    ["docx", "DOCX"],
-                  ].map(([format, label]) => (
-                    <button
-                      key={format}
-                      type="button"
-                      onClick={() => handleExport(format)}
-                      disabled={busy}
-                      className={SECONDARY_BUTTON}
-                    >
-                      Export {label}
-                    </button>
-                  ))}
-                </div>
-
-                <p className="mt-3 text-xs leading-6 text-slate-400">
-                  {isQuiz
-                    ? "Quiz exports contain the initially generated question set, correct answers, and explanations. The full bank remains in saved app material."
-                    : "Exports include the complete learning material."}
-                </p>
-
-                {exporting && (
-                  <p
-                    role="status"
-                    className="mt-2 text-sm text-cyan-200"
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
                   >
-                    Preparing your export...
-                  </p>
-                )}
+                    <div className="absolute -left-24 -top-32 h-80 w-80 rounded-full bg-cyan-500/[0.08] blur-[100px]" />
+                    <div className="absolute -right-24 top-48 h-80 w-80 rounded-full bg-violet-500/[0.07] blur-[110px]" />
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/50 to-transparent" />
+                  </div>
 
-                {exportError && (
-                  <p
-                    role="alert"
-                    className="mt-2 text-sm text-red-300"
-                  >
-                    {exportError}
-                  </p>
-                )}
-              </section>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/70 pb-5">
+                    <div className="flex items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-200"
+                      >
+                        ✓
+                      </span>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300">
+                          Quiz Studio
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Practice with purpose
+                        </p>
+                      </div>
+                    </div>
 
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full border border-cyan-400/20 bg-cyan-400/[0.06] px-3 py-1.5 text-xs font-semibold text-cyan-200">
+                        {generatedResult.content.questions.length} questions
+                      </span>
+                      <span className="rounded-full border border-violet-400/20 bg-violet-400/[0.06] px-3 py-1.5 text-xs font-semibold capitalize text-violet-200">
+                        {generatedResult.experience_level}
+                      </span>
+                    </div>
+                  </div>
+
+                  <LearningMaterialView
+                    key={`${outputType}-${resultVersion}`}
+                    material={generatedResult}
+                    disabled={busy || !active}
+                  />
+                </section>
+              ) : (
+                <LearningMaterialView
+                  key={`${outputType}-${resultVersion}`}
+                  material={generatedResult}
+                  disabled={busy || !active}
+                />
+              )
+            ) : (
+              practiceEmptyState
+            )}
+          </div>
+        ) : (
+          <section
+            ref={lessonOutputRef}
+            aria-label="Generated lesson"
+            aria-busy={loading}
+            tabIndex={0}
+            style={{
+              "--lesson-output-height": `${sidebarHeight}px`,
+            }}
+            className={`${OUTPUT_PANEL_CLASS} flex min-h-0 max-h-[75vh] flex-col overflow-y-auto overscroll-contain [scrollbar-color:rgb(71_85_105)_transparent] [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 xl:h-[var(--lesson-output-height)] xl:max-h-[var(--lesson-output-height)] [&>*]:shrink-0`}
+          >
+            {generatedResult ? (
               <LearningMaterialView
                 key={`${outputType}-${resultVersion}`}
                 material={generatedResult}
                 disabled={busy || !active}
               />
-            </>
-          ) : !loading && !generationError ? (
-            <div className="mt-5 rounded-xl border border-dashed border-slate-700 p-6 text-center">
-              <span
-                className="text-3xl text-cyan-300"
-                aria-hidden="true"
-              >
-                {selectedOutput?.icon}
-              </span>
-              <p className="mt-3 font-semibold">
-                Your {displayedOutputLabel.toLowerCase()} will
-                appear here
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                {isQuiz
-                  ? "Enter a topic, choose your quiz settings, optionally upload notes, and select Generate Quiz."
-                  : `Enter a topic and select Generate ${displayedOutputLabel}.`}
-              </p>
-            </div>
-          ) : null}
-        </section>
+            ) : (
+              lessonEmptyState
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
@@ -1678,20 +1995,13 @@ function LearningStudio() {
         const token = localStorage.getItem("token");
 
         if (!token) {
-          throw new Error(
-            "Your session has expired. Please sign in again."
-          );
+          throw new Error("Your session has expired. Please sign in again.");
         }
 
-        const response = await fetch(
-          `${API_BASE_URL}/projects/`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            signal: controller.signal,
-          }
-        );
+        const response = await fetch(`${API_BASE_URL}/projects/`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
 
         const data = await response.json().catch(() => null);
 
@@ -1710,9 +2020,7 @@ function LearningStudio() {
         }
 
         if (!Array.isArray(data)) {
-          throw new Error(
-            "The server returned invalid project information."
-          );
+          throw new Error("The server returned invalid project information.");
         }
 
         setProjects(data);
@@ -1732,7 +2040,6 @@ function LearningStudio() {
     };
 
     loadProjects();
-
     return () => controller.abort();
   }, [projectsReload]);
 
@@ -1743,8 +2050,7 @@ function LearningStudio() {
       nextIndex = (currentIndex + 1) % OUTPUT_TYPES.length;
     } else if (event.key === "ArrowLeft") {
       nextIndex =
-        (currentIndex - 1 + OUTPUT_TYPES.length) %
-        OUTPUT_TYPES.length;
+        (currentIndex - 1 + OUTPUT_TYPES.length) % OUTPUT_TYPES.length;
     } else if (event.key === "Home") {
       nextIndex = 0;
     } else if (event.key === "End") {
@@ -1761,7 +2067,6 @@ function LearningStudio() {
   return (
     <main className="min-h-screen w-full bg-slate-950 px-3 py-4 text-white sm:px-4 lg:px-5 xl:px-6">
       <section>
-        {/* Hero Header */}
         <div className="group relative mb-5 overflow-hidden rounded-[22px] border border-cyan-400/20 bg-slate-950/80 shadow-[0_30px_100px_rgba(0,0,0,0.34)] ring-1 ring-white/[0.035] backdrop-blur-2xl">
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute -left-20 -top-32 h-72 w-72 rounded-full bg-cyan-400/[0.13] blur-[90px]" />
@@ -1791,7 +2096,6 @@ function LearningStudio() {
                   <span className="rounded-full border border-cyan-400/20 bg-cyan-400/[0.07] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
                     Tanio Intelligence
                   </span>
-
                   <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-300/90">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_9px_rgba(52,211,153,0.85)]" />
                     Online
@@ -1801,7 +2105,6 @@ function LearningStudio() {
                 <h1 className="bg-gradient-to-r from-white via-slate-100 to-cyan-200 bg-clip-text text-3xl font-black tracking-[-0.035em] text-transparent sm:text-4xl">
                   Learning Studio
                 </h1>
-
                 <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
                   Turn topics and class notes into personalized lessons,
                   flashcards, and quizzes. Practice, save, and export your
@@ -1824,16 +2127,13 @@ function LearningStudio() {
                     <p className="truncate font-bold text-white">
                       AI Learning Engine
                     </p>
-
                     <span className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
                       Ready
                     </span>
                   </div>
-
                   <p className="mt-1 text-xs leading-5 text-slate-400 sm:text-sm">
                     Explore → learn → practice → master
                   </p>
-
                   <div
                     className="mt-2.5 flex items-center gap-1.5"
                     aria-hidden="true"
@@ -1849,7 +2149,6 @@ function LearningStudio() {
           </div>
         </div>
 
-        {/* Learning Tools Tabs */}
         <div
           role="tablist"
           aria-label="Learning Studio tools"
@@ -1872,19 +2171,14 @@ function LearningStudio() {
                 aria-controls={`learning-studio-panel-${tab.value}`}
                 tabIndex={isActive ? 0 : -1}
                 onClick={() => setActiveTab(tab.value)}
-                onKeyDown={(event) =>
-                  handleTabKeyDown(event, index)
-                }
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
                 className={`min-w-0 flex-1 rounded-xl px-2 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 sm:flex-none sm:px-5 ${
                   isActive
                     ? "border border-cyan-400/40 bg-cyan-400/15 text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,0.10)]"
                     : "border border-transparent text-slate-400 hover:bg-slate-900 hover:text-white"
                 }`}
               >
-                <span
-                  aria-hidden="true"
-                  className="mr-2 hidden sm:inline"
-                >
+                <span aria-hidden="true" className="mr-2 hidden sm:inline">
                   {tab.icon}
                 </span>
                 {tab.label}
